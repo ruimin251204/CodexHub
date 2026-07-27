@@ -120,7 +120,7 @@ for (const file of requiredFiles) {
 }
 
 const packageJson = JSON.parse(read("package.json"));
-if (packageJson.version !== "0.4.8") fail("package version should be 0.4.8");
+if (packageJson.version !== "0.4.9") fail("package version should be 0.4.9");
 for (const script of ["tauri", "dev", "dev:web", "dev:mock", "build", "build:tauri", "build:tauri:dev", "build:linux:release", "build:linux:updater", "build:macos:release", "build:macos:updater", "build:installer:nsis", "build:installer:nsis:updater", "build:installer:nsis:dev", "build:installer:msi", "build:installer:msi:dev", "release:portable", "release:portable:dev", "release:updater-feed", "release:linux-updater-feed", "release:macos-updater-feed", "validate:release", "validate:release:dev", "audit:public", "smoke", "smoke:mock", "test"]) {
   if (!packageJson.scripts?.[script]) fail(`missing package script ${script}`);
 }
@@ -151,11 +151,11 @@ const devTauriConfig = JSON.parse(read("src-tauri/tauri.dev.conf.json"));
 const updaterTauriConfig = JSON.parse(read("src-tauri/tauri.updater.conf.json"));
 if (tauriConfig.productName !== "CodexHub") fail("stable productName should be CodexHub");
 if (tauriConfig.identifier !== "app.codexhub.desktop") fail("stable identifier should be app.codexhub.desktop");
-if (tauriConfig.version !== "0.4.8") fail("stable Tauri version should be 0.4.8");
+if (tauriConfig.version !== "0.4.9") fail("stable Tauri version should be 0.4.9");
 if (tauriConfig.app?.windows?.[0]?.title !== "CodexHub") fail("stable window title should be CodexHub");
 if (devTauriConfig.productName !== "CodexHub Dev") fail("dev productName should be CodexHub Dev");
 if (devTauriConfig.identifier !== "dev.codexhub.desktop") fail("dev identifier should be dev.codexhub.desktop");
-if (devTauriConfig.version !== "0.4.8") fail("dev Tauri version should be 0.4.8");
+if (devTauriConfig.version !== "0.4.9") fail("dev Tauri version should be 0.4.9");
 if (devTauriConfig.app?.windows?.[0]?.title !== "CodexHub Dev") fail("dev window title should be CodexHub Dev");
 if (tauriConfig.identifier === devTauriConfig.identifier) fail("stable and dev identifiers must differ for app data isolation");
 if (tauriConfig.identifier?.endsWith(".app")) fail("Tauri identifier should not end with .app");
@@ -263,9 +263,9 @@ const requiredText = [
   [readme, "CodexHub is a desktop control console"],
   [zhReadme, "通用桌面控制台，支持 Windows、macOS 和 Linux"],
   [readme, "latest stable build"],
-  [readme, "CodexHub_0.4.8_aarch64.dmg"],
-  [readme, "CodexHub_0.4.8_amd64.deb"],
-  [readme, "CodexHub_0.4.8_arm64.deb"],
+  [readme, "CodexHub_0.4.9_aarch64.dmg"],
+  [readme, "CodexHub_0.4.9_amd64.deb"],
+  [readme, "CodexHub_0.4.9_arm64.deb"],
   [readme, "update checks fail"],
   [zhReadme, "检查更新失败"],
   [readme, "Settings > Codex > Connections"],
@@ -1256,7 +1256,7 @@ const mockApiSource = read("src/api/mock.ts");
 const modalFrameSource = read("src/ui/ModalFrame.tsx");
 const operationProgressSource = read("src/ui/OperationProgress.tsx");
 const alertModalFrameSource = read("src/ui/AlertModalFrame.tsx");
-for (const token of ["MonitorView", "MonitorHostCard", "MonitorHostStatusIndicator", "CircularStatusIndicator", "HostStatusIndicator", "resolveMonitorHostIndicatorState", "resolveHostStatusIndicatorState", "applyRemoteProbeResultToHosts", "applyRemoteProbeBatchResultsToHosts", "resourcePendingHostAliases", "monitorBentoGrid", "ResizeObserver", "resourceMonitorAutoRefresh", "resourceMonitorRefreshSeconds", "resourceMonitorHostOrder", "monitorAutoRefreshControl", "pillToggle", "monitorDragHandle", "monitorSegmentedMeter", "aggregateGpuProcessUsers", "elapsedSeconds", "copy.monitor.refreshNow", "copy.monitor.autoRefresh", "copy.monitor.gpuProcesses", "copy.monitor.unifiedMemory", "resolveMonitorGpuMemoryUsage", "hostMemoryTotalBytes", "sampleHostResources", "mergeHostResourceSnapshot", "resource-monitor-${Date.now()}", "监控", "onPointerDown", "previewMonitorHostOrder", "monitorDragGhost", "data-placeholder", "requestAnimationFrame", "stopMonitorAutoScroll", "MonitorMeterTone", "host.hostAlias", "formatCpuLoadSummary", "pendingReorderTimerRef", "monitorCpuPercent", "summarizeGpuMemory", 'aria-label={label}', 'role="img"', 'stroke="currentColor"']) {
+for (const token of ["MonitorView", "MonitorHostCard", "MonitorHostStatusIndicator", "CircularStatusIndicator", "HostStatusIndicator", "resolveMonitorHostIndicatorState", "resolveHostStatusIndicatorState", "applyRemoteProbeResultToHosts", "applyRemoteProbeBatchResultsToHosts", "resourcePendingHostAliases", "monitorBentoGrid", "ResizeObserver", "resourceMonitorAutoRefresh", "resourceMonitorRefreshSeconds", "resourceMonitorHostOrder", "monitorAutoRefreshControl", "pillToggle", "monitorDragHandle", "monitorSegmentedMeter", "aggregateGpuProcessUsers", "sortMonitorGpuProcesses", "expandedUsers", "aria-expanded={expanded}", "sampledAt={snapshot?.sampledAt", "elapsedSeconds", "copy.monitor.refreshNow", "copy.monitor.autoRefresh", "copy.monitor.gpuProcesses", "copy.monitor.unifiedMemory", "resolveMonitorGpuMemoryUsage", "hostMemoryTotalBytes", "sampleHostResources", "mergeHostResourceSnapshot", "resource-monitor-${Date.now()}", "监控", "onPointerDown", "previewMonitorHostOrder", "monitorDragGhost", "data-placeholder", "requestAnimationFrame", "stopMonitorAutoScroll", "MonitorMeterTone", "host.hostAlias", "formatCpuLoadSummary", "pendingReorderTimerRef", "monitorCpuPercent", "summarizeGpuMemory", 'aria-label={label}', 'role="img"', 'stroke="currentColor"']) {
   if (!app.includes(token)) fail(`missing resource monitor UI token: ${token}`);
 }
 if (!/<th className="sshHostsAliasCol">[\s\S]*?<th className="sshHostsOnlineCol">[\s\S]*?<th className="sshHostsSourceCol">/.test(app)) {
@@ -2205,7 +2205,7 @@ for (const token of [".storageHealthBanner", "width: min(100%, var(--app-content
 for (const token of ["storagePlanCard", "storagePlanCode", "grid-template-columns: repeat(2, minmax(0, 1fr))", 'font-family: "Consolas"']) {
   if (!app.includes(token) && !styles.includes(token)) fail(`storage migration confirmation should use card and code-snippet styling: ${token}`);
 }
-for (const token of ["monitorBentoGrid", "monitorHostCard", "circularStatusIndicator", "sshHostsOnlineCol", "monitorSummaryTile", "monitorGpuBlock", "monitorProcessRow", "monitorAutoRefreshControl", "monitorDragHandle", "monitorSegmentedMeter", "monitorDragGhost", "--monitor-gap", "grid-auto-rows: 2px", "data-placeholder", 'data-tone="memory"', 'data-tone="cpu"', 'data-tone="gpu"', 'data-status="refreshing"', "width: 24px", "min-width: 64px", "background: var(--green)", "background: var(--red)", "background: var(--blue)"]) {
+for (const token of ["monitorBentoGrid", "monitorHostCard", "circularStatusIndicator", "sshHostsOnlineCol", "monitorSummaryTile", "monitorGpuBlock", "monitorProcessRow", "monitorProcessDetails", "monitorProcessDisclosure", "monitorAutoRefreshControl", "monitorDragHandle", "monitorSegmentedMeter", "monitorDragGhost", "--monitor-gap", "grid-auto-rows: 2px", "data-placeholder", 'data-tone="memory"', 'data-tone="cpu"', 'data-tone="gpu"', 'data-status="refreshing"', "width: 24px", "min-width: 64px", "background: var(--green)", "background: var(--red)", "background: var(--blue)"]) {
   if (!styles.includes(token)) fail(`missing resource monitor Bento style token: ${token}`);
 }
 if (styles.includes("monitorBentoTile")) fail("resource monitor should use simplified summary tiles instead of old Bento tile styles");

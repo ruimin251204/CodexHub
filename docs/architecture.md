@@ -41,6 +41,7 @@ flowchart LR
 - Servers: host inventory, aliases, labels, SSH config status, connection health.
 - Profiles: local profile templates, CRUD/import/export, env-var-first API key policy, rendered remote TOML preview, single or selected-host batch apply, and a per-run remote Codex reload choice.
 - Skills: local skill packages, GitHub search/clone import, installed-skill tag preview/download/uninstall, remote upload/install status, and remote list.
+- Monitor: page-active host sampling with compact CPU, memory, and GPU cards plus expandable, read-only per-user GPU process details.
 - Operations: backup, apply, restore, dry-run, and audit log.
 - Codex App Fallback: manual steps for enabling SSH hosts and reconnecting in the local ChatGPT/Codex App.
 - Settings: local data location, remote paths, OpenSSH binary overrides, theme, and privacy controls.
@@ -188,7 +189,7 @@ type OperationLog = {
 
 ## Release Channel Data Isolation
 
-CodexHub v0.4.8 continues to define exactly two release channels: `stable` and `dev`.
+CodexHub v0.4.9 continues to define exactly two release channels: `stable` and `dev`.
 
 - `stable` is the public release channel. It uses `src-tauri/tauri.conf.json`, `productName: CodexHub`, `identifier: app.codexhub.desktop`, and window title `CodexHub`.
 - `dev` is for development, test runs, previews, and manual acceptance. It uses `src-tauri/tauri.dev.conf.json`, `productName: CodexHub Dev`, `identifier: dev.codexhub.desktop`, and window title `CodexHub Dev`.

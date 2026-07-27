@@ -17,7 +17,7 @@
   </p>
 
   <p>
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.4.8-2563eb" />
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.4.9-2563eb" />
     <img alt="License" src="https://img.shields.io/badge/license-MIT-16a34a" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%2B%20macOS%20%2B%20Linux-0078D4" />
     <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB" />
@@ -41,7 +41,7 @@ CodexHub 聚焦一个清晰场景：让 Windows、macOS 或 Linux 桌面上的 C
 | 视图 | Windows | macOS |
 | --- | --- | --- |
 | **Dashboard**<br>一屏查看所有托管主机的 SSH 连通性、远端 Codex 状态、profile 对齐情况、skill inventory 和近期任务结果。 | ![CodexHub Dashboard Windows 页面，展示托管主机和状态检查](../../figs/Dashboard-zh-win.png) | ![CodexHub Dashboard macOS 页面，展示托管主机和状态检查](../../figs/Dashboard-zh-mac.jpg) |
-| **监控**<br>查看已记住主机的只读 CPU、内存和 GPU 采样结果，并显示刷新状态和慢主机超时耗时提示。 | ![CodexHub 监控 Windows 页面，展示主机 CPU、内存和 GPU 资源卡片](../../figs/monitor-zh-win.png) | ![CodexHub 监控 macOS 页面，展示主机 CPU、内存和 GPU 资源卡片](../../figs/monitor-zh-mac.jpg) |
+| **监控**<br>查看已记住主机的只读 CPU、内存和 GPU 采样结果，并可展开每个 GPU 用户行查看 PID、进程名和显存占用。 | ![CodexHub 监控 Windows 页面，展示主机 CPU、内存和 GPU 资源卡片](../../figs/monitor-zh-win.png) | ![CodexHub 监控 macOS 页面，展示主机 CPU、内存和 GPU 资源卡片](../../figs/monitor-zh-mac.jpg) |
 | **Hosts**<br>添加或检查 SSH 主机，完成 key 配置、一次性密码初始化、连接测试和远端 Codex 探测。 | ![CodexHub Hosts Windows 页面，展示 SSH 主机管理](../../figs/Host-zh-win.png) | ![CodexHub Hosts macOS 页面，展示 SSH 主机管理](../../figs/Host-zh-mac.jpg) |
 | **API 与 Profiles**<br>管理本地 API config 名称和 profile 模板，再预览或应用远端配置变更。 | ![CodexHub API 与 profile Windows 配置页面](../../figs/API-zh-win.png) | ![CodexHub API 与 profile macOS 配置页面](../../figs/API-zh-mac.jpg) |
 | **Skills**<br>导入本地或 GitHub skill 包，检查安装目标 inventory，预览已安装 skill 标签，并通过任务日志追踪下载或移除结果。 | ![CodexHub Skills Windows 页面，展示本地技能库和安装目标](../../figs/Skills-zh-win.png) | ![CodexHub Skills macOS 页面，展示本地技能库和安装目标](../../figs/Skills-zh-mac.jpg) |
@@ -59,7 +59,7 @@ CodexHub 聚焦一个清晰场景：让 Windows、macOS 或 Linux 桌面上的 C
 - 创建、预览、应用 profile 到远端 `~/.codex/config.toml`。
 - Profile 应用确认后，可重载当前 SSH 用户下身份已严格确认的远端 Codex 进程；推荐模式会保留交互式 CLI 和 exec 会话。
 - 导入本地或 GitHub skill，并安装到本机或远端目标。
-- 对已记住主机展示只读、页面活跃时刷新的 CPU、内存和 GPU 资源采样。
+- 对已记住主机展示只读、页面活跃时刷新的 CPU、内存和 GPU 资源采样，并支持展开用户级 GPU 进程详情。
 - 最近 100 条任务记录会跨重启持久保存；每条保留任务的完整诊断信息统一放在“任务”页面，命令与 stdout/stderr 默认脱敏。
 - 弹窗支持键盘焦点锁定、Esc 关闭、关闭后焦点恢复、范围明确的状态播报和 reduced-motion。
 - 提供 Windows 托盘 / macOS 菜单栏 / Linux 托盘状态图标；首次点击窗口关闭按钮时会询问以后是退出程序还是最小化到托盘，后续可在 Settings 修改。
@@ -107,11 +107,11 @@ Linux 桌面应用需要：
 
 日常使用建议从本仓库的 Releases 页面下载最新 stable 构建。
 
-- Windows：下载并运行 `CodexHub_0.4.8_x64-setup.exe`。
-- macOS Apple Silicon：下载 `CodexHub_0.4.8_aarch64.dmg`，打开后将 `CodexHub.app` 移入 Applications。v0.4.8 macOS 资产仍为 unsigned/ad-hoc；首次打开时可能需要通过 Control-click > Open 或 Privacy & Security 手动允许。只信任从本仓库 Release 页面下载的文件。
+- Windows：下载并运行 `CodexHub_0.4.9_x64-setup.exe`。
+- macOS Apple Silicon：下载 `CodexHub_0.4.9_aarch64.dmg`，打开后将 `CodexHub.app` 移入 Applications。v0.4.9 macOS 资产仍为 unsigned/ad-hoc；首次打开时可能需要通过 Control-click > Open 或 Privacy & Security 手动允许。只信任从本仓库 Release 页面下载的文件。
 - `.app.tar.gz` 资产用于应用内更新；macOS 用户日常安装请使用 `.dmg`，不要手动解压 updater archive。
-- Linux Ubuntu/Debian x86_64：安装 `CodexHub_0.4.8_amd64.deb`。Linux 默认使用 macOS 风格界面，可在 Settings 切换；已验证的 Linux stable 构建会进入签名自动更新 feed。
-- Linux Ubuntu/Debian arm64：安装 `CodexHub_0.4.8_arm64.deb`。已验证的 Linux stable 构建会进入签名自动更新 feed。
+- Linux Ubuntu/Debian x86_64：安装 `CodexHub_0.4.9_amd64.deb`。Linux 默认使用 macOS 风格界面，可在 Settings 切换；已验证的 Linux stable 构建会进入签名自动更新 feed。
+- Linux Ubuntu/Debian arm64：安装 `CodexHub_0.4.9_arm64.deb`。已验证的 Linux stable 构建会进入签名自动更新 feed。
 - 如果 Settings 中检查更新失败，CodexHub 会弹出日志窗口，并把本次运行记录到 Tasks，方便后续回看。
 
 ## ⚡ 快速开始

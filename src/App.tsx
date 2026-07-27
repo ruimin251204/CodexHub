@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEventHandler, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -510,6 +510,10 @@ export const uiCopy = {
       processCount: "Processes",
       processCountShort: (count: number) => `${count} proc`,
       processMemory: "Process memory",
+      processName: "Process name",
+      processDetails: (user: string) => `GPU process details for ${user}`,
+      expandProcessDetails: (user: string) => `Show GPU process details for ${user}`,
+      collapseProcessDetails: (user: string) => `Hide GPU process details for ${user}`,
       runtime: "Runtime",
       usage: "Usage",
       pid: "PID",
@@ -1306,6 +1310,10 @@ export const uiCopy = {
       processCount: "进程数",
       processCountShort: (count: number) => `${count} 进程`,
       processMemory: "进程显存",
+      processName: "进程名",
+      processDetails: (user: string) => `${user} 的 GPU 进程详情`,
+      expandProcessDetails: (user: string) => `展开 ${user} 的 GPU 进程详情`,
+      collapseProcessDetails: (user: string) => `收起 ${user} 的 GPU 进程详情`,
       runtime: "运行时",
       usage: "占用量",
       pid: "PID",
@@ -5437,6 +5445,7 @@ function MonitorHostCard({
               gpu={gpu}
               hostMemoryTotalBytes={hostMemoryTotalBytes}
               key={`${gpu.uuid ?? gpu.index ?? index}-${index}`}
+              sampledAt={snapshot?.sampledAt ?? null}
               userColorByUser={userColorByUser}
             />
           ))
@@ -5478,18 +5487,37 @@ function MonitorSummaryTile({
   );
 }
 
-function MonitorGpuBlock({
+export function MonitorGpuBlock({
   copy,
   gpu,
   hostMemoryTotalBytes,
+  sampledAt,
   userColorByUser
 }: {
   copy: UICopy;
   gpu: HostResourceSnapshot["gpus"][number];
   hostMemoryTotalBytes: number | null;
+  sampledAt: string | null;
   userColorByUser: MonitorGpuUserColorMap;
 }) {
   const userUsages = aggregateGpuProcessUsers(gpu, userColorByUser);
+  const detailsIdPrefix = useId();
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(() => new Set());
+
+  // A completed manual or automatic sample starts from a compact card again.
+  useEffect(() => {
+    setExpandedUsers(new Set());
+  }, [sampledAt]);
+
+  const toggleUser = (user: string) => {
+    setExpandedUsers((current) => {
+      const next = new Set(current);
+      if (next.has(user)) next.delete(user);
+      else next.add(user);
+      return next;
+    });
+  };
+
   return (
     <article className="monitorGpuBlock" data-status={gpu.status}>
       <header className="monitorGpuLineHeader">
@@ -5506,19 +5534,86 @@ function MonitorGpuBlock({
         <p className="monitorGpuDetected">{copy.monitor.detectedOnly}</p>
       ) : userUsages.length > 0 ? (
         <div className="monitorProcessList">
-          {userUsages.map((usage) => (
-            <div
-              className="monitorProcessRow"
-              key={usage.user}
-              style={{ "--monitor-user-color": usage.color } as CSSProperties}
-              title={`${copy.monitor.usage}: ${formatBytes(usage.usedMemoryBytes, copy)}`}
-            >
-              <strong>{usage.user}</strong>
-              <span>{formatProcessCount(usage.processCount, copy)}</span>
-              <span>{formatDuration(usage.elapsedSeconds, copy)}</span>
-              <span>{formatBytes(usage.usedMemoryBytes, copy)}</span>
-            </div>
-          ))}
+          {userUsages.map((usage, usageIndex) => {
+            const expanded = expandedUsers.has(usage.user);
+            const detailsId = `${detailsIdPrefix}-processes-${usageIndex}`;
+            const processes = sortMonitorGpuProcesses(
+              (gpu.processes ?? []).filter((process) => normalizeMonitorGpuUser(process.user) === usage.user)
+            );
+            return (
+              <div
+                className="monitorProcessGroup"
+                key={usage.user}
+                style={{ "--monitor-user-color": usage.color } as CSSProperties}
+              >
+                <button
+                  aria-controls={detailsId}
+                  aria-expanded={expanded}
+                  aria-label={expanded
+                    ? copy.monitor.collapseProcessDetails(usage.user)
+                    : copy.monitor.expandProcessDetails(usage.user)}
+                  className="monitorProcessRow"
+                  onClick={() => toggleUser(usage.user)}
+                  title={`${copy.monitor.usage}: ${formatBytes(usage.usedMemoryBytes, copy)}`}
+                  type="button"
+                >
+                  <strong>{usage.user}</strong>
+                  <span>{formatProcessCount(usage.processCount, copy)}</span>
+                  <span>{formatDuration(usage.elapsedSeconds, copy)}</span>
+                  <span>{formatBytes(usage.usedMemoryBytes, copy)}</span>
+                  <svg
+                    aria-hidden="true"
+                    className="monitorProcessDisclosure"
+                    fill="none"
+                    focusable="false"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="m7 8 3 3 3-3" />
+                  </svg>
+                </button>
+                {expanded ? (
+                  <div
+                    aria-label={copy.monitor.processDetails(usage.user)}
+                    className="monitorProcessDetails"
+                    id={detailsId}
+                    role="region"
+                  >
+                    <div className="monitorProcessDetailsHeader">
+                      <span>{copy.monitor.pid}</span>
+                      <span>{copy.monitor.processName}</span>
+                      <span>{copy.monitor.processMemory}</span>
+                    </div>
+                    <div className="monitorProcessDetailsList" role="list">
+                      {processes.map((process, processIndex) => (
+                        <div
+                          className="monitorProcessDetailRow"
+                          key={`${process.pid ?? "unknown"}-${process.name}-${processIndex}`}
+                          role="listitem"
+                        >
+                          <span>
+                            <small>{copy.monitor.pid}</small>
+                            <strong>{process.pid ?? copy.hosts.unknown}</strong>
+                          </span>
+                          <span>
+                            <small>{copy.monitor.processName}</small>
+                            <strong title={process.name}>{process.name || copy.hosts.unknown}</strong>
+                          </span>
+                          <span>
+                            <small>{copy.monitor.processMemory}</small>
+                            <strong>{formatBytes(process.usedMemoryBytes, copy)}</strong>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </article>
@@ -10319,6 +10414,18 @@ function aggregateGpuProcessUsers(
   return Array.from(users.values())
     .sort((left, right) => right.usedMemoryBytes - left.usedMemoryBytes || left.user.localeCompare(right.user))
     .map((usage) => ({ ...usage, color: monitorGpuUserColor(usage.user, userColorByUser) }));
+}
+
+export function sortMonitorGpuProcesses(
+  processes: HostResourceSnapshot["gpus"][number]["processes"]
+) {
+  return [...processes].sort((left, right) => {
+    const memoryOrder = (right.usedMemoryBytes ?? -1) - (left.usedMemoryBytes ?? -1);
+    if (memoryOrder !== 0) return memoryOrder;
+    const pidOrder = (left.pid ?? Number.MAX_SAFE_INTEGER) - (right.pid ?? Number.MAX_SAFE_INTEGER);
+    if (pidOrder !== 0) return pidOrder;
+    return left.name.localeCompare(right.name);
+  });
 }
 
 function buildMonitorGpuUserColorMap(snapshots: HostResourceSnapshot[]): MonitorGpuUserColorMap {
