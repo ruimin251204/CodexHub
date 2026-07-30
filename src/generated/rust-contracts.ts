@@ -233,7 +233,11 @@ initialDirectory?: WorkspaceInitialTerminalDirectoryDto, rows: number, cols: num
 
 export type WorkspaceInitialTerminalDirectoryDto = { fileSessionId: string, path: string, };
 
-export type WorkspaceTerminalSessionDto = { sessionId: string, createdAt: string, hostId: string, hostName: string, hostAlias: string, generation: number, revision: number, state: WorkspaceTerminalStateDto, reconnectable: boolean, attempt: number, autoReconnect: boolean, rows: number, cols: number, verifiedCwd: string | null, reason: string | null, };
+export type WorkspaceTerminalSessionDto = { sessionId: string, createdAt: string, hostId: string, hostName: string, hostAlias: string, generation: number, revision: number, state: WorkspaceTerminalStateDto, reconnectable: boolean, attempt: number, autoReconnect: boolean, rows: number, cols: number, verifiedCwd: string | null, reason: string | null,
+/**
+ * The active connection-attempt audit record. Terminal bytes never enter it.
+ */
+taskId: string | null, };
 
 export type WorkspaceAttachTerminalRequestDto = { sessionId: string, generation: number, afterSequence: number, };
 
@@ -365,7 +369,7 @@ export type WorkspaceResolveTransferConflictRequestDto = { transferId: string, c
 
 export type WorkspaceTerminalOutputEventDto = { sessionId: string, generation: number, sequence: number, dataBase64: string, };
 
-export type WorkspaceSessionStateEventDto = { sessionId: string, generation: number, revision: number, state: WorkspaceTerminalStateDto, reconnectable: boolean, attempt: number, nextRetryAt: string | null, reason: string | null, };
+export type WorkspaceSessionStateEventDto = { sessionId: string, generation: number, revision: number, state: WorkspaceTerminalStateDto, reconnectable: boolean, attempt: number, nextRetryAt: string | null, reason: string | null, taskId: string | null, };
 
 export type WorkspaceSessionHeartbeatEventDto = { sessionId: string, generation: number, revision: number, observedAt: string, };
 

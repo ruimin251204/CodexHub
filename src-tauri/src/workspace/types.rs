@@ -63,6 +63,8 @@ pub struct TerminalSessionDto {
     pub cols: u16,
     pub verified_cwd: Option<String>,
     pub reason: Option<String>,
+    /// The active connection-attempt audit record. Terminal bytes never enter it.
+    pub task_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TS)]

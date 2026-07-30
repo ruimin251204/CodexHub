@@ -9,6 +9,10 @@ use super::types::{
     TerminalAckRequest, TerminalIdentityRequest, TerminalReplayFrame, TerminalResizeRequest,
     TerminalSessionDto, TerminalState, TerminalWriteRequest, ValidatedCwd,
 };
+use crate::adapters::TaskEventSink;
+use crate::jobs;
+use crate::storage::TaskStore;
+use crate::tasks::{TaskLog, TaskLogLevel, TaskStatus, TaskStep, TaskStepStatus};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::{Duration as ChronoDuration, Local};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -83,18 +87,275 @@ struct Terminal {
     /// full. This keeps the in-memory ring bounded without dropping bytes.
     output_ready: Condvar,
     sink: Option<WorkspaceEventSink>,
+    audit: Option<Arc<dyn TerminalAuditSink>>,
 }
 
 pub struct TerminalSessions {
     values: Mutex<HashMap<String, Arc<Terminal>>>,
     sink: Option<WorkspaceEventSink>,
+    audit: Option<Arc<dyn TerminalAuditSink>>,
+}
+
+/// Job records contain only lifecycle summaries and stable error codes. PTY
+/// bytes, SSH stderr, paths and user input remain outside the task store.
+pub trait TerminalAuditSink: Send + Sync {
+    fn begin_attempt(&self, session: &TerminalSessionDto) -> Result<String, String>;
+    fn record(&self, task_id: &str, event: TerminalAuditEvent, reason: Option<&str>);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TerminalAuditEvent {
+    ProcessLaunched,
+    Connected,
+    Failed,
+    Interrupted,
+    Closed,
+}
+
+/// Durable Job Manager adapter for terminal attempts. It is deliberately
+/// owned by Workspace so automatic reconnects receive the same audit policy.
+pub struct JobManagerTerminalAudit {
+    task_store: Arc<TaskStore>,
+    task_event_sink: Option<TaskEventSink>,
+}
+
+impl JobManagerTerminalAudit {
+    pub fn new(task_store: Arc<TaskStore>, task_event_sink: Option<TaskEventSink>) -> Self {
+        Self {
+            task_store,
+            task_event_sink,
+        }
+    }
+}
+
+impl TerminalAuditSink for JobManagerTerminalAudit {
+    fn begin_attempt(&self, session: &TerminalSessionDto) -> Result<String, String> {
+        let task_id = format!("task-workspace-terminal-{}", Uuid::new_v4());
+        let action = if session.attempt > 1 {
+            "Reconnect Workspace terminal"
+        } else {
+            "Connect Workspace terminal"
+        };
+        let mut task = jobs::begin_task(
+            self.task_store.as_ref(),
+            self.task_event_sink.as_ref(),
+            &task_id,
+            &session.host_id,
+            &session.host_name,
+            action,
+        )?;
+        let now = Local::now().to_rfc3339();
+        task.steps = terminal_task_steps(&task_id);
+        if let Some(step) = task.steps.iter_mut().find(|step| step.step_id == "launch") {
+            step.status = TaskStepStatus::Running;
+            step.started_at = Some(now);
+        }
+        task.summary = "Launching the local SSH terminal process.".into();
+        jobs::persist_task(
+            self.task_store.as_ref(),
+            self.task_event_sink.as_ref(),
+            &task,
+        )?;
+        Ok(task_id)
+    }
+
+    fn record(&self, task_id: &str, event: TerminalAuditEvent, reason: Option<&str>) {
+        let Ok(Some(mut task)) = self.task_store.get(task_id) else {
+            return;
+        };
+        if matches!(
+            task.status,
+            TaskStatus::Success
+                | TaskStatus::Failed
+                | TaskStatus::Cancelled
+                | TaskStatus::Interrupted
+        ) {
+            return;
+        }
+
+        let now = Local::now().to_rfc3339();
+        let connect_started = task
+            .steps
+            .iter()
+            .find(|step| step.step_id == "connect")
+            .is_some_and(|step| !matches!(step.status, TaskStepStatus::Pending));
+        let connect_succeeded = task
+            .steps
+            .iter()
+            .find(|step| step.step_id == "connect")
+            .is_some_and(|step| matches!(step.status, TaskStepStatus::Success));
+        let (summary, level, final_status) = match event {
+            TerminalAuditEvent::ProcessLaunched => {
+                set_terminal_step(&mut task, "launch", TaskStepStatus::Success, &now);
+                set_terminal_step(&mut task, "connect", TaskStepStatus::Running, &now);
+                (
+                    "Connecting the SSH terminal.".to_string(),
+                    TaskLogLevel::Info,
+                    None,
+                )
+            }
+            TerminalAuditEvent::Connected => {
+                set_terminal_step(&mut task, "launch", TaskStepStatus::Success, &now);
+                set_terminal_step(&mut task, "connect", TaskStepStatus::Success, &now);
+                (
+                    "SSH terminal connected.".to_string(),
+                    TaskLogLevel::Info,
+                    None,
+                )
+            }
+            TerminalAuditEvent::Failed => {
+                if connect_started {
+                    set_terminal_step(&mut task, "launch", TaskStepStatus::Success, &now);
+                    set_terminal_step(&mut task, "connect", TaskStepStatus::Failed, &now);
+                } else {
+                    set_terminal_step(&mut task, "launch", TaskStepStatus::Failed, &now);
+                    set_terminal_step(&mut task, "connect", TaskStepStatus::Skipped, &now);
+                }
+                (
+                    format!(
+                        "SSH terminal connection failed ({}).",
+                        safe_terminal_reason(reason)
+                    ),
+                    TaskLogLevel::Error,
+                    Some(TaskStatus::Failed),
+                )
+            }
+            TerminalAuditEvent::Interrupted => {
+                if !connect_succeeded {
+                    if connect_started {
+                        set_terminal_step(&mut task, "connect", TaskStepStatus::Failed, &now);
+                    } else {
+                        set_terminal_step(&mut task, "launch", TaskStepStatus::Failed, &now);
+                        set_terminal_step(&mut task, "connect", TaskStepStatus::Skipped, &now);
+                    }
+                }
+                (
+                    format!(
+                        "SSH terminal connection interrupted ({}).",
+                        safe_terminal_reason(reason)
+                    ),
+                    TaskLogLevel::Warn,
+                    Some(TaskStatus::Interrupted),
+                )
+            }
+            TerminalAuditEvent::Closed => {
+                if connect_succeeded {
+                    set_terminal_step(&mut task, "launch", TaskStepStatus::Success, &now);
+                    set_terminal_step(&mut task, "connect", TaskStepStatus::Success, &now);
+                    (
+                        "SSH terminal session closed.".to_string(),
+                        TaskLogLevel::Info,
+                        Some(TaskStatus::Success),
+                    )
+                } else {
+                    set_terminal_step(&mut task, "connect", TaskStepStatus::Skipped, &now);
+                    (
+                        "SSH terminal connection cancelled by the user.".to_string(),
+                        TaskLogLevel::Warn,
+                        Some(TaskStatus::Cancelled),
+                    )
+                }
+            }
+        };
+        task.summary = summary.clone();
+        task.logs.push(TaskLog {
+            id: jobs::task_log_id(task_id, task.logs.len() + 1),
+            task_run_id: task_id.to_string(),
+            step_id: None,
+            level,
+            timestamp: now.clone(),
+            message: summary,
+            command: None,
+            stdout: None,
+            stderr: None,
+            exit_code: None,
+            duration_ms: None,
+            timed_out: None,
+        });
+        if let Some(status) = final_status {
+            task.status = status;
+            task.ended_at = Some(now);
+        }
+        let _ = jobs::persist_task(
+            self.task_store.as_ref(),
+            self.task_event_sink.as_ref(),
+            &task,
+        );
+    }
+}
+
+fn terminal_task_steps(task_id: &str) -> Vec<TaskStep> {
+    [
+        ("launch", 1, "Launching the local SSH terminal process."),
+        ("connect", 2, "Connecting through the selected SSH alias."),
+    ]
+    .into_iter()
+    .map(|(step_id, sequence, summary)| TaskStep {
+        task_run_id: task_id.to_string(),
+        step_id: step_id.to_string(),
+        sequence,
+        status: TaskStepStatus::Pending,
+        summary: summary.to_string(),
+        started_at: None,
+        ended_at: None,
+    })
+    .collect()
+}
+
+fn set_terminal_step(
+    task: &mut crate::tasks::TaskRun,
+    step_id: &str,
+    status: TaskStepStatus,
+    now: &str,
+) {
+    let Some(step) = task.steps.iter_mut().find(|step| step.step_id == step_id) else {
+        return;
+    };
+    if step.started_at.is_none() {
+        step.started_at = Some(now.to_string());
+    }
+    let completed = !matches!(status, TaskStepStatus::Running | TaskStepStatus::Pending);
+    step.status = status;
+    if completed {
+        step.ended_at = Some(now.to_string());
+    }
+}
+
+fn safe_terminal_reason(reason: Option<&str>) -> String {
+    let value = reason.unwrap_or("connection-failed");
+    [
+        "application-exit",
+        "closed-by-user",
+        "consumer-stalled",
+        "network-disconnected",
+        "shell-exited",
+        "ssh-authentication-failed",
+        "ssh-eof",
+        "ssh-host-key-failed",
+        "ssh-read-failed",
+        "ssh-reader-disconnected",
+        "terminal-initial-directory-unavailable",
+        "terminal-initial-directory-write-failed",
+        "terminal-pty-create-failed",
+        "terminal-reader-failed",
+        "terminal-ssh-start-failed",
+        "terminal-writer-failed",
+    ]
+    .contains(&value)
+    .then_some(value)
+    .unwrap_or("connection-failed")
+    .to_string()
 }
 
 impl TerminalSessions {
-    pub fn new(sink: Option<WorkspaceEventSink>) -> Self {
+    pub fn new(
+        sink: Option<WorkspaceEventSink>,
+        audit: Option<Arc<dyn TerminalAuditSink>>,
+    ) -> Self {
         Self {
             values: Mutex::new(HashMap::new()),
             sink,
+            audit,
         }
     }
 
@@ -167,6 +428,7 @@ impl TerminalSessions {
                     cols: request.cols,
                     verified_cwd: None,
                     reason: None,
+                    task_id: None,
                 },
                 next_sequence: 0,
                 acknowledged: 0,
@@ -188,6 +450,7 @@ impl TerminalSessions {
             }),
             output_ready: Condvar::new(),
             sink: self.sink.clone(),
+            audit: self.audit.clone(),
         });
         start_pty(&terminal, false, true)?;
         let dto = terminal.inner.lock().map_err(lock_error)?.dto.clone();
@@ -313,7 +576,10 @@ impl TerminalSessions {
         let terminal = self.get(session_id)?;
         {
             let inner = terminal.inner.lock().map_err(lock_error)?;
-            if !inner.dto.auto_reconnect || !inner.dto.reconnectable {
+            if !inner.dto.auto_reconnect
+                || !inner.dto.reconnectable
+                || inner.dto.state != TerminalState::Disconnected
+            {
                 return Err(WorkspaceError::new(
                     "terminal-not-reconnectable",
                     "This terminal cannot be reconnected.",
@@ -341,6 +607,12 @@ impl TerminalSessions {
         inner.dto.reason = Some("closed-by-user".into());
         inner.dto.revision = inner.dto.revision.saturating_add(1);
         emit_state(&terminal, &inner, None);
+        record_terminal_audit(
+            &terminal,
+            inner.dto.task_id.as_deref(),
+            TerminalAuditEvent::Closed,
+            Some("closed-by-user"),
+        );
         terminal.output_ready.notify_all();
         let dto = inner.dto.clone();
         drop(inner);
@@ -465,6 +737,12 @@ impl TerminalSessions {
                 inner.dto.reason = Some("application-exit".into());
                 inner.dto.revision = inner.dto.revision.saturating_add(1);
                 emit_state(terminal, &inner, None);
+                record_terminal_audit(
+                    terminal,
+                    inner.dto.task_id.as_deref(),
+                    TerminalAuditEvent::Interrupted,
+                    Some("application-exit"),
+                );
                 terminal.output_ready.notify_all();
             }
         }
@@ -494,7 +772,7 @@ fn start_pty(
     reconnect: bool,
     reset_retries: bool,
 ) -> WorkspaceResult<()> {
-    let (alias, rows, cols, generation, requested_cwd, requires_initial_cwd) = {
+    let (alias, rows, cols, generation, requested_cwd, requires_initial_cwd, task_id) = {
         let mut inner = terminal.inner.lock().map_err(lock_error)?;
         if matches!(
             inner.dto.state,
@@ -534,6 +812,17 @@ fn start_pty(
             inner.reconnect_attempts = 0;
         }
         reset_generation_buffers(&mut inner);
+        inner.dto.task_id = terminal
+            .audit
+            .as_ref()
+            .map(|audit| audit.begin_attempt(&inner.dto))
+            .transpose()
+            .map_err(|_| {
+                WorkspaceError::new(
+                    "terminal-task-create-failed",
+                    "Could not create the terminal connection task.",
+                )
+            })?;
         emit_state(terminal, &inner, None);
         terminal.output_ready.notify_all();
         (
@@ -543,6 +832,7 @@ fn start_pty(
             inner.dto.generation,
             requested_cwd,
             !reconnect,
+            inner.dto.task_id.clone(),
         )
     };
 
@@ -601,6 +891,12 @@ fn start_pty(
         Ok(child) => child,
         Err(error) => return fail_start(terminal, generation, "terminal-ssh-start-failed", error),
     };
+    record_terminal_audit(
+        terminal,
+        task_id.as_deref(),
+        TerminalAuditEvent::ProcessLaunched,
+        None,
+    );
     drop(pair.slave);
     let reader = match pair.master.try_clone_reader() {
         Ok(reader) => reader,
@@ -657,6 +953,12 @@ fn start_pty(
         inner.dto.revision = inner.dto.revision.saturating_add(1);
         inner.connected_at = Some(Instant::now());
         emit_state(terminal, &inner, None);
+        record_terminal_audit(
+            terminal,
+            inner.dto.task_id.as_deref(),
+            TerminalAuditEvent::Connected,
+            None,
+        );
     }
 
     spawn_reader(terminal.clone(), reader, generation);
@@ -685,6 +987,12 @@ fn fail_start(
             inner.dto.reconnectable = inner.dto.auto_reconnect;
             inner.dto.revision = inner.dto.revision.saturating_add(1);
             emit_state(terminal, &inner, None);
+            record_terminal_audit(
+                terminal,
+                inner.dto.task_id.as_deref(),
+                TerminalAuditEvent::Failed,
+                Some(code),
+            );
         }
     }
     Err(WorkspaceError::retryable(code, message))
@@ -912,6 +1220,12 @@ fn record_output(terminal: &Arc<Terminal>, generation: u32, bytes: Vec<u8>) {
                 inner.dto.reconnectable = false;
                 inner.dto.revision = inner.dto.revision.saturating_add(1);
                 emit_state(terminal, &inner, None);
+                record_terminal_audit(
+                    terminal,
+                    inner.dto.task_id.as_deref(),
+                    TerminalAuditEvent::Failed,
+                    Some("consumer-stalled"),
+                );
                 terminal.output_ready.notify_all();
                 return;
             }
@@ -959,7 +1273,7 @@ fn append_recent_output(recent: &mut Vec<u8>, bytes: &[u8]) {
 }
 
 fn mark_disconnected(terminal: &Arc<Terminal>, generation: u32, fallback_reason: &'static str) {
-    let should_retry = {
+    let (should_retry, audit_event, task_id, reason) = {
         let mut inner = match terminal.inner.lock() {
             Ok(value) => value,
             Err(_) => return,
@@ -981,7 +1295,12 @@ fn mark_disconnected(terminal: &Arc<Terminal>, generation: u32, fallback_reason:
                 inner.dto.revision = inner.dto.revision.saturating_add(1);
                 release_pty(&mut inner);
                 emit_state(terminal, &inner, None);
-                false
+                (
+                    false,
+                    TerminalAuditEvent::Closed,
+                    inner.dto.task_id.clone(),
+                    inner.dto.reason.clone(),
+                )
             }
             DisconnectReason::Authentication => {
                 inner.dto.state = TerminalState::Failed;
@@ -990,7 +1309,12 @@ fn mark_disconnected(terminal: &Arc<Terminal>, generation: u32, fallback_reason:
                 inner.dto.revision = inner.dto.revision.saturating_add(1);
                 release_pty(&mut inner);
                 emit_state(terminal, &inner, None);
-                false
+                (
+                    false,
+                    TerminalAuditEvent::Failed,
+                    inner.dto.task_id.clone(),
+                    inner.dto.reason.clone(),
+                )
             }
             DisconnectReason::HostKey => {
                 inner.dto.state = TerminalState::Failed;
@@ -999,7 +1323,12 @@ fn mark_disconnected(terminal: &Arc<Terminal>, generation: u32, fallback_reason:
                 inner.dto.revision = inner.dto.revision.saturating_add(1);
                 release_pty(&mut inner);
                 emit_state(terminal, &inner, None);
-                false
+                (
+                    false,
+                    TerminalAuditEvent::Failed,
+                    inner.dto.task_id.clone(),
+                    inner.dto.reason.clone(),
+                )
             }
             DisconnectReason::Network(reason) => {
                 inner.dto.state = TerminalState::Disconnected;
@@ -1008,10 +1337,16 @@ fn mark_disconnected(terminal: &Arc<Terminal>, generation: u32, fallback_reason:
                 inner.dto.revision = inner.dto.revision.saturating_add(1);
                 release_pty(&mut inner);
                 emit_state(terminal, &inner, None);
-                inner.dto.auto_reconnect
+                (
+                    inner.dto.auto_reconnect,
+                    TerminalAuditEvent::Interrupted,
+                    inner.dto.task_id.clone(),
+                    inner.dto.reason.clone(),
+                )
             }
         }
     };
+    record_terminal_audit(terminal, task_id.as_deref(), audit_event, reason.as_deref());
     if should_retry {
         schedule_auto_reconnect(terminal.clone());
     }
@@ -1244,6 +1579,18 @@ fn schedule_auto_reconnect(terminal: Arc<Terminal>) {
     });
 }
 
+fn record_terminal_audit(
+    terminal: &Terminal,
+    task_id: Option<&str>,
+    event: TerminalAuditEvent,
+    reason: Option<&str>,
+) {
+    let (Some(audit), Some(task_id)) = (terminal.audit.as_ref(), task_id) else {
+        return;
+    };
+    audit.record(task_id, event, reason);
+}
+
 fn emit_state(terminal: &Terminal, inner: &TerminalInner, next_retry_at: Option<String>) {
     emit(
         terminal.sink.as_ref(),
@@ -1257,6 +1604,7 @@ fn emit_state(terminal: &Terminal, inner: &TerminalInner, next_retry_at: Option<
             attempt: inner.dto.attempt,
             next_retry_at,
             reason: inner.dto.reason.clone(),
+            task_id: inner.dto.task_id.clone(),
         },
     );
 }
@@ -1310,6 +1658,75 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> WorkspaceError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn audit_session(attempt: u8) -> TerminalSessionDto {
+        TerminalSessionDto {
+            session_id: "term-test".into(),
+            created_at: "2026-07-30T00:00:00Z".into(),
+            host_id: "host-test".into(),
+            host_name: "Test host".into(),
+            host_alias: "test-host".into(),
+            generation: 1,
+            revision: 1,
+            state: TerminalState::Connecting,
+            reconnectable: false,
+            attempt,
+            auto_reconnect: true,
+            rows: 24,
+            cols: 80,
+            verified_cwd: None,
+            reason: None,
+            task_id: None,
+        }
+    }
+
+    #[test]
+    fn terminal_audit_tracks_connection_attempts_without_secret_text() {
+        let store = Arc::new(TaskStore::in_memory());
+        let audit = JobManagerTerminalAudit::new(store.clone(), None);
+        let task_id = audit.begin_attempt(&audit_session(1)).unwrap();
+        audit.record(&task_id, TerminalAuditEvent::ProcessLaunched, None);
+        audit.record(
+            &task_id,
+            TerminalAuditEvent::Failed,
+            Some("ssh-authentication-failed"),
+        );
+
+        let task = store.get(&task_id).unwrap().unwrap();
+        assert!(matches!(task.status, TaskStatus::Failed));
+        assert!(
+            task.steps
+                .iter()
+                .any(|step| step.step_id == "launch"
+                    && matches!(step.status, TaskStepStatus::Success))
+        );
+        assert!(
+            task.steps
+                .iter()
+                .any(|step| step.step_id == "connect"
+                    && matches!(step.status, TaskStepStatus::Failed))
+        );
+        assert!(task
+            .logs
+            .iter()
+            .any(|log| log.message.contains("ssh-authentication-failed")));
+        assert!(task
+            .logs
+            .iter()
+            .all(|log| !log.message.contains("private-key")));
+    }
+
+    #[test]
+    fn terminal_audit_only_accepts_known_reason_codes() {
+        assert_eq!(
+            safe_terminal_reason(Some("ssh-host-key-failed")),
+            "ssh-host-key-failed"
+        );
+        assert_eq!(
+            safe_terminal_reason(Some("token=private-key:/home/user/.ssh/id_ed25519")),
+            "connection-failed"
+        );
+    }
 
     #[test]
     fn terminal_size_has_fixed_safe_bounds() {

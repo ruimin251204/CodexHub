@@ -14,7 +14,8 @@ const session = (generation: number, revision: number): WorkspaceTerminalSession
   attempt: 0,
   nextRetryAt: null,
   reason: null,
-  createdAt: "2026-07-30T00:00:00Z"
+  createdAt: "2026-07-30T00:00:00Z",
+  taskId: "task-terminal"
 });
 
 const transfer = (revision: number): WorkspaceTransfer => ({
@@ -46,18 +47,18 @@ test("Workspace state rejects delayed session generations and revisions", () => 
     type: "session-state-received",
     event: {
       sessionId: "term-test", generation: 1, revision: 99, state: "failed",
-      reconnectable: false, attempt: 5, nextRetryAt: null, reason: "stale"
+      reconnectable: false, attempt: 5, nextRetryAt: null, reason: "stale", taskId: "task-stale"
     }
   });
   state = workspaceStateReducer(state, {
     type: "session-state-received",
     event: {
       sessionId: "term-test", generation: 2, revision: 5, state: "reconnecting",
-      reconnectable: true, attempt: 1, nextRetryAt: "2026-07-30T00:00:01Z", reason: null
+      reconnectable: true, attempt: 1, nextRetryAt: "2026-07-30T00:00:01Z", reason: null, taskId: "task-reconnected"
     }
   });
 
-  expect(state.sessions[0]).toMatchObject({ generation: 2, revision: 5, state: "reconnecting", attempt: 1 });
+  expect(state.sessions[0]).toMatchObject({ generation: 2, revision: 5, state: "reconnecting", attempt: 1, taskId: "task-reconnected" });
 });
 
 test("Workspace transfer snapshot cannot overwrite a newer event", () => {

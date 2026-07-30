@@ -5,6 +5,7 @@ import { useWorkspaceController } from "./controller";
 import { FilesPanel, WORKSPACE_FILES_LOCATION_EVENT } from "./FilesPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { TransfersPanel } from "./TransfersPanel";
+import type { TerminalRendererFailure } from "./XtermTerminal";
 import type {
   WorkspaceApi,
   WorkspaceHost,
@@ -43,6 +44,7 @@ export function WorkspacePage({
   initialHostAlias = "",
   locale,
   onError,
+  onTerminalRendererError,
   onModeChange,
   onOpenTask,
   platform,
@@ -55,6 +57,7 @@ export function WorkspacePage({
   initialHostAlias?: string;
   locale: WorkspaceLocale;
   onError: (error: unknown) => void;
+  onTerminalRendererError: (failure: TerminalRendererFailure) => void;
   onModeChange?: (mode: WorkspaceMode) => void;
   onOpenTask?: (taskId: string) => void;
   platform: WorkspacePlatform;
@@ -260,6 +263,8 @@ export function WorkspacePage({
       onActivateSession={setActiveSessionId}
       onCloseSession={setCloseTarget}
       onError={onError}
+      onOpenTask={onOpenTask}
+      onRendererError={onTerminalRendererError}
       onHostSelected={(hostAlias) => void openTerminal(hostAlias)}
       onReconnect={(session) => void reconnect(session)}
     />

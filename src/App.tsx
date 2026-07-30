@@ -2766,6 +2766,8 @@ function App() {
   const resourceBusyRef = useRef(false);
   const resourceMonitorVisitedRef = useRef(false);
   const settingsSaveBusyRef = useRef(false);
+  // A renderer attempt produces one sanitized task at most once.
+  const terminalRendererTaskKeysRef = useRef(new Set<string>());
 
   const locale: Locale = settings.fontPreset === "zh-cn" ? "zh" : "en";
   const copy = uiCopy[locale];
@@ -2781,6 +2783,27 @@ function App() {
   const setWarningNotice = useCallback((message: string, taskId?: string) => {
     notify({ message, taskId, tone: "warning" });
   }, [notify]);
+  const handleTerminalRendererError = useCallback((failure: {
+    sessionId: string;
+    generation: number;
+    retry: number;
+  }) => {
+    const key = `${failure.sessionId}:${failure.generation}:${failure.retry}`;
+    if (terminalRendererTaskKeysRef.current.has(key)) return;
+    terminalRendererTaskKeysRef.current.add(key);
+    // The raw browser error is intentionally never persisted in Task logs.
+    void api.recordFrontendError("Workspace terminal renderer initialization failed.")
+      .then((task) => {
+        setTasks((current) => mergeTaskRunsForUi([normalizeTaskRunForUi(task)], current));
+        setErrorNotice("Workspace terminal renderer initialization failed.", task.id);
+      })
+      .catch((error) => {
+        // Storage failures are retryable; do not permanently suppress a later
+        // renderer retry when the first Task record could not be created.
+        terminalRendererTaskKeysRef.current.delete(key);
+        setErrorNotice(formatError(error), taskIdForError(error));
+      });
+  }, [setErrorNotice]);
   const runtimePlatform = useMemo(() => getPlatform(), []);
   const effectivePlatform = resolvePlatformAppearance(settings.platformAppearance);
   const usesCustomTitleBar = isWindows(runtimePlatform);
@@ -4441,6 +4464,7 @@ function App() {
               platform={runtimePlatform}
               terminalPreferences={workspaceTerminalPreferences(settings)}
               onError={(error) => setErrorNotice(formatError(error), taskIdForError(error))}
+              onTerminalRendererError={handleTerminalRendererError}
               onOpenTask={openTaskDetail}
             />
           </Suspense>

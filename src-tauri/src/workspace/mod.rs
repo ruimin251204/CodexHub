@@ -14,7 +14,7 @@ use crate::workspace::error::{WorkspaceError, WorkspaceResult};
 use crate::workspace::events::WorkspaceEventSink;
 use crate::workspace::files::FileSessions;
 use crate::workspace::operations::{FileOperations, RecoveryPersistence};
-use crate::workspace::terminal::TerminalSessions;
+use crate::workspace::terminal::{TerminalAuditSink, TerminalSessions};
 use crate::workspace::transfer_io::{
     LocalRecoveryPersistence, SqliteLocalRecoveryCommitter, TransferIo,
 };
@@ -39,13 +39,14 @@ impl WorkspaceManager {
         recovery_persistence: Box<dyn RecoveryPersistence>,
         local_recovery_persistence: Arc<dyn LocalRecoveryPersistence>,
         event_sink: Option<WorkspaceEventSink>,
+        terminal_audit: Option<Arc<dyn TerminalAuditSink>>,
     ) -> WorkspaceResult<Self> {
         let operations = Arc::new(FileOperations::new(recovery_persistence));
         let local_recoveries = Arc::new(SqliteLocalRecoveryCommitter::new(
             local_recovery_persistence,
         ));
         Ok(Self {
-            terminals: TerminalSessions::new(event_sink.clone()),
+            terminals: TerminalSessions::new(event_sink.clone(), terminal_audit),
             files: FileSessions::new(event_sink.clone()),
             transfers: TransferQueue::new(transfer_persistence, event_sink)?,
             transfer_io: TransferIo::with_committers(operations.clone(), local_recoveries.clone()),

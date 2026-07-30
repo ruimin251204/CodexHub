@@ -11,6 +11,13 @@ import type {
 export const WORKSPACE_TERMINAL_SEARCH_EVENT = "codexhub:workspace-terminal-search";
 export const WORKSPACE_TERMINAL_FOCUS_EVENT = "codexhub:workspace-terminal-focus";
 
+/** Stable identifiers for a sanitized renderer-failure task. */
+export type TerminalRendererFailure = {
+  sessionId: string;
+  generation: number;
+  retry: number;
+};
+
 type XtermLike = {
   cols: number;
   rows: number;
@@ -100,7 +107,8 @@ export function XtermTerminal({
   platform,
   preferences,
   session,
-  onError
+  onError,
+  onRendererError
 }: {
   active: boolean;
   api: WorkspaceApi;
@@ -109,6 +117,7 @@ export function XtermTerminal({
   preferences: WorkspaceTerminalPreferences;
   session: WorkspaceTerminalSession;
   onError: (error: unknown) => void;
+  onRendererError: (failure: TerminalRendererFailure) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XtermLike | null>(null);
@@ -123,6 +132,7 @@ export function XtermTerminal({
   const preferencesRef = useRef(preferences);
   const themeRef = useRef<Record<string, string>>({});
   const onErrorRef = useRef(onError);
+  const onRendererErrorRef = useRef(onRendererError);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [rendererReady, setRendererReady] = useState(false);
@@ -134,6 +144,7 @@ export function XtermTerminal({
   generationRef.current = session.generation;
   preferencesRef.current = preferences;
   onErrorRef.current = onError;
+  onRendererErrorRef.current = onRendererError;
   const theme = useMemo(() => resolveTerminalTheme(preferences.colorScheme), [preferences.colorScheme]);
   themeRef.current = theme;
 
@@ -142,6 +153,12 @@ export function XtermTerminal({
     let resizeObserver: ResizeObserver | null = null;
     let resizeTimer: number | null = null;
     const disposables: Array<{ dispose: () => void }> = [];
+    let pendingTerminal: XtermLike | null = null;
+    let pendingFitAddon: FitAddonLike | null = null;
+    let pendingSearchAddon: SearchAddonLike | null = null;
+
+    setLoading(true);
+    setLoadError(false);
 
     void Promise.all([
       import("@xterm/xterm"),
@@ -151,7 +168,8 @@ export function XtermTerminal({
     ]).then(([xtermModule, fitModule, searchModule, unicodeModule]) => {
       if (cancelled || !containerRef.current) return;
       const terminal = new xtermModule.Terminal({
-        allowProposedApi: false,
+        // Unicode11Addon needs this xterm API. Clipboard/WebLinks/OSC52 stay disabled.
+        allowProposedApi: true,
         convertEol: false,
         cursorBlink: true,
         cursorStyle: preferencesRef.current.cursorStyle,
@@ -167,17 +185,34 @@ export function XtermTerminal({
         smoothScrollDuration: 0,
         theme: themeRef.current,
       }) as unknown as XtermLike;
+      pendingTerminal = terminal;
       const fitAddon = new fitModule.FitAddon() as unknown as FitAddonLike;
       const searchAddon = new searchModule.SearchAddon() as unknown as SearchAddonLike;
-      const unicodeAddon = new unicodeModule.Unicode11Addon();
-      terminal.loadAddon(fitAddon);
-      terminal.loadAddon(searchAddon);
-      terminal.loadAddon(unicodeAddon);
-      terminal.unicode.activeVersion = "11";
-      terminal.open(containerRef.current);
+      pendingFitAddon = fitAddon;
+      pendingSearchAddon = searchAddon;
+      try {
+        const unicodeAddon = new unicodeModule.Unicode11Addon();
+        terminal.loadAddon(fitAddon);
+        terminal.loadAddon(searchAddon);
+        terminal.loadAddon(unicodeAddon);
+        terminal.unicode.activeVersion = "11";
+        terminal.open(containerRef.current);
+      } catch (error) {
+        // Initialization may allocate resources before refs are assigned.
+        pendingSearchAddon?.dispose();
+        pendingFitAddon?.dispose();
+        pendingTerminal?.dispose();
+        pendingSearchAddon = null;
+        pendingFitAddon = null;
+        pendingTerminal = null;
+        throw error;
+      }
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
+      pendingSearchAddon = null;
+      pendingFitAddon = null;
+      pendingTerminal = null;
       setLoading(false);
       setLoadError(false);
       setRendererReady(true);
@@ -229,11 +264,17 @@ export function XtermTerminal({
       resizeObserver.observe(containerRef.current);
       fitAndResize();
       if (active) terminal.focus();
-    }).catch((error) => {
+    }).catch(() => {
       if (cancelled) return;
       setLoading(false);
       setLoadError(true);
-      onError(error);
+      // Persist a fixed summary only; the raw browser exception can contain
+      // paths, extension data or rendered terminal text.
+      onRendererErrorRef.current({
+        sessionId: session.sessionId,
+        generation: generationRef.current,
+        retry: rendererRetry
+      });
     });
 
     return () => {
@@ -241,6 +282,9 @@ export function XtermTerminal({
       resizeObserver?.disconnect();
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
       for (const disposable of disposables) disposable.dispose();
+      pendingSearchAddon?.dispose();
+      pendingFitAddon?.dispose();
+      pendingTerminal?.dispose();
       fitAddonRef.current?.dispose();
       searchAddonRef.current?.dispose();
       terminalRef.current?.dispose();

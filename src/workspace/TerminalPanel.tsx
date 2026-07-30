@@ -8,6 +8,7 @@ import type {
   WorkspaceTerminalSession
 } from "./types";
 import { WORKSPACE_TERMINAL_SEARCH_EVENT, XtermTerminal } from "./XtermTerminal";
+import type { TerminalRendererFailure } from "./XtermTerminal";
 
 function stateLabel(state: WorkspaceTerminalSession["state"], copy: WorkspaceCopy) {
   switch (state) {
@@ -39,6 +40,8 @@ export function TerminalPanel({
   onActivateSession,
   onCloseSession,
   onError,
+  onOpenTask,
+  onRendererError,
   onHostSelected,
   onReconnect
 }: {
@@ -52,6 +55,8 @@ export function TerminalPanel({
   onActivateSession: (sessionId: string) => void;
   onCloseSession: (session: WorkspaceTerminalSession) => void;
   onError: (error: unknown) => void;
+  onOpenTask?: (taskId: string) => void;
+  onRendererError: (failure: TerminalRendererFailure) => void;
   onHostSelected: (hostAlias: string) => void;
   onReconnect: (session: WorkspaceTerminalSession) => void;
 }) {
@@ -165,6 +170,7 @@ export function TerminalPanel({
               preferences={preferences}
               session={session}
               onError={onError}
+              onRendererError={onRendererError}
             />
           </div>
         ))}
@@ -180,6 +186,9 @@ export function TerminalPanel({
           <span className="workspaceVisuallyHidden" aria-live="polite">{stateLabel(activeSession.state, copy)}</span>
           {activeSession.reconnectable && ["disconnected", "failed", "closed"].includes(activeSession.state) ? (
             <button type="button" onClick={() => onReconnect(activeSession)}>{copy.reconnect}</button>
+          ) : null}
+          {activeSession.taskId && onOpenTask ? (
+            <button type="button" onClick={() => onOpenTask(activeSession.taskId!)}>{copy.viewTask}</button>
           ) : null}
           <span className="workspaceTerminalEncoding">UTF-8</span>
         </footer>

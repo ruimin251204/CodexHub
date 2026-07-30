@@ -74,7 +74,8 @@ export function applySessionStateEvent(
         reconnectable: event.reconnectable,
         attempt: event.attempt,
         nextRetryAt: event.nextRetryAt,
-        reason: event.reason
+        reason: event.reason,
+        taskId: event.taskId
       }
     : session);
 }

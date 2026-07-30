@@ -32,6 +32,7 @@ export type WorkspaceTerminalSession = {
   nextRetryAt: string | null;
   reason: string | null;
   createdAt: string;
+  taskId: string | null;
 };
 
 export type TerminalOutputFrame = {
@@ -58,6 +59,7 @@ export type WorkspaceSessionStateEvent = {
   attempt: number;
   nextRetryAt: string | null;
   reason: string | null;
+  taskId: string | null;
 };
 
 export type WorkspaceSessionHeartbeatEvent = {

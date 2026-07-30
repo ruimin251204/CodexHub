@@ -56,7 +56,8 @@ function terminal(raw: WorkspaceTerminalSessionDto): WorkspaceTerminalSession {
     attempt: raw.attempt,
     nextRetryAt: null,
     reason: raw.reason,
-    createdAt: raw.createdAt
+    createdAt: raw.createdAt,
+    taskId: raw.taskId
   };
 }
 
@@ -267,7 +268,7 @@ export const desktopWorkspaceApi: WorkspaceApi = {
 
   events: {
     onTerminalOutput: (handler) => subscribe<WorkspaceTerminalOutputEventDto>("workspace_attach_terminal", "workspace-terminal-output", (raw) => handler({ sessionId: raw.sessionId, generation: raw.generation, sequence: numberValue(raw.sequence), dataBase64: raw.dataBase64 })),
-    onSessionState: (handler) => subscribe<WorkspaceSessionStateEventDto>("workspace_list_terminal_sessions", "workspace-session-state", (raw) => handler({ sessionId: raw.sessionId, generation: raw.generation, revision: numberValue(raw.revision), state: raw.state, reconnectable: raw.reconnectable, attempt: raw.attempt, nextRetryAt: raw.nextRetryAt, reason: raw.reason })),
+    onSessionState: (handler) => subscribe<WorkspaceSessionStateEventDto>("workspace_list_terminal_sessions", "workspace-session-state", (raw) => handler({ sessionId: raw.sessionId, generation: raw.generation, revision: numberValue(raw.revision), state: raw.state, reconnectable: raw.reconnectable, attempt: raw.attempt, nextRetryAt: raw.nextRetryAt, reason: raw.reason, taskId: raw.taskId })),
     onSessionHeartbeat: (handler) => subscribe<WorkspaceSessionHeartbeatEventDto>("workspace_list_terminal_sessions", "workspace-session-heartbeat", (raw) => handler({ sessionId: raw.sessionId, generation: raw.generation, revision: numberValue(raw.revision), receivedAt: raw.observedAt })),
     onTerminalCwd: (handler) => subscribe<WorkspaceTerminalCwdEventDto>("workspace_validate_terminal_cwd", "workspace-terminal-cwd", (raw) => handler({ sessionId: raw.sessionId, generation: raw.generation, revision: numberValue(raw.revision), path: raw.path, source: raw.source })),
     onTransferUpdated: (handler) => subscribe<WorkspaceTransferUpdatedEventDto>("workspace_list_transfers", "workspace-transfer-updated", (raw) => handler({

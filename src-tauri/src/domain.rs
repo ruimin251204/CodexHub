@@ -955,7 +955,7 @@ pub(crate) struct AppServices {
     pub(crate) profiles: Mutex<Vec<Profile>>,
     pub(crate) host_profile_write_lock: Mutex<()>,
     pub(crate) skill_packs: Mutex<Vec<SkillPack>>,
-    pub(crate) task_store: TaskStore,
+    pub(crate) task_store: Arc<TaskStore>,
     pub(crate) task_storage_error: Mutex<Option<String>>,
     pub(crate) task_event_sink: Option<adapters::TaskEventSink>,
     pub(crate) workspace: Result<workspace::WorkspaceManager, String>,
@@ -978,6 +978,7 @@ impl AppState {
         task_event_sink: Option<adapters::TaskEventSink>,
         workspace_event_sink: Option<workspace::events::WorkspaceEventSink>,
     ) -> Self {
+        let task_store = Arc::new(task_store);
         let transfer_persistence =
             storage::WorkspaceSqliteTransferPersistence::open(paths.database_path());
         let recovery_persistence =
@@ -995,6 +996,10 @@ impl AppState {
                     Box::new(recoveries),
                     Arc::new(local_recoveries),
                     workspace_event_sink,
+                    Some(Arc::new(workspace::terminal::JobManagerTerminalAudit::new(
+                        task_store.clone(),
+                        task_event_sink.clone(),
+                    ))),
                 )
                 .map_err(|error| error.to_string())
             }

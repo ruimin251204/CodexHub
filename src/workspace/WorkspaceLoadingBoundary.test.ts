@@ -15,3 +15,10 @@ test("safe no-replace failures retain a specific bilingual safety explanation", 
   expect(appSource).toContain("No file was overwritten");
   expect(appSource).toContain(noOverwriteZh);
 });
+
+test("terminal renderer failures create a fixed sanitized task summary", () => {
+  expect(appSource).toContain('api.recordFrontendError("Workspace terminal renderer initialization failed.")');
+  expect(appSource).toContain("terminalRendererTaskKeysRef");
+  expect(appSource).toContain("failure.sessionId}:${failure.generation}:${failure.retry");
+  expect(appSource).not.toContain("recordFrontendError(formatError(error))");
+});

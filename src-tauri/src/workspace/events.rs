@@ -37,6 +37,7 @@ pub struct SessionStateEvent {
     pub attempt: u8,
     pub next_retry_at: Option<String>,
     pub reason: Option<String>,
+    pub task_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
