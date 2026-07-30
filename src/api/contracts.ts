@@ -25,8 +25,10 @@ import type {
   ProfileImportExport,
   ProfilePatch,
   RemoteCodexAction,
+  RemoteCodexBatchHostPlan,
   RemoteCodexBatchResult,
   RemoteCodexMaintenanceResult,
+  RemoteCodexProcessPreflightResult,
   RemoteProbeResult,
   RemoteProbeBatchItemCompletedEvent,
   RemoteProbeBatchResult,
@@ -125,8 +127,13 @@ export type CodexHubApi = {
     requestId?: string,
     onProgress?: HostOperationProgressHandler
   ) => Promise<RemoteCodexMaintenanceResult>;
-  batchRemoteUpdateCodex: (
+  previewBatchRemoteCodexUpdate: (
     hostAliases: string[],
+    timeoutMs?: number,
+    requestId?: string
+  ) => Promise<RemoteCodexProcessPreflightResult>;
+  batchRemoteUpdateCodex: (
+    plans: RemoteCodexBatchHostPlan[],
     timeoutMs?: number,
     requestId?: string,
     onProgress?: HostOperationProgressHandler

@@ -173,6 +173,8 @@ for (const stepId of [
   "api",
   "skills",
   "preparation",
+  "process-impact",
+  "path-repair",
   "official-installer",
   "remote-native-mirror",
   "remote-npm-mirror",

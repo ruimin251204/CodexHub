@@ -61,6 +61,7 @@ pub fn run() {
             batch_remote_probe_codex,
             sample_host_resources,
             remote_manage_codex,
+            preview_batch_remote_codex_update,
             batch_remote_update_codex,
             refresh_latest_codex_version,
             get_local_codex_status,

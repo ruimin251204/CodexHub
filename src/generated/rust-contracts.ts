@@ -154,6 +154,16 @@ export type HostOperationProgressEventDto = { requestId: string, taskId: string,
 
 export type RemoteCodexMaintenanceResultDto = { hostAlias: string, ok: boolean, action: RemoteCodexActionDto, beforeVersion: string | null, afterVersion: string | null, codexPath: string | null, codexCommandAvailable: boolean, installMethod: string | null, pathChanged: boolean, shellConfigPath: string | null, backupPath: string | null, message: string, task: TaskRun, };
 
+export type RemoteCodexProcessIdentityDto = { pid: number, startTime: string, processName: string, version: string, releasePath: string, };
+
+export type RemoteCodexProcessPreflightItemDto = { hostAlias: string, ok: boolean, processes: Array<RemoteCodexProcessIdentityDto>, message: string, };
+
+export type RemoteCodexProcessPreflightResultDto = { requestId: string, results: Array<RemoteCodexProcessPreflightItemDto>, };
+
+export type RemoteCodexBatchProcessActionDto = "proceed" | "terminate" | "decline" | "preflight-failed";
+
+export type RemoteCodexBatchHostPlanDto = { hostAlias: string, processAction: RemoteCodexBatchProcessActionDto, approvedProcesses: Array<RemoteCodexProcessIdentityDto>, };
+
 export type RemoteCodexBatchItemDto = { hostAlias: string, ok: boolean, result?: RemoteCodexMaintenanceResultDto, error?: string, };
 
 export type RemoteCodexBatchResultDto = { requestId: string, action: RemoteCodexActionDto, results: Array<RemoteCodexBatchItemDto>, };

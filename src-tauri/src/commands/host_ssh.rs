@@ -177,19 +177,30 @@ pub(crate) async fn remote_manage_codex(
 }
 
 #[tauri::command]
-pub(crate) async fn batch_remote_update_codex(
+pub(crate) async fn preview_batch_remote_codex_update(
     app: AppHandle,
     host_aliases: Vec<String>,
     timeout_ms: Option<u64>,
     request_id: Option<String>,
-) -> Result<RemoteCodexBatchResult, String> {
-    services::host_use_cases::execute_batch_remote_update_codex(
+) -> Result<RemoteCodexProcessPreflightResult, String> {
+    services::host_use_cases::execute_preview_batch_remote_codex_update(
         app,
         host_aliases,
         timeout_ms,
         request_id,
     )
     .await
+}
+
+#[tauri::command]
+pub(crate) async fn batch_remote_update_codex(
+    app: AppHandle,
+    plans: Vec<RemoteCodexBatchHostPlan>,
+    timeout_ms: Option<u64>,
+    request_id: Option<String>,
+) -> Result<RemoteCodexBatchResult, String> {
+    services::host_use_cases::execute_batch_remote_update_codex(app, plans, timeout_ms, request_id)
+        .await
 }
 
 #[tauri::command]

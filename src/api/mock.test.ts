@@ -184,6 +184,8 @@ test("Mock Codex maintenance emits the ordered fallback chain without making a r
   expect(result.ok).toBe(true);
   expect(result.task.steps.map((step) => [step.stepId, step.status])).toEqual([
     ["preparation", "success"],
+    ["process-impact", "success"],
+    ["path-repair", "success"],
     ["official-installer", "failed"],
     ["remote-native-mirror", "failed"],
     ["remote-npm-mirror", "success"],
@@ -194,6 +196,8 @@ test("Mock Codex maintenance emits the ordered fallback chain without making a r
   ]);
   expect(events.filter((event) => event.step.status === "running").map((event) => event.step.stepId)).toEqual([
     "preparation",
+    "process-impact",
+    "path-repair",
     "official-installer",
     "remote-native-mirror",
     "remote-npm-mirror",
@@ -290,7 +294,11 @@ test("Mock batch update uses a six-host sliding pool and preserves input order",
   const active = new Set<string>();
   let maxActive = 0;
   const result = await mockApi.batchRemoteUpdateCodex(
-    aliases,
+    aliases.map((hostAlias) => ({
+      hostAlias,
+      processAction: "proceed",
+      approvedProcesses: []
+    })),
     120000,
     "mock-batch-request",
     (event) => {

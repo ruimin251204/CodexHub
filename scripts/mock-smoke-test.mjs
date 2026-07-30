@@ -133,15 +133,19 @@ try {
     "await Promise.all(runners)",
     "mockBatchRemoteProbeCodex",
     "mockBatchRemoteUpdateCodex",
+    "mockBatchRemoteCodexProcessPreflight",
     "mockRemoteProbeWithProgress",
     "mockRemoteManageCodexWithProgress",
     "batchRemoteProbeCodex:",
+    "previewBatchRemoteCodexUpdate:",
     "batchRemoteUpdateCodex:"
   ]) {
     if (!mockSource.includes(token)) fail(`mock host-operation flow is missing: ${token}`);
   }
   for (const stepId of [
     "preparation",
+    "process-impact",
+    "path-repair",
     "official-installer",
     "remote-native-mirror",
     "remote-npm-mirror",

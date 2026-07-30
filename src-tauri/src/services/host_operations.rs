@@ -1,6 +1,7 @@
 use crate::tasks::{TaskStep, TaskStepStatus};
 use crate::*;
 
+use super::codex_processes::{self, RemoteCodexProcessGate};
 use super::codex_runtime::{
     self, CodexReleaseCleanupPolicy, CodexReleaseCleanupStatus, CodexRuntimeReconcileStatus,
 };
@@ -18,6 +19,11 @@ const PROBE_STEP_IDS: &[(&str, &str)] = &[
 ];
 const INSTALL_STEP_IDS: &[(&str, &str)] = &[
     ("preparation", "Preparing the remote host."),
+    (
+        "process-impact",
+        "Waiting to verify running Codex processes.",
+    ),
+    ("path-repair", "Waiting to verify the remote user PATH."),
     (
         "official-installer",
         "Waiting to try the official installer.",
@@ -2123,6 +2129,26 @@ pub(crate) fn run_remote_manage_codex(
     timeout_ms: Option<u64>,
     request_id: Option<String>,
 ) -> Result<RemoteCodexMaintenanceResult, String> {
+    run_remote_manage_codex_with_process_gate(
+        app,
+        state,
+        host_alias,
+        action,
+        timeout_ms,
+        request_id,
+        RemoteCodexProcessGate::Bypass,
+    )
+}
+
+fn run_remote_manage_codex_with_process_gate(
+    app: &AppHandle,
+    state: &AppState,
+    host_alias: String,
+    action: RemoteCodexAction,
+    timeout_ms: Option<u64>,
+    request_id: Option<String>,
+    process_gate: RemoteCodexProcessGate,
+) -> Result<RemoteCodexMaintenanceResult, String> {
     let timeout = ssh::normalize_timeout_ms(timeout_ms.or(Some(120_000)));
     let alias_result = ssh::validate_ssh_alias(&host_alias);
     let alias = alias_result
@@ -2792,6 +2818,113 @@ pub(crate) fn run_remote_manage_codex(
     let strict_current_runtime = strict_current_runtime
         .expect("strict current version was checked by the preparation guard");
 
+    persist_step_logs(
+        &host_progress,
+        "preparation",
+        &mut logs[preparation_log_start..],
+    )?;
+    persist_and_emit_step(
+        &host_progress,
+        "preparation",
+        TaskStepStatus::Success,
+        "SSH checks, current-state checks, and installation prerequisites completed.",
+        None,
+    )?;
+    persist_and_emit_step(
+        &host_progress,
+        "process-impact",
+        TaskStepStatus::Running,
+        "Revalidating the previewed managed-release process impact.",
+        None,
+    )?;
+    let process_gate_result =
+        codex_processes::enforce_remote_codex_process_gate(&alias, &process_gate, timeout);
+    let process_gate_message = process_gate_result
+        .as_ref()
+        .map(|result| result.message.clone())
+        .unwrap_or_else(|error| redact_error_text(error));
+    let process_gate_status = if matches!(&process_gate, RemoteCodexProcessGate::Bypass) {
+        TaskStepStatus::Skipped
+    } else if process_gate_result.is_ok() {
+        TaskStepStatus::Success
+    } else {
+        TaskStepStatus::Failed
+    };
+    logs.push(basic_log(
+        &task_id,
+        next_log_index,
+        if process_gate_result.is_ok() {
+            TaskLogLevel::Info
+        } else {
+            TaskLogLevel::Error
+        },
+        &process_gate_message,
+    ));
+    next_log_index += 1;
+    if let Some(log) = logs.last_mut() {
+        log.step_id = Some("process-impact".into());
+    }
+    persist_and_emit_step(
+        &host_progress,
+        "process-impact",
+        process_gate_status,
+        process_gate_message.clone(),
+        logs.last().cloned(),
+    )?;
+    if process_gate_result.is_err() {
+        for (step_id, _) in INSTALL_STEP_IDS.iter().skip(2) {
+            persist_and_emit_step(
+                &host_progress,
+                step_id,
+                TaskStepStatus::Skipped,
+                "Not run because safe process termination was not confirmed.",
+                None,
+            )?;
+        }
+        let message = format!(
+            "{action_label} was not started on {alias}: {process_gate_message} Exit the related Codex processes and retry."
+        );
+        let mut task = codex_maintenance_task(
+            &task_id,
+            &host_id,
+            &host_name,
+            action_label,
+            TaskStatus::Failed,
+            &message,
+            logs,
+        );
+        task.steps = state
+            .task_store
+            .get(&task_id)?
+            .map(|task| task.steps)
+            .unwrap_or_default();
+        record_task(state, task.clone())?;
+        return Ok(RemoteCodexMaintenanceResult {
+            host_alias: alias,
+            ok: false,
+            action,
+            before_version: before_version.clone(),
+            after_version: before_version,
+            codex_path: output_trimmed(&before_checks.codex_path),
+            codex_command_available: before_command_available,
+            install_method: None,
+            path_changed: false,
+            shell_config_path: None,
+            backup_path: None,
+            message,
+            task,
+        });
+    }
+
+    persist_and_emit_step(
+        &host_progress,
+        "path-repair",
+        TaskStepStatus::Running,
+        "Checking ~/.local/bin and remote shell PATH configuration.",
+        None,
+    )?;
+    let path_repair_log_start = logs.len();
+
     let path_repair_output = run_codex_step(
         &alias,
         &task_id,
@@ -2810,8 +2943,8 @@ pub(crate) fn run_remote_manage_codex(
     let backup_path = marker_value(&path_repair_output.stdout, "CODEXHUB_BACKUP_PATH");
     persist_step_logs(
         &host_progress,
-        "preparation",
-        &mut logs[preparation_log_start..],
+        "path-repair",
+        &mut logs[path_repair_log_start..],
     )?;
     if !path_repair_output.success() {
         let message = format!(
@@ -2820,12 +2953,12 @@ pub(crate) fn run_remote_manage_codex(
         );
         persist_and_emit_step(
             &host_progress,
-            "preparation",
+            "path-repair",
             TaskStepStatus::Failed,
             message.clone(),
             None,
         )?;
-        for (step_id, _) in INSTALL_STEP_IDS.iter().skip(1) {
+        for (step_id, _) in INSTALL_STEP_IDS.iter().skip(3) {
             persist_and_emit_step(
                 &host_progress,
                 step_id,
@@ -2867,9 +3000,9 @@ pub(crate) fn run_remote_manage_codex(
     }
     persist_and_emit_step(
         &host_progress,
-        "preparation",
+        "path-repair",
         TaskStepStatus::Success,
-        "SSH checks, current-state checks, and PATH preparation completed.",
+        "Remote user PATH preparation completed.",
         None,
     )?;
 
@@ -3387,15 +3520,205 @@ pub(crate) fn run_remote_manage_codex(
     })
 }
 
+fn validate_batch_host_aliases(host_aliases: &[String]) -> Result<Vec<String>, String> {
+    let mut aliases = Vec::with_capacity(host_aliases.len());
+    let mut seen = std::collections::HashSet::new();
+    for alias in host_aliases {
+        let alias = ssh::validate_ssh_alias(alias)?;
+        if !seen.insert(alias.to_ascii_lowercase()) {
+            return Err(format!("Duplicate SSH alias in batch request: {alias}."));
+        }
+        aliases.push(alias);
+    }
+    Ok(aliases)
+}
+
+pub(crate) fn run_batch_remote_codex_process_preflight(
+    host_aliases: Vec<String>,
+    timeout_ms: Option<u64>,
+    request_id: Option<String>,
+) -> Result<RemoteCodexProcessPreflightResult, String> {
+    let request_id = host_operation_request_id(request_id, "batch-codex-process-preflight");
+    let aliases = validate_batch_host_aliases(&host_aliases)?;
+    let timeout = ssh::normalize_timeout_ms(timeout_ms.or(Some(120_000)));
+    let results = run_bounded_ordered(aliases, |alias| {
+        codex_processes::inspect_remote_codex_processes(&alias, timeout)
+    });
+    Ok(RemoteCodexProcessPreflightResult {
+        request_id,
+        results,
+    })
+}
+
+fn validate_batch_update_plans(
+    plans: Vec<RemoteCodexBatchHostPlan>,
+) -> Result<Vec<RemoteCodexBatchHostPlan>, String> {
+    let aliases = plans
+        .iter()
+        .map(|plan| plan.host_alias.clone())
+        .collect::<Vec<_>>();
+    let validated_aliases = validate_batch_host_aliases(&aliases)?;
+    for (plan, alias) in plans.iter().zip(validated_aliases.iter()) {
+        let process_count = plan.approved_processes.len();
+        match plan.process_action {
+            RemoteCodexBatchProcessAction::Proceed if process_count == 0 => {}
+            RemoteCodexBatchProcessAction::Terminate if process_count > 0 => {}
+            RemoteCodexBatchProcessAction::Decline
+            | RemoteCodexBatchProcessAction::PreflightFailed
+                if process_count == 0 => {}
+            _ => {
+                return Err(format!(
+                    "Batch process decision for {alias} has an invalid approval payload."
+                ));
+            }
+        }
+    }
+    Ok(plans
+        .into_iter()
+        .zip(validated_aliases)
+        .map(|(mut plan, alias)| {
+            plan.host_alias = alias;
+            plan
+        })
+        .collect())
+}
+
+fn blocked_batch_update_result(
+    app: &AppHandle,
+    state: &AppState,
+    alias: &str,
+    request_id: &str,
+    preflight_failed: bool,
+) -> Result<RemoteCodexMaintenanceResult, String> {
+    let task_id = format!("task-codex-{}", timestamp_millis());
+    let host_name = host_name_for_alias(state, alias);
+    let host_id = host_id_for_alias(state, alias);
+    let (known_version, command_available) = state
+        .hosts
+        .lock()
+        .expect("hosts mutex poisoned")
+        .iter()
+        .find(|host| host.host_alias.eq_ignore_ascii_case(alias))
+        .map(|host| {
+            (
+                host.codex_installed.then(|| host.codex_version.clone()),
+                host.codex_command_available.unwrap_or(host.codex_installed),
+            )
+        })
+        .unwrap_or((None, false));
+    let mut running = jobs::begin_task(
+        &state.task_store,
+        state.task_event_sink.as_ref(),
+        &task_id,
+        &host_id,
+        &host_name,
+        "Update Codex",
+    )?;
+    initialize_operation_steps(state, &mut running, INSTALL_STEP_IDS)?;
+    let progress = HostProgressContext {
+        app,
+        state,
+        task_id: &task_id,
+        request_id,
+        host_alias: alias,
+        operation: HostOperationKind::CodexUpdate,
+    };
+    let message = if preflight_failed {
+        format!(
+            "Update was not started on {alias} because running Codex processes could not be verified safely. Exit related processes and retry."
+        )
+    } else {
+        format!(
+            "Update was not started on {alias} because process termination was not approved. Exit the listed Codex processes and retry."
+        )
+    };
+    persist_and_emit_step(
+        &progress,
+        "preparation",
+        TaskStepStatus::Skipped,
+        "No remote mutation was started.",
+        None,
+    )?;
+    let mut logs = running.logs;
+    logs.push(basic_log(&task_id, 1, TaskLogLevel::Error, &message));
+    if let Some(log) = logs.last_mut() {
+        log.step_id = Some("process-impact".into());
+    }
+    persist_and_emit_step(
+        &progress,
+        "process-impact",
+        TaskStepStatus::Failed,
+        message.clone(),
+        logs.last().cloned(),
+    )?;
+    for (step_id, _) in INSTALL_STEP_IDS.iter().skip(2) {
+        persist_and_emit_step(
+            &progress,
+            step_id,
+            TaskStepStatus::Skipped,
+            "Not run because this host did not pass the unified process confirmation.",
+            None,
+        )?;
+    }
+    let mut task = codex_maintenance_task(
+        &task_id,
+        &host_id,
+        &host_name,
+        "Update Codex",
+        TaskStatus::Failed,
+        &message,
+        logs,
+    );
+    task.steps = state
+        .task_store
+        .get(&task_id)?
+        .map(|task| task.steps)
+        .unwrap_or_default();
+    record_task(state, task.clone())?;
+    emit_remote_codex_progress(
+        Some(&CodexProgressContext {
+            app,
+            request_id: Some(request_id),
+            host_alias: alias,
+            action: &RemoteCodexAction::Update,
+        }),
+        "summary",
+        "failed",
+        message.clone(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    Ok(RemoteCodexMaintenanceResult {
+        host_alias: alias.into(),
+        ok: false,
+        action: RemoteCodexAction::Update,
+        before_version: known_version.clone(),
+        after_version: known_version,
+        codex_path: None,
+        codex_command_available: command_available,
+        install_method: None,
+        path_changed: false,
+        shell_config_path: None,
+        backup_path: None,
+        message,
+        task,
+    })
+}
+
 pub(crate) fn run_batch_remote_update_codex(
     app: &AppHandle,
     state: &AppState,
-    host_aliases: Vec<String>,
+    plans: Vec<RemoteCodexBatchHostPlan>,
     timeout_ms: Option<u64>,
     request_id: Option<String>,
 ) -> Result<RemoteCodexBatchResult, String> {
     let request_id = host_operation_request_id(request_id, "batch-codex-update");
-    let item_count = host_aliases.len();
+    let plans = validate_batch_update_plans(plans)?;
+    let item_count = plans.len();
     if item_count == 0 {
         return Ok(RemoteCodexBatchResult {
             request_id,
@@ -3403,16 +3726,35 @@ pub(crate) fn run_batch_remote_update_codex(
             results: Vec::new(),
         });
     }
-    // Workers pull the next host immediately after finishing, forming a sliding pool.
-    let results = run_bounded_ordered(host_aliases, |host_alias| {
-        match run_remote_manage_codex(
-            app,
-            state,
-            host_alias.clone(),
-            RemoteCodexAction::Update,
-            timeout_ms,
-            Some(request_id.clone()),
-        ) {
+    let run_plan = |plan: RemoteCodexBatchHostPlan| {
+        let host_alias = plan.host_alias.clone();
+        let result = match plan.process_action {
+            RemoteCodexBatchProcessAction::Proceed => run_remote_manage_codex_with_process_gate(
+                app,
+                state,
+                host_alias.clone(),
+                RemoteCodexAction::Update,
+                timeout_ms,
+                Some(request_id.clone()),
+                RemoteCodexProcessGate::ExpectClear,
+            ),
+            RemoteCodexBatchProcessAction::Terminate => run_remote_manage_codex_with_process_gate(
+                app,
+                state,
+                host_alias.clone(),
+                RemoteCodexAction::Update,
+                timeout_ms,
+                Some(request_id.clone()),
+                RemoteCodexProcessGate::Terminate(plan.approved_processes),
+            ),
+            RemoteCodexBatchProcessAction::Decline => {
+                blocked_batch_update_result(app, state, &host_alias, &request_id, false)
+            }
+            RemoteCodexBatchProcessAction::PreflightFailed => {
+                blocked_batch_update_result(app, state, &host_alias, &request_id, true)
+            }
+        };
+        match result {
             Ok(result) => RemoteCodexBatchItem {
                 host_alias,
                 ok: result.ok,
@@ -3426,7 +3768,29 @@ pub(crate) fn run_batch_remote_update_codex(
                 error: Some(redact_error_text(&error)),
             },
         }
-    });
+    };
+
+    // Rejected hosts settle before long-running approved workers occupy the pool.
+    let mut ordered_results = (0..item_count).map(|_| None).collect::<Vec<_>>();
+    let mut active_plans = Vec::new();
+    for (index, plan) in plans.into_iter().enumerate() {
+        if matches!(
+            plan.process_action,
+            RemoteCodexBatchProcessAction::Decline | RemoteCodexBatchProcessAction::PreflightFailed
+        ) {
+            ordered_results[index] = Some(run_plan(plan));
+        } else {
+            active_plans.push((index, plan));
+        }
+    }
+    let active_results = run_bounded_ordered(active_plans, |(index, plan)| (index, run_plan(plan)));
+    for (index, item) in active_results {
+        ordered_results[index] = Some(item);
+    }
+    let results = ordered_results
+        .into_iter()
+        .map(|item| item.expect("every validated batch plan produced a result"))
+        .collect();
     Ok(RemoteCodexBatchResult {
         request_id,
         action: RemoteCodexAction::Update,
@@ -3586,61 +3950,7 @@ pub(crate) fn run_official_codex_installer(
     proxy_settings: &AppSettings,
     progress: Option<&CodexProgressContext<'_>>,
 ) -> ssh::SshCommandOutput {
-    let direct_script =
-        official_codex_installer_script(minimum_version, minimum_current_version, None);
-    // 官方包通过本地代理反向隧道下载时可能超过通用 SSH 的 120 秒上限。
-    let direct_output = run_codex_step_with_tunnel(
-        alias,
-        task_id,
-        logs,
-        next_log_index,
-        "official Codex installer (direct)",
-        &direct_script,
-        OFFICIAL_INSTALLER_SSH_TIMEOUT_MS,
-        TaskLogLevel::Error,
-        None,
-        true,
-        progress,
-    );
-    if direct_output.success() || !official_installer_network_failure(&direct_output) {
-        return direct_output;
-    }
-    if let Some(log) = logs.last_mut() {
-        log.level = TaskLogLevel::Warn;
-    }
-
-    emit_remote_codex_progress(
-        progress,
-        "official Codex installer proxy retry",
-        "running",
-        "Direct network access failed; checking local proxy tunnel routes.".into(),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
     let (routes, notes) = remote_codex_proxy_tunnel_candidates(proxy_settings);
-    if routes.is_empty() {
-        let detail = if notes.is_empty() {
-            "No eligible localhost proxy route was detected.".to_string()
-        } else {
-            format!(
-                "No eligible localhost proxy route was detected: {}.",
-                notes.join("; ")
-            )
-        };
-        logs.push(basic_log(
-            task_id,
-            *next_log_index,
-            TaskLogLevel::Warn,
-            &detail,
-        ));
-        *next_log_index += 1;
-        return direct_output;
-    }
-
     let (selected_route, preflight_errors) =
         select_proxy_route_with_preflight(routes, preflight_remote_codex_proxy_tunnel);
     for error in preflight_errors {
@@ -3652,73 +3962,125 @@ pub(crate) fn run_official_codex_installer(
         ));
         *next_log_index += 1;
     }
-    let Some((route, preflight_confirmed)) = selected_route else {
-        return direct_output;
-    };
-    let (level, message) = if preflight_confirmed {
-        (
-            TaskLogLevel::Info,
-            format!(
-                "Local proxy route {} reached the official Codex endpoints.",
-                route.source
-            ),
-        )
-    } else {
-        (
-            TaskLogLevel::Warn,
-            format!(
-                "All local proxy endpoint preflights failed; attempting route {} through a real SSH tunnel.",
-                route.source
-            ),
-        )
-    };
-    logs.push(basic_log(task_id, *next_log_index, level, &message));
-    *next_log_index += 1;
-
-    let mut last_tunnel_output = None;
-    for remote_port in remote_proxy_port_candidates(task_id) {
-        let tunnel = ssh::ReverseProxyTunnel::new(route.local_port, remote_port)
-            .expect("validated proxy tunnel ports");
-        let proxy_url = match route.proxy_environment_url(remote_port) {
-            Ok(url) => url,
-            Err(error) => {
-                logs.push(basic_log(
-                    task_id,
-                    *next_log_index,
-                    TaskLogLevel::Error,
-                    &redact_error_text(&error),
-                ));
-                *next_log_index += 1;
-                return direct_output;
-            }
-        };
-        let tunnel_script = official_codex_installer_script(
-            minimum_version,
-            minimum_current_version,
-            Some(&proxy_url),
-        );
-        let output = run_codex_step_with_tunnel(
-            alias,
-            task_id,
-            logs,
-            next_log_index,
-            "official Codex installer (local proxy tunnel)",
-            &tunnel_script,
-            OFFICIAL_INSTALLER_SSH_TIMEOUT_MS,
-            TaskLogLevel::Error,
-            Some(&tunnel),
-            true,
+    if let Some((route, preflight_confirmed)) = selected_route {
+        emit_remote_codex_progress(
             progress,
+            "official Codex installer proxy",
+            "running",
+            "A local proxy is available; opening this host's independent SSH reverse tunnel."
+                .into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
-        if output.success() || !remote_forward_setup_failure(&output) {
-            return output;
+        let (level, message) = if preflight_confirmed {
+            (
+                TaskLogLevel::Info,
+                format!(
+                    "Local proxy route {} reached the official Codex endpoints; this host will try its own concurrent reverse tunnel first.",
+                    route.source
+                ),
+            )
+        } else {
+            (
+                TaskLogLevel::Warn,
+                format!(
+                    "Local proxy endpoint preflight failed; this host will still verify route {} through its own real SSH tunnel.",
+                    route.source
+                ),
+            )
+        };
+        logs.push(basic_log(task_id, *next_log_index, level, &message));
+        *next_log_index += 1;
+
+        for remote_port in remote_proxy_port_candidates(task_id) {
+            let tunnel = ssh::ReverseProxyTunnel::new(route.local_port, remote_port)
+                .expect("validated proxy tunnel ports");
+            let proxy_url = match route.proxy_environment_url(remote_port) {
+                Ok(url) => url,
+                Err(error) => {
+                    logs.push(basic_log(
+                        task_id,
+                        *next_log_index,
+                        TaskLogLevel::Error,
+                        &redact_error_text(&error),
+                    ));
+                    *next_log_index += 1;
+                    break;
+                }
+            };
+            let tunnel_script = official_codex_installer_script(
+                minimum_version,
+                minimum_current_version,
+                Some(&proxy_url),
+            );
+            let output = run_codex_step_with_tunnel(
+                alias,
+                task_id,
+                logs,
+                next_log_index,
+                "official Codex installer (local proxy tunnel)",
+                &tunnel_script,
+                OFFICIAL_INSTALLER_SSH_TIMEOUT_MS,
+                TaskLogLevel::Error,
+                Some(&tunnel),
+                true,
+                progress,
+            );
+            if output.success() {
+                return output;
+            }
+            if !remote_forward_setup_failure(&output)
+                && !official_installer_network_failure(&output)
+            {
+                return output;
+            }
+            if let Some(log) = logs.last_mut() {
+                log.level = TaskLogLevel::Warn;
+            }
+            if !remote_forward_setup_failure(&output) {
+                break;
+            }
         }
-        if let Some(log) = logs.last_mut() {
-            log.level = TaskLogLevel::Warn;
-        }
-        last_tunnel_output = Some(output);
+        logs.push(basic_log(
+            task_id,
+            *next_log_index,
+            TaskLogLevel::Warn,
+            "The local proxy tunnel did not complete the official installer; trying direct remote access before mirror fallbacks.",
+        ));
+        *next_log_index += 1;
+    } else if !notes.is_empty() {
+        logs.push(basic_log(
+            task_id,
+            *next_log_index,
+            TaskLogLevel::Info,
+            &format!(
+                "No eligible local proxy tunnel was selected: {}.",
+                notes.join("; ")
+            ),
+        ));
+        *next_log_index += 1;
     }
-    last_tunnel_output.unwrap_or(direct_output)
+
+    let direct_script =
+        official_codex_installer_script(minimum_version, minimum_current_version, None);
+    // Each batch worker owns its SSH process, so direct and tunneled installs stay concurrent.
+    run_codex_step_with_tunnel(
+        alias,
+        task_id,
+        logs,
+        next_log_index,
+        "official Codex installer (direct)",
+        &direct_script,
+        OFFICIAL_INSTALLER_SSH_TIMEOUT_MS,
+        TaskLogLevel::Error,
+        None,
+        true,
+        progress,
+    )
 }
 
 /// Prefer a preflight-confirmed route, but keep the first eligible route as an advisory fallback.
@@ -4982,7 +5344,7 @@ mod host_operation_tests {
     }
 
     #[test]
-    fn official_installer_retries_proxy_only_for_remote_network_failures() {
+    fn official_installer_network_failure_classifier_is_remote_only() {
         assert!(official_installer_network_failure(&installer_output(
             Some(28),
             "curl: (28) Operation timed out",
@@ -5519,6 +5881,8 @@ mod host_operation_tests {
                 .collect::<Vec<_>>(),
             [
                 "preparation",
+                "process-impact",
+                "path-repair",
                 "official-installer",
                 "remote-native-mirror",
                 "remote-npm-mirror",

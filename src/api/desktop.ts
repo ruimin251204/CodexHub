@@ -12,8 +12,10 @@ import type {
   ProfileApplyOptions,
   ProfilePatch,
   RemoteCodexAction,
+  RemoteCodexBatchHostPlan,
   RemoteCodexBatchResult,
   RemoteCodexMaintenanceResult,
+  RemoteCodexProcessPreflightResult,
   RemoteProbeBatchItemCompletedEvent,
   SkillDetectionResult,
   SkillImportResult,
@@ -43,6 +45,7 @@ import type {
   ProfileDto,
   ProfileImportExportDto,
   RemoteCodexMaintenanceResultDto,
+  RemoteCodexProcessPreflightResultDto,
   RemoteProbeResultDto,
   SkillDetectionResultDto,
   SkillImportResultDto,
@@ -299,8 +302,17 @@ export const desktopApi: CodexHubApi = {
       })
     );
   },
-  batchRemoteUpdateCodex: async (
+  previewBatchRemoteCodexUpdate: async (
     hostAliases: string[],
+    timeoutMs = 120000,
+    requestId?: string
+  ) => requiredInvoke<RemoteCodexProcessPreflightResultDto>("preview_batch_remote_codex_update", {
+    hostAliases: hostAliases.map((alias) => requireHostAlias("preview_batch_remote_codex_update", alias)),
+    timeoutMs,
+    requestId
+  }) as Promise<RemoteCodexProcessPreflightResult>,
+  batchRemoteUpdateCodex: async (
+    plans: RemoteCodexBatchHostPlan[],
     timeoutMs = 120000,
     requestId?: string,
     onProgress?: (event: HostOperationProgressEvent) => void
@@ -309,7 +321,10 @@ export const desktopApi: CodexHubApi = {
     requestId,
     onProgress,
     () => requiredInvoke<RemoteCodexBatchResult>("batch_remote_update_codex", {
-      hostAliases: hostAliases.map((alias) => requireHostAlias("batch_remote_update_codex", alias)),
+      plans: plans.map((plan) => ({
+        ...plan,
+        hostAlias: requireHostAlias("batch_remote_update_codex", plan.hostAlias)
+      })),
       timeoutMs,
       requestId
     })

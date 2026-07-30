@@ -493,14 +493,26 @@ pub(crate) async fn execute_remote_manage_codex(
 
 pub(crate) async fn execute_batch_remote_update_codex(
     app: AppHandle,
-    host_aliases: Vec<String>,
+    plans: Vec<RemoteCodexBatchHostPlan>,
     timeout_ms: Option<u64>,
     request_id: Option<String>,
 ) -> Result<RemoteCodexBatchResult, String> {
     ensure_task_storage_for_app(&app)?;
     run_blocking_command("batch_remote_update_codex", move || {
         let state = app.state::<AppState>();
-        run_batch_remote_update_codex(&app, &state, host_aliases, timeout_ms, request_id)
+        run_batch_remote_update_codex(&app, &state, plans, timeout_ms, request_id)
+    })
+    .await?
+}
+
+pub(crate) async fn execute_preview_batch_remote_codex_update(
+    _app: AppHandle,
+    host_aliases: Vec<String>,
+    timeout_ms: Option<u64>,
+    request_id: Option<String>,
+) -> Result<RemoteCodexProcessPreflightResult, String> {
+    run_blocking_command("preview_batch_remote_codex_update", move || {
+        run_batch_remote_codex_process_preflight(host_aliases, timeout_ms, request_id)
     })
     .await?
 }

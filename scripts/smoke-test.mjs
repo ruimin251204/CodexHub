@@ -592,6 +592,7 @@ for (const command of [
   "batch_remote_probe_codex",
   "sample_host_resources",
   "remote_manage_codex",
+  "preview_batch_remote_codex_update",
   "batch_remote_update_codex",
   "refresh_latest_codex_version",
   "get_local_codex_status",
@@ -638,7 +639,7 @@ for (const token of ["stable_update_endpoints", "resolve_github_latest_json_asse
   if (!rustBackend.includes(token)) fail(`missing GitHub updater feed fallback token: ${token}`);
 }
 for (const token of ["remote_codex_proxy_tunnel_candidates", "preflight_remote_codex_proxy_tunnel", "REMOTE_CODEX_PROXY_PREFLIGHT_ENDPOINTS", "official_installer_network_failure", "remote_proxy_port_candidates", "official Codex installer (local proxy tunnel)"]) {
-  if (!rustBackend.includes(token)) fail(`missing remote official-installer proxy retry token: ${token}`);
+  if (!rustBackend.includes(token)) fail(`missing remote official-installer proxy route token: ${token}`);
 }
 for (const token of ["ReverseProxyTunnel", "ExitOnForwardFailure=yes", "run_ssh_script_with_reverse_proxy", "run_ssh_script_streaming_with_reverse_proxy", "127.0.0.1:{}:127.0.0.1:{}"]) {
   if (!sshRs.includes(token)) fail(`missing restricted SSH reverse-proxy token: ${token}`);
@@ -673,6 +674,7 @@ for (const asyncCommand of [
   "async fn remote_probe_codex",
   "async fn batch_remote_probe_codex",
   "async fn remote_manage_codex",
+  "async fn preview_batch_remote_codex_update",
   "async fn batch_remote_update_codex",
   "async fn refresh_latest_codex_version",
   "async fn detect_installed_skills",
@@ -1502,7 +1504,7 @@ for (const token of [
 }
 if (!app.includes("OperationProgressModal")) fail("Host operations should use the shared step progress modal");
 if (!app.includes("HostOperationProgressEvent")) fail("Host operations should consume structured progress events");
-const managedMaintenanceStepIds = '["preparation", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"]';
+const managedMaintenanceStepIds = '["preparation", "process-impact", "path-repair", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"]';
 for (const action of ["codex-install", "codex-update"]) {
   if (!app.includes(`${JSON.stringify(action)}: ${managedMaintenanceStepIds}`)) {
     fail(`${action} pending progress must use the stable runtime reconcile/verification/cleanup order`);
@@ -1757,7 +1759,8 @@ for (const token of [
   "api.batchRemoteProbeCodex(",
   "applyCompletedItem(event.item)",
   "applyHostOperationProgressConnectivityToHosts",
-  "api.batchRemoteUpdateCodex(uniqueAliases, 120000, requestId",
+  "api.previewBatchRemoteCodexUpdate(uniqueAliases, 120000, requestId)",
+  "api.batchRemoteUpdateCodex(plans, 120000, requestId",
   "applyHostOperationProgressEvent(current, event)",
   "aggregateOperationStatus(current.hosts)",
   'status: hostIndex < 6 ? "running" : "pending"',
@@ -1871,7 +1874,7 @@ for (const token of [
 if (!app.includes('onManageCodex(sshHost.alias, "install")') || !app.includes('onManageCodex(sshHost.alias, "update")') || !app.includes('onManageCodex(sshHost.alias, "uninstall")')) fail("SSH Hosts table should expose remote Codex install/update/uninstall actions");
 if (!rustBackend.includes('remove_path "$CODEX_HOME"') || !rustBackend.includes('remove_path "$hub_dir"') || rustBackend.includes("codexhub.uninstall.bak")) fail("Remote Codex uninstall should directly delete Codex config/env paths without backups");
 if (!app.includes('installCodex: "安装"') || !app.includes('updateCodex: "更新"') || !app.includes('uninstallCodex: "卸载"')) fail("SSH Hosts Codex buttons should use short install/update/uninstall labels");
-for (const token of ["onUpdateOutdatedCodexHosts", "handleUpdateOutdatedCodexHosts", "api.batchRemoteUpdateCodex", "outdatedCodexAliases", "copy.hosts.updateOutdatedCodex", "copy.codexOperation.batchUpdateStarted"]) {
+for (const token of ["onUpdateOutdatedCodexHosts", "handleUpdateOutdatedCodexHosts", "api.previewBatchRemoteCodexUpdate", "api.batchRemoteUpdateCodex", "BatchCodexProcessConfirmModal", "outdatedCodexAliases", "copy.hosts.updateOutdatedCodex", "copy.codexOperation.batchUpdateStarted"]) {
   if (!app.includes(token)) fail(`missing one-click outdated Codex update token: ${token}`);
 }
 if (!app.includes('className="sshHostsTable"') || !app.includes("sshHostsActionsCol") || !app.includes("sshHostsCodexCol")) fail("SSH Hosts table should use the compact responsive table layout");

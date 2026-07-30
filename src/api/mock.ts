@@ -17,8 +17,10 @@ import type {
   ProfileImportExport,
   ProfilePatch,
   RemoteCodexAction,
+  RemoteCodexBatchHostPlan,
   RemoteCodexBatchResult,
   RemoteCodexMaintenanceResult,
+  RemoteCodexProcessPreflightResult,
   RemoteProbeBatchResult,
   RemoteProbeBatchItemCompletedEvent,
   RemoteProbeResult,
@@ -970,7 +972,7 @@ function mockRemoteManageCodex(hostAlias: string, action: RemoteCodexAction): Re
   const message = `Mock ${actionLabel.toLowerCase()} completed for ${host.hostAlias}: ${versionLabel}.`;
   const taskId = `mock-codex-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const timestamp = new Date().toISOString();
-  const installStepIds = ["preparation", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"];
+  const installStepIds = ["preparation", "process-impact", "path-repair", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"];
   const uninstallStepIds = ["preparation", "uninstall", "final-verification"];
   const stepIds = action === "uninstall" ? uninstallStepIds : action === "check-version" ? ["codex"] : installStepIds;
   const statusForStep = (stepId: string): TaskStepStatus => {
@@ -1099,12 +1101,31 @@ async function mockBatchRemoteProbeCodex(
 }
 
 async function mockBatchRemoteUpdateCodex(
-  hostAliases: string[],
+  plans: RemoteCodexBatchHostPlan[],
   requestId: string,
   onProgress?: (event: HostOperationProgressEvent) => void
 ): Promise<RemoteCodexBatchResult> {
-  const results = await runMockConcurrencyPool(hostAliases, async (hostAlias): Promise<RemoteCodexBatchResult["results"][number]> => {
+  const results = await runMockConcurrencyPool(plans, async (plan): Promise<RemoteCodexBatchResult["results"][number]> => {
+    const hostAlias = plan.hostAlias;
     try {
+      if (plan.processAction === "decline" || plan.processAction === "preflight-failed") {
+        const result = mockRemoteManageCodex(hostAlias, "update");
+        const message = plan.processAction === "decline"
+          ? `Mock update was not started on ${hostAlias} because process termination was not approved.`
+          : `Mock update was not started on ${hostAlias} because process preflight failed.`;
+        result.ok = false;
+        result.afterVersion = result.beforeVersion;
+        result.message = message;
+        result.task.status = "failed";
+        result.task.summary = message;
+        result.task.steps = result.task.steps.map((step) => ({
+          ...step,
+          status: step.stepId === "process-impact" ? "failed" : "skipped",
+          summary: step.stepId === "process-impact" ? message : "Mock remote mutation was not started."
+        }));
+        recordMockTask(result.task);
+        return { hostAlias, ok: false, result };
+      }
       const result = await mockRemoteManageCodexWithProgress(hostAlias, "update", requestId, onProgress);
       return { hostAlias, ok: result.ok, result };
     } catch (error) {
@@ -1112,6 +1133,38 @@ async function mockBatchRemoteUpdateCodex(
     }
   });
   return { requestId, action: "update", results };
+}
+
+function mockBatchRemoteCodexProcessPreflight(
+  hostAliases: string[],
+  requestId: string
+): RemoteCodexProcessPreflightResult {
+  return {
+    requestId,
+    results: hostAliases.map((hostAlias, index) => {
+      if (hostAlias.toLowerCase().includes("preflight-fail")) {
+        return {
+          hostAlias,
+          ok: false,
+          processes: [],
+          message: "Mock process identity could not be verified safely."
+        };
+      }
+      const busy = hostAlias.toLowerCase().includes("busy");
+      return {
+        hostAlias,
+        ok: true,
+        processes: busy ? [{
+          pid: 4100 + index,
+          startTime: `${9000 + index}`,
+          processName: index % 2 === 0 ? "codex" : "codex-code-mode",
+          version: "0.31.0",
+          releasePath: `/home/mock/.codex/packages/standalone/releases/0.31.0`
+        }] : [],
+        message: busy ? "1 mock process requires confirmation." : "No mock process requires confirmation."
+      };
+    })
+  };
 }
 
 function mockImportSkill(path: string): SkillImportResult {
@@ -1575,8 +1628,10 @@ export const mockApi: CodexHubApi = {
     requestId?: string,
     onProgress?: (event: HostOperationProgressEvent) => void
   ) => mockRemoteManageCodexWithProgress(hostAlias, action, requestId, onProgress),
-  batchRemoteUpdateCodex: async (hostAliases: string[], _timeoutMs = 120000, requestId = `mock-batch-update-${Date.now()}`, onProgress?: (event: HostOperationProgressEvent) => void) =>
-    mockBatchRemoteUpdateCodex(hostAliases, requestId, onProgress),
+  previewBatchRemoteCodexUpdate: async (hostAliases: string[], _timeoutMs = 120000, requestId = `mock-batch-process-${Date.now()}`) =>
+    mockBatchRemoteCodexProcessPreflight(hostAliases, requestId),
+  batchRemoteUpdateCodex: async (plans: RemoteCodexBatchHostPlan[], _timeoutMs = 120000, requestId = `mock-batch-update-${Date.now()}`, onProgress?: (event: HostOperationProgressEvent) => void) =>
+    mockBatchRemoteUpdateCodex(plans, requestId, onProgress),
   listProfiles: async () => clone(mockProfiles).map(normalizeProfile),
   createProfile: async (draft: ProfileDraft) => {
     const profile = createMockProfile(draft);

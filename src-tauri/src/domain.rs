@@ -798,6 +798,56 @@ pub(crate) struct RemoteCodexMaintenanceResult {
     pub(crate) task: TaskRun,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "RemoteCodexProcessIdentityDto")]
+pub(crate) struct RemoteCodexProcessIdentity {
+    pub(crate) pid: u32,
+    // Linux starttime may exceed JavaScript's safe integer range, so keep it textual.
+    pub(crate) start_time: String,
+    pub(crate) process_name: String,
+    pub(crate) version: String,
+    pub(crate) release_path: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "RemoteCodexProcessPreflightItemDto")]
+pub(crate) struct RemoteCodexProcessPreflightItem {
+    pub(crate) host_alias: String,
+    pub(crate) ok: bool,
+    pub(crate) processes: Vec<RemoteCodexProcessIdentity>,
+    pub(crate) message: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "RemoteCodexProcessPreflightResultDto")]
+pub(crate) struct RemoteCodexProcessPreflightResult {
+    pub(crate) request_id: String,
+    pub(crate) results: Vec<RemoteCodexProcessPreflightItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename = "RemoteCodexBatchProcessActionDto")]
+pub(crate) enum RemoteCodexBatchProcessAction {
+    Proceed,
+    Terminate,
+    Decline,
+    PreflightFailed,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "RemoteCodexBatchHostPlanDto")]
+pub(crate) struct RemoteCodexBatchHostPlan {
+    pub(crate) host_alias: String,
+    pub(crate) process_action: RemoteCodexBatchProcessAction,
+    #[serde(default)]
+    pub(crate) approved_processes: Vec<RemoteCodexProcessIdentity>,
+}
+
 #[derive(Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "RemoteProbeBatchItemDto")]

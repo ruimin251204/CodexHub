@@ -35,6 +35,7 @@ export const commandPolicies = {
   batch_remote_probe_codex: { effect: "refresh", liveSsh: true, sensitiveInput: false },
   sample_host_resources: { effect: "refresh", liveSsh: true, sensitiveInput: false },
   remote_manage_codex: { effect: "remote-write", liveSsh: true, sensitiveInput: false },
+  preview_batch_remote_codex_update: { effect: "read", liveSsh: true, sensitiveInput: false },
   batch_remote_update_codex: { effect: "remote-write", liveSsh: true, sensitiveInput: false },
   refresh_latest_codex_version: { effect: "refresh", liveSsh: false, sensitiveInput: false },
   get_local_codex_status: { effect: "read", liveSsh: false, sensitiveInput: false },

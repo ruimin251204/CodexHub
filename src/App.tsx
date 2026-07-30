@@ -29,7 +29,9 @@ import type {
   ProfilePatch,
   CcSwitchDetection,
   RemoteCodexAction,
+  RemoteCodexBatchHostPlan,
   RemoteCodexMaintenanceResult,
+  RemoteCodexProcessPreflightResult,
   RemoteCodexReloadMode,
   RemoteCodexReloadStatus,
   RemoteProbeBatchItem,
@@ -282,6 +284,10 @@ type CodexOperationModalState = {
 type CodexUninstallConfirmState = {
   hostAlias: string;
   hostName: string;
+};
+type BatchCodexUpdateConfirmState = {
+  requestId: string;
+  preview: RemoteCodexProcessPreflightResult;
 };
 type MonitorGpuUserUsage = {
   user: string;
@@ -821,6 +827,19 @@ export const uiCopy = {
       testStarted: "Testing this host and its remote Codex environment.",
       batchTestStarted: (count: number) => `Testing ${count} hosts with up to six running at once.`,
       batchUpdateStarted: (count: number) => `Updating Codex on ${count} hosts with up to six running at once.`,
+      batchProcessPreflight: (count: number) => `Checking running Codex processes on ${count} hosts before any remote change.`,
+      batchProcessConfirmTitle: "Confirm affected Codex processes",
+      batchProcessConfirmBody: (hosts: number, processes: number) =>
+        `${processes} running process${processes === 1 ? "" : "es"} on ${hosts} host${hosts === 1 ? "" : "s"} must close before installation or update. Choose the hosts CodexHub may stop.`,
+      batchProcessSelectAll: "Select all affected hosts",
+      batchProcessClear: "Clear selection",
+      batchProcessContinue: "Continue with selection",
+      batchProcessAutoContinue: "Continues automatically",
+      batchProcessNoImpact: "No running managed-release process; this host will continue automatically.",
+      batchProcessUnavailable: "Process identity could not be verified; this host will fail without starting installation or update.",
+      batchProcessDeclined: "Unselected hosts will fail without remote mutation. Exit their related processes manually, then retry.",
+      batchProcessCount: (count: number) => `${count} process${count === 1 ? "" : "es"} will be stopped`,
+      batchProcessItem: (pid: number, name: string, version: string) => `PID ${pid} · ${name} · ${version}`,
       waiting: "Waiting for remote output...",
       installHint: "Install tries the official installer, remote native mirror, remote npm mirror, local upload, then final verification.",
       updateHint: "Update tries the official installer, remote native mirror, remote npm mirror, local upload, then final verification and staged backup of verified older runtimes under ~/.codex-hub/deletion-backups/.",
@@ -841,6 +860,8 @@ export const uiCopy = {
         api: ["API configuration", "Check remote Codex configuration and credential environment readiness."],
         skills: ["Skills", "Check the remote Codex skills directory and inventory."],
         preparation: ["Preparation", "Check SSH, the current Codex state, platform, tools, and user paths."],
+        "process-impact": ["Running process safety", "Verify the unified batch approval and stop only strictly matched managed-release processes."],
+        "path-repair": ["Shell PATH", "Verify ~/.local/bin and repair the remote user's shell PATH when required."],
         "official-installer": ["Official installer", "Try the official Codex installer with strict TLS verification."],
         "remote-native-mirror": ["Remote native mirror package", "Download and verify the matching native package on the host."],
         "remote-npm-mirror": ["Remote npm mirror", "Install Codex into the user directory through the configured npm mirror."],
@@ -1621,6 +1642,19 @@ export const uiCopy = {
       testStarted: "正在测试主机及其远端 Codex 环境。",
       batchTestStarted: (count: number) => `正在测试 ${count} 台主机，同时最多运行 6 台。`,
       batchUpdateStarted: (count: number) => `正在更新 ${count} 台主机的 Codex，同时最多运行 6 台。`,
+      batchProcessPreflight: (count: number) => `正在并行检查 ${count} 台主机的 Codex 进程，检查完成前不会修改远端。`,
+      batchProcessConfirmTitle: "确认受影响的 Codex 进程",
+      batchProcessConfirmBody: (hosts: number, processes: number) =>
+        `${hosts} 台主机上共有 ${processes} 个运行中进程需要在安装或更新前关闭。请选择允许 CodexHub 终止进程的主机。`,
+      batchProcessSelectAll: "全选受影响主机",
+      batchProcessClear: "清空选择",
+      batchProcessContinue: "按选择继续",
+      batchProcessAutoContinue: "自动继续",
+      batchProcessNoImpact: "没有运行中的托管版本进程，将自动继续。",
+      batchProcessUnavailable: "无法安全确认进程身份；该主机不会开始安装或更新，并会记录失败任务。",
+      batchProcessDeclined: "未勾选的主机不会发生远端修改，并会记录失败；请手动退出相关进程后重试。",
+      batchProcessCount: (count: number) => `将终止 ${count} 个进程`,
+      batchProcessItem: (pid: number, name: string, version: string) => `PID ${pid} · ${name} · ${version}`,
       waiting: "正在等待远端输出...",
       installHint: "安装会依次尝试官方安装器、远端原生镜像、远端 npm 镜像、本地上传，然后最终验证。",
       updateHint: "更新会依次尝试官方安装器、远端原生镜像、远端 npm 镜像、本地上传，完成最终验证后将已确认的旧运行时移入 ~/.codex-hub/deletion-backups/。",
@@ -1641,6 +1675,8 @@ export const uiCopy = {
         api: ["API 配置", "检查远端 Codex 配置及凭据环境是否就绪。"],
         skills: ["Skills", "检查远端 Codex skills 目录和技能数量。"],
         preparation: ["前期准备", "检查 SSH、当前 Codex、平台、必要工具和用户目录。"],
+        "process-impact": ["运行进程安全确认", "复核统一批量授权，仅终止严格匹配的托管 release 进程。"],
+        "path-repair": ["Shell PATH", "检查 ~/.local/bin，必要时修复远端用户的 Shell PATH。"],
         "official-installer": ["官方安装器", "使用严格 TLS 校验尝试官方 Codex 安装器。"],
         "remote-native-mirror": ["远端镜像原生包", "在主机上下载并校验匹配架构的原生包。"],
         "remote-npm-mirror": ["远端 npm 镜像", "通过 npm 镜像将 Codex 安装到用户目录。"],
@@ -2634,6 +2670,7 @@ function App() {
   const [disableOperationLogPopupsOpen, setDisableOperationLogPopupsOpen] = useState(false);
   const [disableOperationLogPopupsBusy, setDisableOperationLogPopupsBusy] = useState(false);
   const [codexUninstallConfirm, setCodexUninstallConfirm] = useState<CodexUninstallConfirmState | null>(null);
+  const [batchCodexUpdateConfirm, setBatchCodexUpdateConfirm] = useState<BatchCodexUpdateConfirmState | null>(null);
   const [setupGuideOpen, setSetupGuideOpen] = useState(false);
   const [setupGuideStep, setSetupGuideStep] = useState<SetupGuideStep>("preferences");
   const [setupGuideSshConfigHosts, setSetupGuideSshConfigHosts] = useState<SshConfigHost[]>([]);
@@ -3613,6 +3650,116 @@ function App() {
     return runRemoteCodexAction(hostAlias, action);
   };
 
+  const clearBatchUpdateBusy = (aliases: string[]) => {
+    setHostBusy((current) => {
+      const next = { ...current };
+      for (const alias of aliases) delete next[alias];
+      return next;
+    });
+  };
+
+  const runConfirmedBatchCodexUpdate = async (
+    preview: RemoteCodexProcessPreflightResult,
+    selectedAliases: string[]
+  ) => {
+    const uniqueAliases = preview.results.map((item) => item.hostAlias);
+    const selected = new Set(selectedAliases);
+    const plans: RemoteCodexBatchHostPlan[] = preview.results.map((item) => ({
+      hostAlias: item.hostAlias,
+      processAction: !item.ok
+        ? "preflight-failed"
+        : item.processes.length === 0
+          ? "proceed"
+          : selected.has(item.hostAlias)
+            ? "terminate"
+            : "decline",
+      approvedProcesses: item.ok && item.processes.length > 0 && selected.has(item.hostAlias)
+        ? item.processes
+        : []
+    }));
+    const requestId = preview.requestId;
+    const showProgressModal = settings.hostOperationLogPopups;
+    setHosts((current) => current.map((host) => (
+      uniqueAliases.includes(host.hostAlias) ? { ...host, status: "testing" } : host
+    )));
+    if (showProgressModal) {
+      setCodexOperationModal(createOperationModalState(
+        requestId,
+        "codex-update",
+        uniqueAliases.map((hostAlias) => ({
+          hostAlias,
+          hostName: hosts.find((host) => host.hostAlias === hostAlias)?.name ?? hostAlias
+        })),
+        copy.codexOperation.batchUpdateStarted(uniqueAliases.length)
+      ));
+      await waitForNextFrame();
+    }
+
+    try {
+      const result = await api.batchRemoteUpdateCodex(plans, 120000, requestId, showProgressModal ? (event) => {
+        setCodexOperationModal((current) => applyHostOperationProgressEvent(current, event));
+      } : undefined);
+      const transportFailedAliases: string[] = [];
+      for (const item of result.results) {
+        if (item.result) {
+          applyRemoteCodexResult(item.result, "update");
+          if (showProgressModal) {
+            setCodexOperationModal((current) => finalizeOperationHost(
+              current,
+              requestId,
+              item.hostAlias,
+              item.result!.task,
+              item.ok,
+              item.result!.message
+            ));
+          }
+        } else {
+          transportFailedAliases.push(item.hostAlias);
+          if (showProgressModal) {
+            setCodexOperationModal((current) => failOperationHost(
+              current,
+              requestId,
+              item.hostAlias,
+              item.error ?? copy.codexOperation.failed
+            ));
+          }
+        }
+      }
+      if (transportFailedAliases.length > 0) {
+        setHosts((current) => current.map((host) => (
+          transportFailedAliases.includes(host.hostAlias) ? { ...host, status: "offline" } : host
+        )));
+      }
+      const successCount = result.results.filter((item) => item.ok).length;
+      const message = copy.hosts.updatedOutdatedCodex(successCount, uniqueAliases.length);
+      if (showProgressModal) {
+        setCodexOperationModal((current) => current?.requestId === requestId
+          ? { ...current, status: aggregateOperationStatus(current.hosts), message }
+          : current);
+      }
+      if (successCount === uniqueAliases.length) setNotice(message);
+      else setErrorNotice(message);
+      void refreshLatestCodex(true);
+      return { ok: successCount === uniqueAliases.length };
+    } catch (error) {
+      const message = formatError(error);
+      if (showProgressModal) {
+        setCodexOperationModal((current) => failRemainingOperationHosts(
+          current,
+          requestId,
+          message,
+          Boolean(taskIdForError(error))
+        ));
+      }
+      setHosts((current) => current.map((host) => (
+        uniqueAliases.includes(host.hostAlias) ? { ...host, status: "unknown" } : host
+      )));
+      throw error;
+    } finally {
+      clearBatchUpdateBusy(uniqueAliases);
+    }
+  };
+
   const handleUpdateOutdatedCodexHosts = async (aliases: string[]) => {
     const section = activeSection;
     return runSectionOperation(section, async () => {
@@ -3626,72 +3773,18 @@ function App() {
         for (const alias of uniqueAliases) next[alias] = "update";
         return next;
       });
-      setHosts((current) => current.map((host) => (uniqueAliases.includes(host.hostAlias) ? { ...host, status: "testing" } : host)));
       const requestId = `batch-codex-update-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const showProgressModal = settings.hostOperationLogPopups;
-      if (showProgressModal) {
-        setCodexOperationModal(createOperationModalState(
-          requestId,
-          "codex-update",
-          uniqueAliases.map((hostAlias) => ({
-            hostAlias,
-            hostName: hosts.find((host) => host.hostAlias === hostAlias)?.name ?? hostAlias
-          })),
-          copy.codexOperation.batchUpdateStarted(uniqueAliases.length)
-        ));
-        await waitForNextFrame();
-      }
-
       try {
-        const result = await api.batchRemoteUpdateCodex(uniqueAliases, 120000, requestId, showProgressModal ? (event) => {
-          setCodexOperationModal((current) => applyHostOperationProgressEvent(current, event));
-        } : undefined);
-        const failedAliases: string[] = [];
-        for (const item of result.results) {
-          if (item.result) {
-            applyRemoteCodexResult(item.result, "update");
-            if (showProgressModal) {
-              setCodexOperationModal((current) => finalizeOperationHost(current, requestId, item.hostAlias, item.result!.task, item.ok, item.result!.message));
-            }
-          } else {
-            failedAliases.push(item.hostAlias);
-            if (showProgressModal) {
-              setCodexOperationModal((current) => failOperationHost(current, requestId, item.hostAlias, item.error ?? copy.codexOperation.failed));
-            }
-          }
+        const preview = await api.previewBatchRemoteCodexUpdate(uniqueAliases, 120000, requestId);
+        const needsConfirmation = preview.results.some((item) => !item.ok || item.processes.length > 0);
+        if (needsConfirmation) {
+          setBatchCodexUpdateConfirm({ requestId, preview });
+          return { ok: true, pendingConfirmation: true };
         }
-        if (failedAliases.length > 0) {
-          setHosts((current) => current.map((host) => failedAliases.includes(host.hostAlias) ? { ...host, status: "offline" } : host));
-        }
-        const successCount = result.results.filter((item) => item.ok).length;
-        const message = copy.hosts.updatedOutdatedCodex(successCount, uniqueAliases.length);
-        if (showProgressModal) {
-          setCodexOperationModal((current) => current?.requestId === requestId
-            ? { ...current, status: aggregateOperationStatus(current.hosts), message }
-            : current);
-        }
-        if (successCount === uniqueAliases.length) setNotice(message);
-        else setErrorNotice(message);
-        void refreshLatestCodex(true);
-        return { ok: successCount === uniqueAliases.length };
+        return await runConfirmedBatchCodexUpdate(preview, []);
       } catch (error) {
-        const message = formatError(error);
-        if (showProgressModal) {
-          setCodexOperationModal((current) => failRemainingOperationHosts(
-            current,
-            requestId,
-            message,
-            Boolean(taskIdForError(error))
-          ));
-        }
-        setHosts((current) => current.map((host) => uniqueAliases.includes(host.hostAlias) ? { ...host, status: "unknown" } : host));
+        clearBatchUpdateBusy(uniqueAliases);
         throw error;
-      } finally {
-        setHostBusy((current) => {
-          const next = { ...current };
-          for (const alias of uniqueAliases) delete next[alias];
-          return next;
-        });
       }
     });
   };
@@ -4466,6 +4559,26 @@ function App() {
           </section>
         ) : renderContent()}
       </main>
+      {batchCodexUpdateConfirm ? (
+        <BatchCodexProcessConfirmModal
+          copy={copy}
+          hosts={hosts}
+          request={batchCodexUpdateConfirm}
+          onCancel={() => {
+            clearBatchUpdateBusy(batchCodexUpdateConfirm.preview.results.map((item) => item.hostAlias));
+            setBatchCodexUpdateConfirm(null);
+          }}
+          onConfirm={(selectedAliases) => {
+            const request = batchCodexUpdateConfirm;
+            setBatchCodexUpdateConfirm(null);
+            void runSectionOperation(activeSection, () => (
+              runConfirmedBatchCodexUpdate(request.preview, selectedAliases)
+            )).catch((error) => {
+              setErrorNotice(formatError(error), taskIdForError(error));
+            });
+          }}
+        />
+      ) : null}
       {codexUninstallConfirm ? (
         <CodexUninstallConfirmModal
           copy={copy}
@@ -4865,6 +4978,140 @@ function CodexUninstallConfirmModal({
           </button>
         </ModalActions>
       </AlertModalFrame>
+  );
+}
+
+export function BatchCodexProcessConfirmModal({
+  copy,
+  hosts,
+  request,
+  onCancel,
+  onConfirm
+}: {
+  copy: UICopy;
+  hosts: Host[];
+  request: BatchCodexUpdateConfirmState;
+  onCancel: () => void;
+  onConfirm: (selectedAliases: string[]) => void;
+}) {
+  const [selectedAliases, setSelectedAliases] = useState<string[]>([]);
+  const hostNames = useMemo(
+    () => new Map(hosts.map((host) => [host.hostAlias.toLowerCase(), host.name])),
+    [hosts]
+  );
+  const selectableAliases = useMemo(
+    () => request.preview.results
+      .filter((item) => item.ok && item.processes.length > 0)
+      .map((item) => item.hostAlias),
+    [request.preview.results]
+  );
+  const selectedSet = useMemo(() => new Set(selectedAliases), [selectedAliases]);
+  const processCount = request.preview.results.reduce((total, item) => total + item.processes.length, 0);
+
+  useEffect(() => {
+    // Selection is intentionally per batch and requires a fresh explicit choice.
+    setSelectedAliases([]);
+  }, [request.requestId]);
+
+  const toggleAlias = (hostAlias: string) => {
+    setSelectedAliases((current) => current.includes(hostAlias)
+      ? current.filter((alias) => alias !== hostAlias)
+      : [...current, hostAlias]);
+  };
+
+  return (
+    <AlertModalFrame
+      className="sshHostModal batchProcessConfirmModal BatchCodexProcessConfirmModal"
+      descriptionId="batch-process-confirm-description"
+      titleId="batch-process-confirm-title"
+      onCancel={onCancel}
+    >
+      <ModalHeader
+        className="modalHero"
+        titleId="batch-process-confirm-title"
+        title={copy.codexOperation.batchProcessConfirmTitle}
+        icon="warning"
+        closeAriaLabel={copy.setupGuide.close}
+        onClose={onCancel}
+      />
+      <p className="modalLead" id="batch-process-confirm-description">
+        {copy.codexOperation.batchProcessConfirmBody(selectableAliases.length, processCount)}
+      </p>
+
+      <div className="batchProcessHostList">
+        {request.preview.results.map((item) => {
+          const selectable = item.ok && item.processes.length > 0;
+          const selected = selectedSet.has(item.hostAlias);
+          return (
+            <label
+              className="batchProcessHostRow"
+              data-disabled={!selectable}
+              data-selected={selected}
+              key={item.hostAlias}
+            >
+              <input
+                checked={selected}
+                disabled={!selectable}
+                type="checkbox"
+                onChange={() => toggleAlias(item.hostAlias)}
+              />
+              <span className="batchProcessHostBody">
+                <span className="batchProcessHostHeading">
+                  <strong>{hostNames.get(item.hostAlias.toLowerCase()) ?? item.hostAlias}</strong>
+                  <code>{item.hostAlias}</code>
+                  <Badge tone={!item.ok ? "red" : selectable ? "yellow" : "green"}>
+                    {!item.ok
+                      ? copy.codexOperation.failed
+                      : selectable
+                        ? copy.codexOperation.batchProcessCount(item.processes.length)
+                        : copy.codexOperation.batchProcessAutoContinue}
+                  </Badge>
+                </span>
+                {!item.ok ? (
+                  <small>{copy.codexOperation.batchProcessUnavailable}</small>
+                ) : item.processes.length === 0 ? (
+                  <small>{copy.codexOperation.batchProcessNoImpact}</small>
+                ) : (
+                  <span className="batchProcessItems">
+                    {item.processes.map((process) => (
+                      <small key={`${process.pid}-${process.startTime}`}>
+                        {copy.codexOperation.batchProcessItem(process.pid, process.processName, process.version)}
+                      </small>
+                    ))}
+                  </span>
+                )}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
+      <p className="batchProcessDeclinedHint">{copy.codexOperation.batchProcessDeclined}</p>
+      <ModalActions>
+        <button className="secondaryButton" data-alert-cancel type="button" onClick={onCancel}>
+          {copy.hosts.cancel}
+        </button>
+        <button
+          className="secondaryButton"
+          disabled={selectableAliases.length === 0}
+          type="button"
+          onClick={() => setSelectedAliases(
+            selectedAliases.length === selectableAliases.length ? [] : selectableAliases
+          )}
+        >
+          {selectedAliases.length === selectableAliases.length && selectableAliases.length > 0
+            ? copy.codexOperation.batchProcessClear
+            : copy.codexOperation.batchProcessSelectAll}
+        </button>
+        <button
+          className="primaryButton dangerButton"
+          type="button"
+          onClick={() => onConfirm(selectedAliases)}
+        >
+          {copy.codexOperation.batchProcessContinue}
+        </button>
+      </ModalActions>
+    </AlertModalFrame>
   );
 }
 
@@ -9903,8 +10150,8 @@ function remoteCodexButtonLabel(copy: UICopy, busy: HostBusyAction | undefined, 
 
 const hostOperationStepIds: Record<HostOperationKind, string[]> = {
   "host-test": ["ssh-check", "system", "codex", "api", "skills"],
-  "codex-install": ["preparation", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"],
-  "codex-update": ["preparation", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"],
+  "codex-install": ["preparation", "process-impact", "path-repair", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"],
+  "codex-update": ["preparation", "process-impact", "path-repair", "official-installer", "remote-native-mirror", "remote-npm-mirror", "local-upload", "runtime-reconcile", "final-verification", "release-cleanup"],
   "codex-uninstall": ["preparation", "uninstall", "final-verification"]
 };
 

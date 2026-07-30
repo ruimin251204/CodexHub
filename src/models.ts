@@ -22,9 +22,14 @@ import type {
   NetworkProxyCandidateDto,
   NetworkProxyStatusDto,
   RemoteCodexActionDto,
+  RemoteCodexBatchHostPlanDto,
   RemoteCodexBatchItemDto,
+  RemoteCodexBatchProcessActionDto,
   RemoteCodexBatchResultDto,
   RemoteCodexMaintenanceResultDto,
+  RemoteCodexProcessIdentityDto,
+  RemoteCodexProcessPreflightItemDto,
+  RemoteCodexProcessPreflightResultDto,
   RemoteCodexProgressEventDto,
   RemoteProbeResultDto,
   RemoteProbeBatchItemDto,
@@ -423,6 +428,11 @@ export type HostResourceBatchResult = HostResourceBatchResultDto;
 export type RemoteCodexAction = RemoteCodexActionDto;
 export type RemoteCodexProgressEvent = RemoteCodexProgressEventDto;
 export type RemoteCodexMaintenanceResult = RemoteCodexMaintenanceResultDto;
+export type RemoteCodexProcessIdentity = RemoteCodexProcessIdentityDto;
+export type RemoteCodexProcessPreflightItem = RemoteCodexProcessPreflightItemDto;
+export type RemoteCodexProcessPreflightResult = RemoteCodexProcessPreflightResultDto;
+export type RemoteCodexBatchProcessAction = RemoteCodexBatchProcessActionDto;
+export type RemoteCodexBatchHostPlan = RemoteCodexBatchHostPlanDto;
 
 export type RemoteCodexBatchItem = RemoteCodexBatchItemDto;
 export type RemoteCodexBatchResult = RemoteCodexBatchResultDto;
