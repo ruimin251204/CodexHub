@@ -5692,34 +5692,16 @@ td code {
   flex-direction: column;
   gap: 14px;
   width: 100%;
+  max-width: var(--app-content-max);
+  margin: 0 auto;
   min-width: 0;
   min-height: min(720px, calc(100vh - 120px));
-  max-width: none;
-}
-
-.workspacePageHeader {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  min-width: 0;
-}
-
-.workspacePageHeader h1 {
-  color: var(--text);
-  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
-  line-height: 1.08;
-}
-
-.workspacePageHeader p {
-  margin-top: 6px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
 }
 
 .workspaceModeBar {
   display: inline-flex;
   flex: 0 0 auto;
+  align-self: flex-start;
   align-items: center;
   gap: 3px;
   max-width: 100%;
@@ -6326,7 +6308,6 @@ td code {
 
 @media (max-width: 900px) {
   .workspacePage { min-height: 0; }
-  .workspacePageHeader { align-items: flex-start; flex-direction: column; }
   .workspaceModeBar { width: 100%; overflow-x: auto; }
   .workspaceModeBar button { flex: 1 0 auto; }
   .workspaceSplitLayout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(300px, 3fr) 9px minmax(280px, 2fr); min-height: 780px; }
@@ -6336,7 +6317,6 @@ td code {
 }
 
 @media (max-width: 620px) {
-  .workspacePageHeader h1 { font-size: 1.45rem; }
   .workspacePaneToolbar { align-items: stretch; }
   .workspaceTerminalTabs { padding-inline: 4px; }
   .workspaceTerminalTab > button:first-child { min-width: 112px; max-width: 175px; }

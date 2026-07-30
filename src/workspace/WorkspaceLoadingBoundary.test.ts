@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import appSource from "../App.tsx?raw";
+import workspacePageSource from "./WorkspacePage.tsx?raw";
 
 test("Workspace remains outside the non-Workspace initial module boundary", () => {
   expect(appSource).toMatch(/const WorkspacePage = lazy\(async \(\) => \{/);
@@ -21,4 +22,13 @@ test("terminal renderer failures create a fixed sanitized task summary", () => {
   expect(appSource).toContain("terminalRendererTaskKeysRef");
   expect(appSource).toContain("failure.sessionId}:${failure.generation}:${failure.retry");
   expect(appSource).not.toContain("recordFrontendError(formatError(error))");
+});
+
+test("Workspace uses the Terminal page title without rendering a duplicate page heading", () => {
+  const terminalTitleZh = String.fromCodePoint(0x7ec8, 0x7aef);
+  expect(appSource).toContain('title: "Terminal"');
+  expect(appSource).toContain(`title: "${terminalTitleZh}"`);
+  expect(workspacePageSource).not.toContain('className="workspacePageHeader"');
+  expect(workspacePageSource).not.toContain("<h1>{copy.title}</h1>");
+  expect(workspacePageSource).not.toContain("<p>{copy.description}</p>");
 });

@@ -291,36 +291,33 @@ export function WorkspacePage({
 
   return (
     <section className={`workspacePage${className ? ` ${className}` : ""}`} aria-label={copy.title}>
-      <header className="workspacePageHeader">
-        <div><h1>{copy.title}</h1><p>{copy.description}</p></div>
-        <div
-          className="workspaceModeBar"
-          role="tablist"
-          aria-label={copy.title}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft") { event.preventDefault(); selectRelativeMode(-1); }
-            if (event.key === "ArrowRight") { event.preventDefault(); selectRelativeMode(1); }
-            if (event.key === "Home") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[0]); }
-            if (event.key === "End") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[WORKSPACE_MODES.length - 1]); }
-          }}
-        >
-          {WORKSPACE_MODES.map((entry) => (
-            <button
-              aria-controls="workspace-mode-content"
-              aria-selected={mode === entry}
-              key={entry}
-              ref={(node) => {
-                if (node) modeTabRefs.current.set(entry, node);
-                else modeTabRefs.current.delete(entry);
-              }}
-              role="tab"
-              tabIndex={mode === entry ? 0 : -1}
-              type="button"
-              onClick={() => chooseMode(entry)}
-            >{copy.modes[entry]}</button>
-          ))}
-        </div>
-      </header>
+      <div
+        className="workspaceModeBar"
+        role="tablist"
+        aria-label={copy.title}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") { event.preventDefault(); selectRelativeMode(-1); }
+          if (event.key === "ArrowRight") { event.preventDefault(); selectRelativeMode(1); }
+          if (event.key === "Home") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[0]); }
+          if (event.key === "End") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[WORKSPACE_MODES.length - 1]); }
+        }}
+      >
+        {WORKSPACE_MODES.map((entry) => (
+          <button
+            aria-controls="workspace-mode-content"
+            aria-selected={mode === entry}
+            key={entry}
+            ref={(node) => {
+              if (node) modeTabRefs.current.set(entry, node);
+              else modeTabRefs.current.delete(entry);
+            }}
+            role="tab"
+            tabIndex={mode === entry ? 0 : -1}
+            type="button"
+            onClick={() => chooseMode(entry)}
+          >{copy.modes[entry]}</button>
+        ))}
+      </div>
 
       <div
         ref={splitRef}

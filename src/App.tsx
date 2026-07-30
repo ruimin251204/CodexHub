@@ -403,8 +403,8 @@ export const uiCopy = {
         body: "Add CodexHub-managed SSH config blocks without disturbing user-owned SSH settings."
       },
       terminal: {
-        title: "Workspace",
-        eyebrow: "Workspace",
+        title: "Terminal",
+        eyebrow: "Terminal",
         body: "Use your existing SSH aliases for Terminal, Files, Split, and Transfers."
       },
       profiles: {
@@ -1253,8 +1253,8 @@ export const uiCopy = {
         body: "添加 CodexHub 管理的 SSH config 块，不影响用户已有 SSH 设置。"
       },
       terminal: {
-        title: "工作台",
-        eyebrow: "工作台",
+        title: "终端",
+        eyebrow: "终端",
         body: "使用已有 SSH alias 打开终端、文件、分屏和传输队列。"
       },
       profiles: {
