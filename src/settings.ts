@@ -39,6 +39,7 @@ export const defaultSettings: AppSettings = {
   resourceMonitorRefreshSeconds: 60,
   sidebarCompletionIndicators: true,
   hostOperationLogPopups: true,
+  personalInfoMasking: true,
   setupGuideDismissed: false
 };
 
@@ -106,6 +107,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     resourceMonitorRefreshSeconds: normalizeResourceMonitorRefreshSeconds(candidate.resourceMonitorRefreshSeconds),
     sidebarCompletionIndicators: candidate.sidebarCompletionIndicators !== false,
     hostOperationLogPopups: candidate.hostOperationLogPopups !== false,
+    personalInfoMasking: candidate.personalInfoMasking !== false,
     setupGuideDismissed: candidate.setupGuideDismissed === true
   };
 }

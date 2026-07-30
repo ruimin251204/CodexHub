@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 import { MonitorGpuBlock, sortMonitorGpuProcesses, uiCopy } from "../App";
 import type { HostResourceSnapshot } from "../models";
+import { createPersonalInfoMasker } from "../personalInfo";
+import { PersonalInfoMaskingProvider } from "./PersonalInfoMasking";
 
 type Gpu = HostResourceSnapshot["gpus"][number];
 
@@ -195,5 +197,22 @@ describe("GPU process details", () => {
   test("does not render disclosure controls when the GPU has no processes", () => {
     renderGpu("2026-07-27T10:00:00+08:00", []);
     expect(screen.queryByRole("button", { name: /GPU process details/ })).not.toBeInTheDocument();
+  });
+
+  test("keeps process usernames visible when personal information masking is enabled", () => {
+    render(
+      <PersonalInfoMaskingProvider value={createPersonalInfoMasker(true, [{ username: "jy", address: "192.0.2.28" }])}>
+        <MonitorGpuBlock
+          copy={uiCopy.en}
+          gpu={gpu()}
+          hostMemoryTotalBytes={128 * 1024 ** 3}
+          sampledAt="sample-with-masking"
+          userColorByUser={new Map([["amax", "#2563eb"], ["jy", "#0f9f6e"]])}
+        />
+      </PersonalInfoMaskingProvider>
+    );
+
+    expect(screen.getByRole("button", { name: "Show GPU process details for jy" })).toHaveTextContent("jy");
+    expect(screen.queryByText("j*")).not.toBeInTheDocument();
   });
 });

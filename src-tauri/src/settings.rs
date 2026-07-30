@@ -84,6 +84,8 @@ pub(crate) struct AppSettings {
     pub(crate) sidebar_completion_indicators: bool,
     #[serde(default = "default_true")]
     pub(crate) host_operation_log_popups: bool,
+    #[serde(default = "default_true")]
+    pub(crate) personal_info_masking: bool,
     #[serde(default)]
     pub(crate) setup_guide_dismissed: bool,
 }
@@ -111,6 +113,7 @@ impl Default for AppSettings {
             resource_monitor_refresh_seconds: 60,
             sidebar_completion_indicators: true,
             host_operation_log_popups: true,
+            personal_info_masking: true,
             setup_guide_dismissed: false,
         }
     }
@@ -293,6 +296,23 @@ mod tests {
         fs::write(&path, "{invalid").expect("invalid fixture should be written");
         let error = read_settings_at(&path).expect_err("invalid settings should fail");
         assert!(error.contains("invalid and was not overwritten"));
+        fs::remove_dir_all(dir).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn legacy_settings_enable_personal_info_masking() {
+        let dir = test_dir("legacy-personal-info-masking");
+        fs::create_dir_all(&dir).expect("test directory should be created");
+        let path = dir.join("settings.json");
+        fs::write(
+            &path,
+            r#"{"theme":"system","fontPreset":"zh-cn","hostOperationLogPopups":false}"#,
+        )
+        .expect("legacy fixture should be written");
+
+        let settings = read_settings_at(&path).expect("legacy settings should load");
+        assert!(settings.personal_info_masking);
+        assert!(!settings.host_operation_log_popups);
         fs::remove_dir_all(dir).expect("test directory should be removed");
     }
 
