@@ -1,10 +1,12 @@
 //! Workspace owns interactive SSH resources.  Commands are deliberately kept
 //! outside this module so the manager can also be shut down from app exit.
 
+mod background_process;
 pub mod error;
 pub mod events;
 pub mod files;
 pub mod operations;
+pub(crate) mod remote_path;
 pub mod terminal;
 pub mod transfer_io;
 pub mod transfers;

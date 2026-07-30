@@ -1,9 +1,9 @@
 use super::error::{WorkspaceError, WorkspaceResult};
 use super::files::FileSessions;
+use super::remote_path;
 use super::types::*;
 use chrono::{Duration, Local};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Mutex;
 use uuid::Uuid;
 
@@ -118,14 +118,10 @@ impl FileOperations {
             None
         };
         let recovery_id = format!("recovery-{}", Uuid::new_v4());
-        let parent = destination.as_deref().unwrap_or(&source.path);
-        let parent = Path::new(parent)
-            .parent()
-            .and_then(|p| p.to_str())
-            .ok_or_else(|| {
-                WorkspaceError::new("invalid-remote-path", "Backup parent must be UTF-8.")
-            })?;
-        let recovery_path = format!("{parent}/.codexhub-workspace-backups/{recovery_id}");
+        let target = destination.as_deref().unwrap_or(&source.path);
+        let parent = remote_path::parent(target)?;
+        let backup_root = remote_path::join(parent, ".codexhub-workspace-backups")?;
+        let recovery_path = remote_path::join(&backup_root, &recovery_id)?;
         let expires_at = Local::now() + Duration::seconds(TOKEN_TTL_SECONDS);
         let token = format!("fileop-{}", Uuid::new_v4());
         let host_alias = files.operation_host_alias(&request.file_session_id)?;
@@ -549,15 +545,9 @@ impl FileOperations {
             )
         })?;
         let root = match recovery.kind {
-            FileOperationKind::Rename => Path::new(backup),
-            _ => Path::new(backup).parent().ok_or_else(|| {
-                WorkspaceError::new("recovery-unavailable", "Recovery backup path is invalid.")
-            })?,
-        }
-        .to_str()
-        .ok_or_else(|| {
-            WorkspaceError::new("recovery-unavailable", "Recovery backup path is invalid.")
-        })?;
+            FileOperationKind::Rename => backup,
+            _ => remote_path::parent(backup)?,
+        };
         recovery.state = RecoveryState::PurgePrepared;
         recovery.task_id = task_id;
         recovery.reason = None;
@@ -612,16 +602,9 @@ fn normalize_destination(source: &str, destination: &str) -> WorkspaceResult<Str
             "Destination path is not permitted.",
         ));
     }
-    let source_parent = Path::new(source)
-        .parent()
-        .and_then(|p| p.to_str())
-        .unwrap_or("");
-    if source_parent.is_empty() {
-        return Err(WorkspaceError::new(
-            "invalid-source-path",
-            "Source path has no safe parent.",
-        ));
-    }
+    remote_path::parent(source).map_err(|_| {
+        WorkspaceError::new("invalid-source-path", "Source path has no safe parent.")
+    })?;
     Ok(destination.into())
 }
 fn protected(path: &str) -> bool {

@@ -1,3 +1,4 @@
+use super::background_process::configure_std_command;
 use super::error::{WorkspaceError, WorkspaceResult};
 use super::events::{
     emit, SessionHeartbeatEvent, SessionStateEvent, TerminalCwdEvent, TerminalOutputEvent,
@@ -1025,7 +1026,9 @@ fn release_pty(inner: &mut TerminalInner) {
 /// unrelated interactive program. Failure and timeout deliberately deny this
 /// optional convenience instead of guessing.
 fn remote_command_allows_shell_input(alias: &str) -> bool {
-    let Ok(mut child) = ProcessCommand::new("ssh")
+    let mut command = ProcessCommand::new("ssh");
+    configure_std_command(&mut command);
+    let Ok(mut child) = command
         .args(["-G", alias])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

@@ -1,9 +1,12 @@
+use super::background_process::configure_tokio_command;
 use super::error::{WorkspaceError, WorkspaceResult};
 use super::events::{
     emit, FileSearchState, FileSearchUpdatedEvent, WorkspaceEventSink, FILE_SEARCH_UPDATED_EVENT,
 };
+use super::remote_path;
 use super::types::*;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use chrono::{DateTime, SecondsFormat, Utc};
 use futures_util::StreamExt;
 use openssh_sftp_client::{
     metadata::{MetaData, Permissions},
@@ -222,7 +225,13 @@ impl FileSessions {
                     break;
                 }
                 let name = entry.filename().as_os_str().to_os_string();
-                let path = canonical.join(&name);
+                let name_text = name.to_str().ok_or_else(|| {
+                    WorkspaceError::new(
+                        "unsupported-path-encoding",
+                        "This remote path is not valid UTF-8 and is read-only.",
+                    )
+                })?;
+                let path = remote_path::join(&canonical_path, name_text)?;
                 all.push(entry_from_metadata(path, name, entry.metadata(), None)?);
             }
             sort_entries(
@@ -406,7 +415,7 @@ impl FileSessions {
         request: StartFileSearchRequest,
     ) -> WorkspaceResult<FileSearchStarted> {
         let session = self.get(&request.file_session_id)?;
-        let start = canonicalize(&session, &request.path).await?;
+        let start = path_string(&canonicalize(&session, &request.path).await?)?;
         if request.query.trim().is_empty() {
             return Err(WorkspaceError::new(
                 "empty-search-query",
@@ -463,7 +472,8 @@ impl FileSessions {
         }
         let session = self.get(&request.file_session_id)?;
         let parent = canonicalize(&session, &request.parent_path).await?;
-        let child = parent.join(&request.name);
+        let parent_path = path_string(&parent)?;
+        let child = remote_path::join(&parent_path, &request.name)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
         let parent_metadata = fs
@@ -471,7 +481,7 @@ impl FileSessions {
             .await
             .map_err(sftp_error("directory-parent-stale"))?;
         ensure_plain_directory(&parent_metadata, "directory-parent-unsafe")?;
-        match fs.symlink_metadata(&child).await {
+        match fs.symlink_metadata(Path::new(&child)).await {
             Ok(_) => {
                 return Err(WorkspaceError::new(
                     "destination-exists",
@@ -480,11 +490,11 @@ impl FileSessions {
             }
             Err(_) => {}
         }
-        fs.create_dir(&child)
+        fs.create_dir(Path::new(&child))
             .await
             .map_err(sftp_error("directory-create-failed"))?;
         let metadata = fs
-            .symlink_metadata(&child)
+            .symlink_metadata(Path::new(&child))
             .await
             .map_err(sftp_error("directory-create-stale"))?;
         ensure_plain_directory(&metadata, "directory-create-unsafe")?;
@@ -512,7 +522,7 @@ impl FileSessions {
             .await
             .map_err(sftp_error("stale-entry-ref"))?;
         let fresh = entry_from_metadata(
-            PathBuf::from(&entry.path),
+            entry.path.clone(),
             std::ffi::OsString::from(&entry.name),
             metadata,
             None,
@@ -539,16 +549,8 @@ impl FileSessions {
             .symlink_metadata(Path::new(path))
             .await
             .map_err(sftp_error("staging-stat-failed"))?;
-        let name = Path::new(path)
-            .file_name()
-            .ok_or_else(|| {
-                WorkspaceError::new(
-                    "invalid-remote-path",
-                    "Internal staging path has no file name.",
-                )
-            })?
-            .to_os_string();
-        let entry = entry_from_metadata(PathBuf::from(path), name, metadata, None)?;
+        let name = std::ffi::OsString::from(remote_path::file_name(path)?);
+        let entry = entry_from_metadata(path.to_string(), name, metadata, None)?;
         session
             .entries
             .write()
@@ -564,30 +566,19 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<OperationPathSnapshot> {
-        let requested = Path::new(path);
-        let name = requested
-            .file_name()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| {
-                WorkspaceError::new(
-                    "unsupported-path-encoding",
-                    "Only UTF-8 remote names may be changed by Workspace.",
-                )
-            })?;
+        let name = remote_path::file_name(path)?;
         if !safe_child_name(name) {
             return Err(WorkspaceError::new(
                 "invalid-destination",
                 "Overwrite destination has no safe file name.",
             ));
         }
-        let parent = requested.parent().ok_or_else(|| {
-            WorkspaceError::new("invalid-destination", "Destination has no safe parent.")
-        })?;
+        let parent = remote_path::parent(path)?;
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
         let canonical_parent = fs
-            .canonicalize(parent)
+            .canonicalize(Path::new(parent))
             .await
             .map_err(sftp_error("destination-parent-stale"))?;
         let parent_metadata = fs
@@ -595,9 +586,10 @@ impl FileSessions {
             .await
             .map_err(sftp_error("destination-parent-stale"))?;
         ensure_plain_directory(&parent_metadata, "destination-parent-unsafe")?;
-        let destination = canonical_parent.join(name);
+        let canonical_parent = path_string(&canonical_parent)?;
+        let destination = remote_path::join(&canonical_parent, name)?;
         let metadata = fs
-            .symlink_metadata(&destination)
+            .symlink_metadata(Path::new(&destination))
             .await
             .map_err(sftp_error("destination-missing"))?;
         match metadata.file_type() {
@@ -616,7 +608,7 @@ impl FileSessions {
             None,
         )?;
         Ok(OperationPathSnapshot {
-            path: path_string(&destination)?,
+            path: destination,
             fingerprint: entry.fingerprint,
         })
     }
@@ -653,23 +645,11 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<()> {
-        let recovery = Path::new(path);
-        let backup_root = recovery.parent().ok_or_else(|| {
-            WorkspaceError::new("unsafe-recovery-path", "Recovery path has no backup root.")
-        })?;
-        let parent = backup_root.parent().ok_or_else(|| {
-            WorkspaceError::new(
-                "unsafe-recovery-path",
-                "Recovery path has no target parent.",
-            )
-        })?;
-        if recovery
-            .file_name()
-            .and_then(|part| part.to_str())
-            .filter(|part| part.starts_with("recovery-"))
-            .is_none()
-            || backup_root.file_name().and_then(|part| part.to_str())
-                != Some(".codexhub-workspace-backups")
+        let recovery = path;
+        let backup_root = remote_path::parent(recovery)?;
+        let parent = remote_path::parent(backup_root)?;
+        if !remote_path::file_name(recovery)?.starts_with("recovery-")
+            || remote_path::file_name(backup_root)? != ".codexhub-workspace-backups"
         {
             return Err(WorkspaceError::new(
                 "unsafe-recovery-path",
@@ -680,45 +660,45 @@ impl FileSessions {
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
         let parent_metadata = fs
-            .symlink_metadata(parent)
+            .symlink_metadata(Path::new(parent))
             .await
             .map_err(sftp_error("backup-parent-stale"))?;
         ensure_plain_directory(&parent_metadata, "backup-parent-unsafe")?;
-        match fs.symlink_metadata(backup_root).await {
+        match fs.symlink_metadata(Path::new(backup_root)).await {
             Ok(metadata) => ensure_plain_directory(&metadata, "backup-root-unsafe")?,
             Err(_) => {
-                fs.create_dir(backup_root)
+                fs.create_dir(Path::new(backup_root))
                     .await
                     .map_err(sftp_error("backup-create-failed"))?;
                 let metadata = fs
-                    .symlink_metadata(backup_root)
+                    .symlink_metadata(Path::new(backup_root))
                     .await
                     .map_err(sftp_error("backup-create-stale"))?;
                 ensure_plain_directory(&metadata, "backup-root-unsafe")?;
-                fs.set_permissions(backup_root, owner_only_permissions())
+                fs.set_permissions(Path::new(backup_root), owner_only_permissions())
                     .await
                     .map_err(sftp_error("backup-permissions-failed"))?;
             }
         }
-        fs.set_permissions(backup_root, owner_only_permissions())
+        fs.set_permissions(Path::new(backup_root), owner_only_permissions())
             .await
             .map_err(sftp_error("backup-permissions-failed"))?;
         // A recovery id must be unique.  Never reuse an existing directory.
-        if fs.symlink_metadata(recovery).await.is_ok() {
+        if fs.symlink_metadata(Path::new(recovery)).await.is_ok() {
             return Err(WorkspaceError::new(
                 "recovery-already-exists",
                 "Recovery path already exists; prepare the operation again.",
             ));
         }
-        fs.create_dir(recovery)
+        fs.create_dir(Path::new(recovery))
             .await
             .map_err(sftp_error("backup-create-failed"))?;
         let metadata = fs
-            .symlink_metadata(recovery)
+            .symlink_metadata(Path::new(recovery))
             .await
             .map_err(sftp_error("backup-create-stale"))?;
         ensure_plain_directory(&metadata, "backup-root-unsafe")?;
-        fs.set_permissions(recovery, owner_only_permissions())
+        fs.set_permissions(Path::new(recovery), owner_only_permissions())
             .await
             .map_err(sftp_error("backup-permissions-failed"))?;
         Ok(())
@@ -745,14 +725,11 @@ impl FileSessions {
         to: &str,
     ) -> WorkspaceResult<()> {
         let session = self.get(file_session_id)?;
-        let destination = Path::new(to);
-        let parent = destination.parent().ok_or_else(|| {
-            WorkspaceError::new("invalid-destination", "Destination has no safe parent.")
-        })?;
+        let parent = remote_path::parent(to)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
         let parent_metadata = fs
-            .symlink_metadata(parent)
+            .symlink_metadata(Path::new(parent))
             .await
             .map_err(sftp_error("destination-parent-stale"))?;
         ensure_plain_directory(&parent_metadata, "destination-parent-unsafe")?;
@@ -775,7 +752,7 @@ impl FileSessions {
         // `hardlink@openssh.com` maps to the remote create-if-absent link
         // operation. It closes the lstat-to-rename overwrite race for regular
         // files; removing the old name happens only after the new link exists.
-        fs.hard_link(Path::new(from), destination)
+        fs.hard_link(Path::new(from), Path::new(to))
             .await
             .map_err(sftp_error("destination-create-failed"))?;
         fs.remove_file(Path::new(from))
@@ -790,17 +767,9 @@ impl FileSessions {
         root: &str,
         recovery_id: &str,
     ) -> WorkspaceResult<()> {
-        let root_path = Path::new(root);
-        let backup_root = root_path.parent().ok_or_else(|| {
-            WorkspaceError::new("unsafe-recovery-path", "Recovery path has no backup root.")
-        })?;
-        let target_parent = backup_root.parent().ok_or_else(|| {
-            WorkspaceError::new(
-                "unsafe-recovery-path",
-                "Recovery path has no target parent.",
-            )
-        })?;
-        if !is_managed_recovery_root(root_path, recovery_id) {
+        let backup_root = remote_path::parent(root)?;
+        let target_parent = remote_path::parent(backup_root)?;
+        if !is_managed_recovery_root(root, recovery_id) {
             return Err(WorkspaceError::new(
                 "unsafe-recovery-path",
                 "Only a prepared Workspace recovery directory may be purged.",
@@ -810,49 +779,55 @@ impl FileSessions {
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
         let parent_metadata = fs
-            .symlink_metadata(target_parent)
+            .symlink_metadata(Path::new(target_parent))
             .await
             .map_err(sftp_error("recovery-purge-stale"))?;
         let backup_root_metadata = fs
-            .symlink_metadata(backup_root)
+            .symlink_metadata(Path::new(backup_root))
             .await
             .map_err(sftp_error("recovery-purge-stale"))?;
         let root_metadata = fs
-            .symlink_metadata(root_path)
+            .symlink_metadata(Path::new(root))
             .await
             .map_err(sftp_error("recovery-purge-stale"))?;
         ensure_plain_directory(&parent_metadata, "recovery-purge-unsafe")?;
         ensure_plain_directory(&backup_root_metadata, "recovery-purge-unsafe")?;
         ensure_plain_directory(&root_metadata, "recovery-purge-unsafe")?;
-        let mut stack = vec![(root_path.to_path_buf(), false)];
+        let mut stack = vec![(root.to_string(), false)];
         while let Some((path, visited)) = stack.pop() {
             let metadata = fs
-                .symlink_metadata(&path)
+                .symlink_metadata(Path::new(&path))
                 .await
                 .map_err(sftp_error("recovery-purge-stale"))?;
             let is_dir = metadata.file_type().is_some_and(|kind| kind.is_dir());
             if !is_dir {
-                fs.remove_file(&path)
+                fs.remove_file(Path::new(&path))
                     .await
                     .map_err(sftp_error("recovery-purge-failed"))?;
                 continue;
             }
             if visited {
-                fs.remove_dir(&path)
+                fs.remove_dir(Path::new(&path))
                     .await
                     .map_err(sftp_error("recovery-purge-failed"))?;
                 continue;
             }
             stack.push((path.clone(), true));
             let dir = fs
-                .open_dir(&path)
+                .open_dir(Path::new(&path))
                 .await
                 .map_err(sftp_error("recovery-purge-failed"))?;
             let stream = dir.read_dir();
             tokio::pin!(stream);
             while let Some(item) = stream.as_mut().next().await {
                 let item = item.map_err(sftp_error("recovery-purge-failed"))?;
-                stack.push((path.join(item.filename()), false));
+                let name = item.filename().to_str().ok_or_else(|| {
+                    WorkspaceError::new(
+                        "unsupported-path-encoding",
+                        "This remote path is not valid UTF-8 and cannot be purged.",
+                    )
+                })?;
+                stack.push((remote_path::join(&path, name)?, false));
             }
         }
         Ok(())
@@ -1149,6 +1124,7 @@ async fn stop_sftp_child(child: &mut Child) {
 
 async fn connect_sftp(alias: &str) -> WorkspaceResult<ConnectedSftp> {
     let mut command = Command::new("ssh");
+    configure_tokio_command(&mut command);
     command
         .args(["-T", "-s", alias, "sftp"])
         .stdin(std::process::Stdio::piped())
@@ -1200,7 +1176,7 @@ async fn search_task(
     search_id: String,
     file_session_id: String,
     session: Arc<FileSession>,
-    start: PathBuf,
+    start: String,
     query: String,
     cancel: CancellationToken,
     sink: Option<WorkspaceEventSink>,
@@ -1238,7 +1214,7 @@ async fn search_task(
         }
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
-        let dir = match fs.open_dir(&path).await {
+        let dir = match fs.open_dir(Path::new(&path)).await {
             Ok(v) => v,
             Err(_) => {
                 error_code = Some("search-directory-read-failed".into());
@@ -1262,7 +1238,13 @@ async fn search_task(
             };
             scanned = scanned.saturating_add(1);
             let name = entry.filename().as_os_str().to_os_string();
-            let child_path = path.join(&name);
+            let Some(name_text) = name.to_str() else {
+                continue;
+            };
+            let child_path = match remote_path::join(&path, name_text) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
             let item = match entry_from_metadata(child_path.clone(), name, entry.metadata(), None) {
                 Ok(v) => v,
                 Err(_) => continue,
@@ -1335,7 +1317,7 @@ fn next_search_revision(revision: &mut u64) -> u64 {
     *revision
 }
 fn entry_from_metadata(
-    path: PathBuf,
+    path: String,
     name: std::ffi::OsString,
     metadata: MetaData,
     symlink_target: Option<String>,
@@ -1344,7 +1326,6 @@ fn entry_from_metadata(
     let name = name
         .into_string()
         .unwrap_or_else(|raw| format!("[unsupported filename encoding: {} bytes]", raw.len()));
-    let path = path_string(&path)?;
     let kind = match metadata.file_type() {
         Some(kind) if kind.is_file() => RemoteFileKind::File,
         Some(kind) if kind.is_dir() => RemoteFileKind::Directory,
@@ -1354,13 +1335,9 @@ fn entry_from_metadata(
         Some(kind) if kind.is_block_device() => RemoteFileKind::BlockDevice,
         _ => RemoteFileKind::Unknown,
     };
-    let modified_at = metadata.modified().map(|time| time.into_raw().to_string());
-    let fingerprint = format!(
-        "{}:{}:{:?}",
-        metadata.len().unwrap_or(0),
-        modified_at.as_deref().unwrap_or("?"),
-        kind
-    );
+    let modified_raw = metadata.modified().map(|time| time.into_raw());
+    let modified_at = modified_raw.and_then(format_remote_modified_at);
+    let fingerprint = remote_entry_fingerprint(metadata.len().unwrap_or(0), modified_raw, kind);
     Ok(RemoteFileEntry {
         entry_ref: format!("entry-{}", Uuid::new_v4()),
         path,
@@ -1377,6 +1354,18 @@ fn entry_from_metadata(
         fingerprint,
         writable_name,
     })
+}
+
+fn format_remote_modified_at(seconds: u32) -> Option<String> {
+    DateTime::<Utc>::from_timestamp(i64::from(seconds), 0)
+        .map(|value| value.to_rfc3339_opts(SecondsFormat::Secs, true))
+}
+
+fn remote_entry_fingerprint(size: u64, modified_raw: Option<u32>, kind: RemoteFileKind) -> String {
+    let modified = modified_raw
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "?".into());
+    format!("{size}:{modified}:{kind:?}")
 }
 fn sort_entries(entries: &mut [RemoteFileEntry], field: FileSortField, direction: SortDirection) {
     entries.sort_by(|a, b| {
@@ -1482,21 +1471,18 @@ fn is_network_sftp_error(message: &str) -> bool {
     .any(|marker| normalized.contains(marker))
 }
 
-fn is_managed_recovery_root(root: &Path, recovery_id: &str) -> bool {
+fn is_managed_recovery_root(root: &str, recovery_id: &str) -> bool {
     // Remote paths remain POSIX paths even when the desktop app runs on
     // Windows. Validate strings directly; `Path::is_absolute` rejects `/srv`
     // on Windows and would block an otherwise safe recovery purge.
-    let Some(path) = root.to_str() else {
-        return false;
-    };
-    if !path.starts_with('/')
-        || path.contains(['\\', '\0'])
+    if !root.starts_with('/')
+        || root.contains(['\\', '\0'])
         || !recovery_id.starts_with("recovery-")
         || recovery_id.contains(['/', '\\', '\0'])
     {
         return false;
     }
-    let parts = path
+    let parts = root
         .strip_prefix('/')
         .unwrap_or_default()
         .split('/')
@@ -1517,14 +1503,27 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> WorkspaceError {
 
 #[cfg(test)]
 mod tests {
-    use super::is_managed_recovery_root;
-    use std::path::Path;
+    use super::{format_remote_modified_at, is_managed_recovery_root, remote_entry_fingerprint};
+    use crate::workspace::types::RemoteFileKind;
+
+    #[test]
+    fn remote_modified_time_is_rfc3339_but_fingerprint_keeps_unix_seconds() {
+        let seconds = 1_720_000_000;
+        assert_eq!(
+            format_remote_modified_at(seconds).as_deref(),
+            Some("2024-07-03T09:46:40Z")
+        );
+        assert_eq!(
+            remote_entry_fingerprint(42, Some(seconds), RemoteFileKind::File),
+            "42:1720000000:File"
+        );
+    }
 
     #[test]
     fn recovery_purge_root_requires_exact_managed_boundary() {
         let recovery_id = "recovery-7a1a";
         assert!(is_managed_recovery_root(
-            Path::new("/srv/work/.codexhub-workspace-backups/recovery-7a1a"),
+            "/srv/work/.codexhub-workspace-backups/recovery-7a1a",
             recovery_id,
         ));
         for path in [
@@ -1534,7 +1533,7 @@ mod tests {
             "relative/.codexhub-workspace-backups/recovery-7a1a",
         ] {
             assert!(
-                !is_managed_recovery_root(Path::new(path), recovery_id),
+                !is_managed_recovery_root(path, recovery_id),
                 "{path} must not be purgeable"
             );
         }

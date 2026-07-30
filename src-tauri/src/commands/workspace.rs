@@ -890,15 +890,10 @@ pub(crate) async fn workspace_enqueue_transfers(
 }
 
 fn remote_child_path(parent: &str, name: &str) -> Result<String, String> {
-    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\\') {
+    if name.contains('\\') {
         return Err("The upload source name cannot be used as a remote filename.".into());
     }
-    let parent = parent.trim_end_matches('/');
-    Ok(if parent.is_empty() {
-        format!("/{name}")
-    } else {
-        format!("{parent}/{name}")
-    })
+    crate::workspace::remote_path::join(parent, name).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -184,6 +184,7 @@ pub struct RemoteFileEntry {
     pub kind: RemoteFileKind,
     /// String avoids losing precision in JavaScript for very large files.
     pub size: Option<String>,
+    /// UTC RFC 3339 timestamp suitable for direct JavaScript parsing.
     pub modified_at: Option<String>,
     pub permissions: Option<String>,
     pub uid: Option<u32>,

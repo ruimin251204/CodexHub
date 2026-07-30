@@ -268,7 +268,11 @@ export type RemoteFileEntryDto = { entryRef: string, path: string, name: string,
 /**
  * String avoids losing precision in JavaScript for very large files.
  */
-size: string | null, modifiedAt: string | null, permissions: string | null, uid: number | null, gid: number | null, symlinkTarget: string | null, fingerprint: string, writableName: boolean, };
+size: string | null,
+/**
+ * UTC RFC 3339 timestamp suitable for direct JavaScript parsing.
+ */
+modifiedAt: string | null, permissions: string | null, uid: number | null, gid: number | null, symlinkTarget: string | null, fingerprint: string, writableName: boolean, };
 
 export type WorkspaceFileSortFieldDto = "name" | "type" | "size" | "modified";
 

@@ -69,6 +69,12 @@ function displaySize(value: string) {
   return unit === 0 ? `${result} ${units[unit]}` : `${result.toFixed(result >= 10 ? 1 : 2)} ${units[unit]}`;
 }
 
+export function formatModifiedAt(value: string | null) {
+  if (!value) return "—";
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime()) ? "—" : timestamp.toLocaleString();
+}
+
 function kindLabel(entry: RemoteFileEntry, copy: WorkspaceCopy) {
   if (entry.kind === "directory") return copy.directory;
   if (entry.kind === "file") return copy.file;
@@ -735,7 +741,7 @@ export function FilesPanel({
               <span className="workspaceFileName" role="gridcell" title={entry.canonicalPath}><span aria-hidden="true">{iconForEntry(entry)}</span>{entry.name}</span>
               <span role="gridcell">{kindLabel(entry, copy)}</span>
               <span role="gridcell">{entry.kind === "directory" ? "—" : displaySize(entry.size)}</span>
-              <span role="gridcell">{entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : "—"}</span>
+              <span role="gridcell">{formatModifiedAt(entry.modifiedAt)}</span>
             </div>
           ))}
           {!loading && filesError ? (

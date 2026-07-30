@@ -4,6 +4,7 @@
 use super::error::{WorkspaceError, WorkspaceResult};
 use super::files::{FileSessions, TransferFingerprint, TransferStreamStop};
 use super::operations::FileOperations;
+use super::remote_path;
 use super::transfers::TransferQueue;
 use super::types::{
     ConfirmFileOperationRequest, ConflictStrategy, FileOperationKind, LocalPathGrantDto,
@@ -1603,16 +1604,12 @@ fn fail(
 }
 
 fn download_destination(directory: &Path, remote_source: &str) -> WorkspaceResult<PathBuf> {
-    let name = Path::new(remote_source)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .filter(|value| !value.is_empty() && *value != "." && *value != "..")
-        .ok_or_else(|| {
-            WorkspaceError::new(
-                "unsupported-file-encoding",
-                "The remote source name cannot be safely written locally.",
-            )
-        })?;
+    let name = remote_path::file_name(remote_source).map_err(|_| {
+        WorkspaceError::new(
+            "unsupported-file-encoding",
+            "The remote source name cannot be safely written locally.",
+        )
+    })?;
     Ok(directory.join(name))
 }
 
@@ -1768,27 +1765,21 @@ async fn keep_both_remote_path(
     destination: &str,
     transfer_id: &str,
 ) -> WorkspaceResult<String> {
-    let destination_path = Path::new(destination);
-    let parent = destination_path
-        .parent()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| {
-            WorkspaceError::new(
-                "invalid-destination",
-                "The remote destination has no valid parent.",
-            )
-        })?;
-    let name = destination_path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| {
-            WorkspaceError::new(
-                "unsupported-file-encoding",
-                "The remote destination name is not writable.",
-            )
-        })?;
+    let parent = remote_path::parent(destination).map_err(|_| {
+        WorkspaceError::new(
+            "invalid-destination",
+            "The remote destination has no valid parent.",
+        )
+    })?;
+    let name = remote_path::file_name(destination).map_err(|_| {
+        WorkspaceError::new(
+            "unsupported-file-encoding",
+            "The remote destination name is not writable.",
+        )
+    })?;
     let suffix = transfer_id.strip_prefix("transfer-").unwrap_or(transfer_id);
-    let candidate = format!("{parent}/{name}.copy-{}", &suffix[..suffix.len().min(8)]);
+    let candidate_name = format!("{name}.copy-{}", &suffix[..suffix.len().min(8)]);
+    let candidate = remote_path::join(parent, &candidate_name)?;
     if files.operation_exists(file_session_id, &candidate).await? {
         return Err(WorkspaceError::new(
             "keep-both-name-unavailable",
