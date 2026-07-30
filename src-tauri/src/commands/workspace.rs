@@ -292,6 +292,12 @@ fn workspace_files_error_code(error: &crate::workspace::error::WorkspaceError) -
     }
 }
 
+/// Only transport-classified failures may replace the shared SFTP subsystem.
+/// Permission, path and encoding errors keep the original session intact.
+fn should_reconnect_workspace_files(error: &crate::workspace::error::WorkspaceError) -> bool {
+    error.retryable
+}
+
 /// File mutations are durable recovery operations, so their Job Manager row
 /// is created before the confirmation token can trigger a remote write.
 fn begin_workspace_file_task(
@@ -573,7 +579,18 @@ pub(crate) async fn workspace_list_directory(
 ) -> Result<ListDirectoryResult, String> {
     let workspace = manager(&state)?;
     let file_session_id = request.file_session_id.clone();
-    match workspace.files.list_directory(request).await {
+    let result = match workspace.files.list_directory(request.clone()).await {
+        Err(error) if should_reconnect_workspace_files(&error) => {
+            // A FileSession is reused per host. Replace a broken transport once
+            // before surfacing the directory failure to the user and Job Manager.
+            match workspace.files.reconnect(&file_session_id).await {
+                Ok(()) => workspace.files.list_directory(request).await,
+                Err(reconnect_error) => Err(reconnect_error),
+            }
+        }
+        result => result,
+    };
+    match result {
         Ok(result) => Ok(result),
         Err(error) => {
             let error_code = workspace_files_error_code(&error);
@@ -1385,6 +1402,21 @@ mod tests {
             "not used by audit",
         );
         assert_eq!(workspace_files_error_code(&error), "workspace-files-error");
+    }
+
+    #[test]
+    fn only_retryable_files_errors_replace_the_shared_sftp_session() {
+        let transport = crate::workspace::error::WorkspaceError::retryable(
+            "directory-read-failed",
+            "connection reset",
+        );
+        let permissions = crate::workspace::error::WorkspaceError::new(
+            "directory-open-failed",
+            "permission denied",
+        );
+
+        assert!(should_reconnect_workspace_files(&transport));
+        assert!(!should_reconnect_workspace_files(&permissions));
     }
 
     #[test]

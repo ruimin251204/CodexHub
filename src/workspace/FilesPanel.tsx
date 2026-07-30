@@ -155,6 +155,8 @@ export function FilesPanel({
   const pageSortSignatureRef = useRef("");
   const sortRef = useRef({ key: sortKey, ascending: sortAscending });
   const hostViewsRef = useRef(new Map<string, FilesHostView>());
+  const failedHostAliasesRef = useRef(new Set<string>());
+  const failedFileSessionIdsRef = useRef(new Map<string, string>());
   const activeHostRef = useRef("");
   const currentViewRef = useRef<FilesHostView | null>(null);
   const retryRequestRef = useRef<{ hostAlias: string; path: string | null } | null>(null);
@@ -217,6 +219,8 @@ export function FilesPanel({
         direction: sortRef.current.ascending ? "asc" : "desc"
       });
       if (requestId !== requestSequence.current) return;
+      failedHostAliasesRef.current.delete(session.hostAlias);
+      failedFileSessionIdsRef.current.delete(session.hostAlias);
       setFilesError(false);
       setFailedPath(null);
       pageSortSignatureRef.current = [
@@ -240,6 +244,11 @@ export function FilesPanel({
       setHistoryIndex(historyIndexRef.current + 1);
     } catch (error) {
       if (requestId === requestSequence.current) {
+        // A failed list may have left the per-host SFTP child unusable. Mark it
+        // for ordered disposal before the next open so it cannot be reused.
+        failedHostAliasesRef.current.add(session.hostAlias);
+        failedFileSessionIdsRef.current.set(session.hostAlias, session.fileSessionId);
+        setFileSession(null);
         setFilesError(true);
         setFailedPath(path);
         onError(error);
@@ -251,13 +260,23 @@ export function FilesPanel({
 
   useEffect(() => {
     const previousHostAlias = activeHostRef.current;
-    if (previousHostAlias && previousHostAlias !== selectedHostAlias && currentViewRef.current) {
+    if (
+      previousHostAlias
+      && previousHostAlias !== selectedHostAlias
+      && currentViewRef.current
+      && !failedHostAliasesRef.current.has(previousHostAlias)
+    ) {
       hostViewsRef.current.set(previousHostAlias, currentViewRef.current);
     }
     activeHostRef.current = selectedHostAlias;
     requestSequence.current += 1;
     if (!isActive) {
-      if (selectedHostAlias && previousHostAlias === selectedHostAlias && currentViewRef.current) {
+      if (
+        selectedHostAlias
+        && previousHostAlias === selectedHostAlias
+        && currentViewRef.current
+        && !failedHostAliasesRef.current.has(selectedHostAlias)
+      ) {
         hostViewsRef.current.set(selectedHostAlias, currentViewRef.current);
       }
       return;
@@ -274,20 +293,28 @@ export function FilesPanel({
       hostViewsRef.current.delete(selectedHostAlias);
     }
     const cachedView = hostViewsRef.current.get(selectedHostAlias);
-    if (cachedView && !retryRequest) {
+    if (cachedView?.page && !failedHostAliasesRef.current.has(selectedHostAlias) && !retryRequest) {
       restoreHostView(cachedView);
       return;
     }
+    hostViewsRef.current.delete(selectedHostAlias);
     let disposed = false;
     setLoading(true);
     restoreHostView(null);
-    void api.openFiles({ hostAlias: selectedHostAlias }).then(async (session) => {
+    void (async () => {
+      const staleSessionId = failedFileSessionIdsRef.current.get(selectedHostAlias);
+      if (staleSessionId) {
+        await api.closeFiles({ fileSessionId: staleSessionId }).catch(() => undefined);
+        failedFileSessionIdsRef.current.delete(selectedHostAlias);
+      }
+      if (disposed) return;
+      const session = await api.openFiles({ hostAlias: selectedHostAlias });
       if (disposed) return;
       setFileSession(session);
       setHistory([]);
       setHistoryIndex(-1);
       await navigate(session, retryRequest?.path ?? null, { manual: false });
-    }).catch((error) => {
+    })().catch((error) => {
       if (!disposed) {
         setFilesError(true);
         setFailedPath(retryRequest?.path ?? null);

@@ -29,6 +29,10 @@ function cycleSession(sessions: WorkspaceTerminalSession[], activeSessionId: str
   return sessions[(currentIndex + delta + sessions.length) % sessions.length].sessionId;
 }
 
+function hostOptionLabel(host: WorkspaceHost) {
+  return host.name === host.hostAlias ? host.hostAlias : `${host.name} · ${host.hostAlias}`;
+}
+
 export function TerminalPanel({
   activeSessionId,
   api,
@@ -40,7 +44,6 @@ export function TerminalPanel({
   onActivateSession,
   onCloseSession,
   onError,
-  onOpenTask,
   onRendererError,
   onHostSelected,
   onReconnect
@@ -55,7 +58,6 @@ export function TerminalPanel({
   onActivateSession: (sessionId: string) => void;
   onCloseSession: (session: WorkspaceTerminalSession) => void;
   onError: (error: unknown) => void;
-  onOpenTask?: (taskId: string) => void;
   onRendererError: (failure: TerminalRendererFailure) => void;
   onHostSelected: (hostAlias: string) => void;
   onReconnect: (session: WorkspaceTerminalSession) => void;
@@ -83,13 +85,16 @@ export function TerminalPanel({
             if (event.target.value) onHostSelected(event.target.value);
           }}>
             <option value="">{copy.selectHost}</option>
-            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{host.name} · {host.hostAlias}</option>)}
+            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{hostOptionLabel(host)}</option>)}
           </select>
         </label>
         <button type="button" disabled={hosts.length === 0} onClick={() => {
           const hostAlias = activeSession?.hostAlias ?? hosts[0]?.hostAlias;
           if (hostAlias) onHostSelected(hostAlias);
         }}>＋ {copy.newTerminal}</button>
+        {activeSession?.reconnectable && ["disconnected", "failed", "closed"].includes(activeSession.state) ? (
+          <button type="button" onClick={() => onReconnect(activeSession)}>↻ {copy.reconnect}</button>
+        ) : null}
         {activeSession ? (
           <button
             aria-label={copy.searchTerminal}
@@ -139,7 +144,7 @@ export function TerminalPanel({
                 >
                   <span className="workspaceConnectionDot" data-state={session.state} aria-hidden="true" />
                   <span>{session.title || session.hostAlias}</span>
-                  <small>{session.hostAlias}</small>
+                  {session.title && session.title !== session.hostAlias ? <small>{session.hostAlias}</small> : null}
                 </button>
                 <button aria-label={`${copy.closeTerminal}: ${session.title}`} title={copy.closeTerminal} type="button" onClick={() => onCloseSession(session)}>×</button>
               </div>
@@ -176,23 +181,7 @@ export function TerminalPanel({
         ))}
       </div>
 
-      {activeSession ? (
-        <footer className="workspaceTerminalStatus">
-          <span className="workspaceStatusChip" data-state={activeSession.state} title={activeSession.reason ?? stateLabel(activeSession.state, copy)}>
-            <span className="workspaceConnectionDot" data-state={activeSession.state} aria-hidden="true" />
-            {stateLabel(activeSession.state, copy)}
-            {activeSession.state === "reconnecting" ? ` · ${activeSession.attempt}/5` : ""}
-          </span>
-          <span className="workspaceVisuallyHidden" aria-live="polite">{stateLabel(activeSession.state, copy)}</span>
-          {activeSession.reconnectable && ["disconnected", "failed", "closed"].includes(activeSession.state) ? (
-            <button type="button" onClick={() => onReconnect(activeSession)}>{copy.reconnect}</button>
-          ) : null}
-          {activeSession.taskId && onOpenTask ? (
-            <button type="button" onClick={() => onOpenTask(activeSession.taskId!)}>{copy.viewTask}</button>
-          ) : null}
-          <span className="workspaceTerminalEncoding">UTF-8</span>
-        </footer>
-      ) : null}
+      {activeSession ? <span className="workspaceVisuallyHidden" aria-live="polite">{stateLabel(activeSession.state, copy)}</span> : null}
     </section>
   );
 }

@@ -69,8 +69,7 @@ export function WorkspacePage({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedHostAlias, setSelectedHostAlias] = useState(initialHostAlias);
   const [followCwd, setFollowCwd] = useState(true);
-  const [splitRatio, setSplitRatio] = useState(60);
-  const [closeTarget, setCloseTarget] = useState<WorkspaceTerminalSession | null>(null);
+  const [splitRatio, setSplitRatio] = useState(40);
   const splitRef = useRef<HTMLDivElement>(null);
   const modeTabRefs = useRef(new Map<WorkspaceMode, HTMLButtonElement>());
 
@@ -146,14 +145,11 @@ export function WorkspacePage({
     }
   };
 
-  const confirmClose = async () => {
-    if (!closeTarget) return;
-    const target = closeTarget;
+  const closeTerminal = async (target: WorkspaceTerminalSession) => {
     try {
       await api.closeTerminal({ sessionId: target.sessionId, generation: target.generation });
       controller.removeSession(target.sessionId);
       setActiveSessionId(nextActiveSession(sessions, target.sessionId));
-      setCloseTarget(null);
     } catch (error) {
       onError(error);
     }
@@ -181,7 +177,7 @@ export function WorkspacePage({
         void openTerminal(activeTerminal?.hostAlias ?? selectedHostAlias);
       } else if (closeTerminalShortcut && activeTerminal) {
         event.preventDefault();
-        setCloseTarget(activeTerminal);
+        void closeTerminal(activeTerminal);
       } else if (macPreviousTabShortcut) {
         event.preventDefault();
         if (sessions.length > 0) {
@@ -261,9 +257,8 @@ export function WorkspacePage({
       preferences={terminalPreferences}
       sessions={sessions}
       onActivateSession={setActiveSessionId}
-      onCloseSession={setCloseTarget}
+      onCloseSession={(session) => void closeTerminal(session)}
       onError={onError}
-      onOpenTask={onOpenTask}
       onRendererError={onTerminalRendererError}
       onHostSelected={(hostAlias) => void openTerminal(hostAlias)}
       onReconnect={(session) => void reconnect(session)}
@@ -327,9 +322,9 @@ export function WorkspacePage({
         role="tabpanel"
         style={{ "--workspace-split-ratio": `${splitRatio}%` } as CSSProperties}
       >
-        {/* Keep the live PTY and per-host SFTP state mounted across mode changes. */}
-        <div className="workspaceModeTerminal" aria-hidden={mode === "files" || mode === "transfers"}>
-          {terminalPanel}
+        {/* Files stay left and Terminal stays right in Split, while both remain mounted across mode changes. */}
+        <div className="workspaceModeFiles" aria-hidden={mode === "terminal" || mode === "transfers"}>
+          {filesPanel}
         </div>
         <div
           aria-label="Resize workspace panes"
@@ -343,8 +338,8 @@ export function WorkspacePage({
           onKeyDown={onSplitterKeyDown}
           onPointerDown={beginResize}
         />
-        <div className="workspaceModeFiles" aria-hidden={mode === "terminal" || mode === "transfers"}>
-          {filesPanel}
+        <div className="workspaceModeTerminal" aria-hidden={mode === "files" || mode === "transfers"}>
+          {terminalPanel}
         </div>
         {mode === "transfers" ? (
           <TransfersPanel
@@ -362,18 +357,6 @@ export function WorkspacePage({
         ) : null}
       </div>
 
-      {closeTarget ? (
-        <div className="workspaceInlineDialogBackdrop" role="presentation">
-          <section aria-describedby="workspace-close-terminal-body" aria-labelledby="workspace-close-terminal-title" className="workspaceInlineDialog" role="alertdialog" aria-modal="true">
-            <h3 id="workspace-close-terminal-title">{copy.closeTerminalTitle}</h3>
-            <p id="workspace-close-terminal-body">{copy.closeTerminalBody}</p>
-            <div className="workspaceDialogActions">
-              <button type="button" onClick={() => setCloseTarget(null)}>{copy.cancel}</button>
-              <button className="workspaceDangerButton" type="button" onClick={() => void confirmClose()}>{copy.closeTerminal}</button>
-            </div>
-          </section>
-        </div>
-      ) : null}
     </section>
   );
 }

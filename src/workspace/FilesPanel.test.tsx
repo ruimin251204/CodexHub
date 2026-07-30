@@ -165,6 +165,7 @@ test("initial directory failure is visible and successful retry clears it", asyn
 
   await waitFor(() => expect(listDirectory).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(api.closeFiles).toHaveBeenCalledWith({ fileSessionId: session.fileSessionId });
   expect(screen.getByText(workspaceCopy.en.emptyDirectory)).toBeInTheDocument();
 });
 
@@ -197,6 +198,33 @@ test("mode changes preserve the active host directory without reopening Files", 
   expect(listDirectory).toHaveBeenCalledTimes(callsBeforeModeChange);
 });
 
+test("an unfinished Files view reloads after returning to the mode", async () => {
+  let resolveInitialDirectory: (value: WorkspaceDirectoryPage) => void = () => undefined;
+  const listDirectory = vi.fn()
+    .mockImplementationOnce(() => new Promise<WorkspaceDirectoryPage>((resolve) => { resolveInitialDirectory = resolve; }))
+    .mockResolvedValueOnce(page(session.homePath, [directory]));
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    closeFiles: vi.fn().mockResolvedValue(undefined),
+    listDirectory,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const onError = vi.fn();
+  const view = renderErrorPanel(api, onError);
+
+  await waitFor(() => expect(listDirectory).toHaveBeenCalledTimes(1));
+  view.rerender(errorPanel(api, onError, { isActive: false }));
+  resolveInitialDirectory(page(session.homePath, [directory]));
+  view.rerender(errorPanel(api, onError, { isActive: true }));
+
+  await waitFor(() => expect(api.openFiles).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole("row", { name: /projects/i })).toBeInTheDocument();
+});
+
 test("changing hosts while Files is inactive does not restore the previous host view", async () => {
   const otherHost: WorkspaceHost = { ...host, id: "host-2", name: "Other host", hostAlias: "other" };
   const otherSession = { ...session, fileSessionId: "files-2", hostAlias: otherHost.hostAlias };
@@ -226,7 +254,7 @@ test("changing hosts while Files is inactive does not restore the previous host 
   expect(screen.queryByRole("row", { name: /projects/i })).not.toBeInTheDocument();
 });
 
-test("a failed host view keeps its error and retry action across host switches", async () => {
+test("a failed host view is reopened and keeps a visible retry action across host switches", async () => {
   const otherHost: WorkspaceHost = { ...host, id: "host-2", name: "Other host", hostAlias: "other" };
   const otherSession = { ...session, fileSessionId: "files-2", hostAlias: otherHost.hostAlias };
   const listDirectory = vi.fn(async ({ fileSessionId }: { fileSessionId: string }) => {
@@ -236,6 +264,7 @@ test("a failed host view keeps its error and retry action across host switches",
   const stop = () => undefined;
   const api = {
     openFiles: vi.fn(async ({ hostAlias }: { hostAlias: string }) => hostAlias === otherHost.hostAlias ? otherSession : session),
+    closeFiles: vi.fn().mockResolvedValue(undefined),
     listDirectory,
     events: {
       onFileSearchUpdated: vi.fn().mockReturnValue(stop),
@@ -252,6 +281,8 @@ test("a failed host view keeps its error and retry action across host switches",
   view.rerender(errorPanel(api, onError, { hosts, selectedHostAlias: host.hostAlias }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(workspaceCopy.en.filesUnavailable);
+  expect(api.closeFiles).toHaveBeenCalledWith({ fileSessionId: session.fileSessionId });
+  expect(api.openFiles).toHaveBeenCalledTimes(3);
   expect(screen.getByRole("button", { name: workspaceCopy.en.retryLoad })).toBeInTheDocument();
 });
 
@@ -268,6 +299,7 @@ test("retry after a child-directory failure requests the same directory", async 
   const stop = () => undefined;
   const api = {
     openFiles: vi.fn().mockResolvedValue(session),
+    closeFiles: vi.fn().mockResolvedValue(undefined),
     listDirectory,
     events: {
       onFileSearchUpdated: vi.fn().mockReturnValue(stop),
@@ -284,6 +316,7 @@ test("retry after a child-directory failure requests the same directory", async 
   await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({
     path: directory.canonicalPath
   })));
+  expect(api.closeFiles).toHaveBeenCalledWith({ fileSessionId: session.fileSessionId });
   await screen.findByDisplayValue(directory.canonicalPath);
   expect(screen.getByText(workspaceCopy.en.emptyDirectory)).toBeInTheDocument();
 });

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import appSource from "../App.tsx?raw";
+import terminalPanelSource from "./TerminalPanel.tsx?raw";
 import workspacePageSource from "./WorkspacePage.tsx?raw";
 
 test("Workspace remains outside the non-Workspace initial module boundary", () => {
@@ -31,4 +32,18 @@ test("Workspace uses the Terminal page title without rendering a duplicate page 
   expect(workspacePageSource).not.toContain('className="workspacePageHeader"');
   expect(workspacePageSource).not.toContain("<h1>{copy.title}</h1>");
   expect(workspacePageSource).not.toContain("<p>{copy.description}</p>");
+});
+
+test("terminal chrome avoids duplicate aliases and keeps Split Files-first", () => {
+  expect(terminalPanelSource).toContain("host.name === host.hostAlias ? host.hostAlias");
+  expect(terminalPanelSource).toContain("session.title !== session.hostAlias");
+  expect(terminalPanelSource).not.toContain("workspaceTerminalStatus");
+  expect(terminalPanelSource).not.toContain('>UTF-8<');
+  expect(terminalPanelSource).not.toContain("onOpenTask");
+  expect(workspacePageSource).toContain("useState(40)");
+  expect(workspacePageSource).not.toContain("closeTarget");
+  expect(workspacePageSource).not.toContain("workspace-close-terminal-title");
+  expect(workspacePageSource.indexOf('className="workspaceModeFiles"')).toBeLessThan(
+    workspacePageSource.indexOf('className="workspaceModeTerminal"')
+  );
 });

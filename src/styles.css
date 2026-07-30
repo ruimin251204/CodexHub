@@ -6022,21 +6022,6 @@ td code {
 .workspaceTerminalSearch button:hover { background: var(--surface-muted); }
 .workspaceRendererRetry { position: absolute; z-index: 4; right: 12px; bottom: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 9px; color: var(--text); background: var(--surface-solid); box-shadow: var(--shadow-soft); }
 
-.workspaceTerminalStatus {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 37px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  background: var(--surface-muted);
-}
-
-.workspaceTerminalStatus > button { margin-left: auto; }
-.workspaceTerminalEncoding { color: var(--text-faint); font-family: var(--font-mono); }
-
 .workspaceStatusChip {
   display: inline-flex;
   align-items: center;
@@ -6323,8 +6308,6 @@ td code {
   .workspaceFilesActions > button { margin-left: 0; }
   .workspaceLocationForm,
   .workspaceSearchForm { flex-basis: 100%; }
-  .workspaceTerminalStatus { flex-wrap: wrap; }
-  .workspaceTerminalStatus > button { margin-left: 0; }
   .workspaceInlineDialogBackdrop { padding: 12px; }
   .workspaceInlineDialog { padding: 15px; }
   .workspaceDialogActions { flex-direction: column-reverse; }
