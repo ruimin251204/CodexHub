@@ -4,7 +4,7 @@
 //! grants only.  Private keys, arbitrary local paths and terminal bytes never
 //! enter durable task logs.
 
-use crate::tasks::{TaskStatus, TaskStep, TaskStepStatus};
+use crate::tasks::{TaskLog, TaskLogLevel, TaskStatus, TaskStep, TaskStepStatus};
 use crate::workspace::transfer_io::{TransferAuditSink, TransferAuditStage, TransferAuditStatus};
 use crate::workspace::types::*;
 use crate::{jobs, AppServices, AppState, Host};
@@ -156,6 +156,142 @@ fn workspace_file_operation_steps(task_id: &str) -> Vec<TaskStep> {
     .collect()
 }
 
+#[derive(Clone, Copy)]
+enum WorkspaceFilesTaskOperation {
+    Connect,
+    ReadDirectory,
+}
+
+impl WorkspaceFilesTaskOperation {
+    fn action(self) -> &'static str {
+        match self {
+            Self::Connect => "Connect Workspace Files",
+            Self::ReadDirectory => "Read Workspace directory",
+        }
+    }
+
+    fn step(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Connect => ("connect", "Opening the SFTP Files session."),
+            Self::ReadDirectory => ("read", "Reading the requested directory."),
+        }
+    }
+
+    fn completed_message(self) -> &'static str {
+        match self {
+            Self::Connect => "Workspace Files connection completed.",
+            Self::ReadDirectory => "Workspace directory read completed.",
+        }
+    }
+
+    fn failed_message(self, error_code: &str) -> String {
+        match self {
+            Self::Connect => format!("Workspace Files connection failed ({error_code})."),
+            Self::ReadDirectory => format!("Workspace directory read failed ({error_code})."),
+        }
+    }
+}
+
+/// Files tasks contain only the saved host identity, operation and stable code.
+/// SFTP errors can contain remote paths, so they never enter the task payload.
+fn begin_workspace_files_task(
+    store: &crate::storage::TaskStore,
+    event_sink: Option<&crate::adapters::TaskEventSink>,
+    host_id: &str,
+    host_name: &str,
+    operation: WorkspaceFilesTaskOperation,
+) -> Result<String, String> {
+    let task_id = format!("task-workspace-files-{}", Uuid::new_v4());
+    let mut task = jobs::begin_task(
+        store,
+        event_sink,
+        &task_id,
+        host_id,
+        host_name,
+        operation.action(),
+    )?;
+    let (step_id, summary) = operation.step();
+    let now = Local::now().to_rfc3339();
+    task.steps = vec![TaskStep {
+        task_run_id: task.id.clone(),
+        step_id: step_id.to_string(),
+        sequence: 1,
+        status: TaskStepStatus::Running,
+        summary: summary.to_string(),
+        started_at: Some(now),
+        ended_at: None,
+    }];
+    task.summary = summary.to_string();
+    jobs::persist_task(store, event_sink, &task)?;
+    Ok(task.id)
+}
+
+fn settle_workspace_files_task(
+    store: &crate::storage::TaskStore,
+    event_sink: Option<&crate::adapters::TaskEventSink>,
+    task_id: &str,
+    operation: WorkspaceFilesTaskOperation,
+    error_code: Option<&str>,
+) -> Result<(), String> {
+    let mut task = store
+        .get(task_id)?
+        .ok_or_else(|| format!("Workspace Files task {task_id} is unavailable."))?;
+    let now = Local::now().to_rfc3339();
+    let failed = error_code.is_some();
+    let (step_id, _) = operation.step();
+    let summary = error_code
+        .map(|code| operation.failed_message(code))
+        .unwrap_or_else(|| operation.completed_message().to_string());
+    for step in &mut task.steps {
+        step.status = if failed {
+            TaskStepStatus::Failed
+        } else {
+            TaskStepStatus::Success
+        };
+        step.started_at.get_or_insert_with(|| now.clone());
+        step.ended_at = Some(now.clone());
+    }
+    task.status = if failed {
+        TaskStatus::Failed
+    } else {
+        TaskStatus::Success
+    };
+    task.ended_at = Some(now.clone());
+    task.summary = summary.clone();
+    task.logs.push(TaskLog {
+        id: jobs::task_log_id(task_id, task.logs.len() + 1),
+        task_run_id: task_id.to_string(),
+        step_id: Some(step_id.to_string()),
+        level: if failed {
+            TaskLogLevel::Error
+        } else {
+            TaskLogLevel::Info
+        },
+        timestamp: now,
+        message: summary,
+        command: None,
+        stdout: None,
+        stderr: None,
+        exit_code: None,
+        duration_ms: None,
+        timed_out: None,
+    });
+    jobs::persist_task(store, event_sink, &task)
+}
+
+fn workspace_files_error_code(error: &crate::workspace::error::WorkspaceError) -> &str {
+    if !error.code.is_empty()
+        && error
+            .code
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        &error.code
+    } else {
+        "workspace-files-error"
+    }
+}
+
 /// File mutations are durable recovery operations, so their Job Manager row
 /// is created before the confirmation token can trigger a remote write.
 fn begin_workspace_file_task(
@@ -225,7 +361,8 @@ async fn open_recovery_files(
             host_alias: host.host_alias.clone(),
         })
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+        .session;
     Ok((host, session.file_session_id))
 }
 
@@ -256,12 +393,12 @@ fn assert_terminal_host(state: &AppState, request: &OpenTerminalRequest) -> Resu
     Ok(())
 }
 
-fn assert_files_host(state: &AppState, request: &OpenFilesRequest) -> Result<(), String> {
+fn assert_files_host(state: &AppState, request: &OpenFilesRequest) -> Result<Host, String> {
     let host = host_for_alias(state, &request.host_alias)?;
     if host.id != request.host_id || host.name != request.host_name {
         return Err("Workspace Files host identity no longer matches the saved host.".into());
     }
-    Ok(())
+    Ok(host)
 }
 
 #[tauri::command]
@@ -386,12 +523,47 @@ pub(crate) async fn workspace_open_files(
     state: State<'_, AppState>,
     request: OpenFilesRequest,
 ) -> Result<FileSessionDto, String> {
-    assert_files_host(&state, &request)?;
-    manager(&state)?
-        .files
-        .open(request)
-        .await
-        .map_err(|error| error.to_string())
+    let host = assert_files_host(&state, &request)?;
+    let workspace = manager(&state)?;
+    match workspace.files.open(request).await {
+        Ok(opened) if opened.reused => Ok(opened.session),
+        Ok(opened) => {
+            let task_id = begin_workspace_files_task(
+                &state.task_store,
+                state.task_event_sink.as_ref(),
+                &host.id,
+                &host.name,
+                WorkspaceFilesTaskOperation::Connect,
+            )?;
+            settle_workspace_files_task(
+                &state.task_store,
+                state.task_event_sink.as_ref(),
+                &task_id,
+                WorkspaceFilesTaskOperation::Connect,
+                None,
+            )?;
+            Ok(opened.session)
+        }
+        Err(error) => {
+            let error_code = workspace_files_error_code(&error);
+            let safe_message = WorkspaceFilesTaskOperation::Connect.failed_message(error_code);
+            let task_id = begin_workspace_files_task(
+                &state.task_store,
+                state.task_event_sink.as_ref(),
+                &host.id,
+                &host.name,
+                WorkspaceFilesTaskOperation::Connect,
+            )?;
+            settle_workspace_files_task(
+                &state.task_store,
+                state.task_event_sink.as_ref(),
+                &task_id,
+                WorkspaceFilesTaskOperation::Connect,
+                Some(error_code),
+            )?;
+            Err(jobs::task_error(&task_id, &safe_message))
+        }
+    }
 }
 
 #[tauri::command]
@@ -399,11 +571,36 @@ pub(crate) async fn workspace_list_directory(
     state: State<'_, AppState>,
     request: ListDirectoryRequest,
 ) -> Result<ListDirectoryResult, String> {
-    manager(&state)?
-        .files
-        .list_directory(request)
-        .await
-        .map_err(|error| error.to_string())
+    let workspace = manager(&state)?;
+    let file_session_id = request.file_session_id.clone();
+    match workspace.files.list_directory(request).await {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            let error_code = workspace_files_error_code(&error);
+            // A stale/missing session still receives a path-free local task.
+            let (host_id, host_name) = workspace
+                .files
+                .operation_host_identity(&file_session_id)
+                .unwrap_or_else(|_| ("workspace-files".into(), "Workspace Files".into()));
+            let task_id = begin_workspace_files_task(
+                &state.task_store,
+                state.task_event_sink.as_ref(),
+                &host_id,
+                &host_name,
+                WorkspaceFilesTaskOperation::ReadDirectory,
+            )?;
+            let safe_message =
+                WorkspaceFilesTaskOperation::ReadDirectory.failed_message(error_code);
+            settle_workspace_files_task(
+                &state.task_store,
+                state.task_event_sink.as_ref(),
+                &task_id,
+                WorkspaceFilesTaskOperation::ReadDirectory,
+                Some(error_code),
+            )?;
+            Err(jobs::task_error(&task_id, &safe_message))
+        }
+    }
 }
 
 #[tauri::command]
@@ -1128,4 +1325,109 @@ async fn select_folder(app: AppHandle) -> Result<Option<PathBuf>, String> {
                 .map_err(|error| format!("Selected local path is unavailable: {error}"))
         })
         .transpose()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::TaskStore;
+
+    #[test]
+    fn files_connection_task_settles_without_transport_payloads() {
+        let store = TaskStore::in_memory();
+        let task_id = begin_workspace_files_task(
+            &store,
+            None,
+            "host-files-1",
+            "Files host",
+            WorkspaceFilesTaskOperation::Connect,
+        )
+        .expect("begin files task");
+
+        settle_workspace_files_task(
+            &store,
+            None,
+            &task_id,
+            WorkspaceFilesTaskOperation::Connect,
+            Some("sftp-start-failed"),
+        )
+        .expect("settle files task");
+
+        let task = store
+            .get(&task_id)
+            .expect("read task")
+            .expect("task exists");
+        assert!(matches!(task.status, TaskStatus::Failed));
+        assert_eq!(task.action, "Connect Workspace Files");
+        assert_eq!(task.host_id, "host-files-1");
+        assert!(task.logs.iter().any(|log| {
+            log.step_id.as_deref() == Some("connect")
+                && log.message == "Workspace Files connection failed (sftp-start-failed)."
+        }));
+        assert!(task.logs.iter().all(|log| {
+            !log.message.contains("/home/")
+                && !log.message.contains("password=")
+                && log.stdout.is_none()
+                && log.stderr.is_none()
+        }));
+        let envelope = jobs::task_error(
+            &task_id,
+            "Workspace Files connection failed (sftp-start-failed).",
+        );
+        assert!(envelope.starts_with(&format!("task-error:{task_id}:")));
+        assert!(!envelope.contains("/private/path"));
+    }
+
+    #[test]
+    fn files_error_code_rejects_non_stable_text() {
+        let error = crate::workspace::error::WorkspaceError::new(
+            "directory-open-failed /private/path",
+            "not used by audit",
+        );
+        assert_eq!(workspace_files_error_code(&error), "workspace-files-error");
+    }
+
+    #[test]
+    fn directory_read_failure_is_task_enveloped_and_path_free() {
+        let store = TaskStore::in_memory();
+        let task_id = begin_workspace_files_task(
+            &store,
+            None,
+            "host-files-1",
+            "Files host",
+            WorkspaceFilesTaskOperation::ReadDirectory,
+        )
+        .expect("begin directory read task");
+        let error_code = "directory-open-failed";
+        let safe_message = WorkspaceFilesTaskOperation::ReadDirectory.failed_message(error_code);
+
+        settle_workspace_files_task(
+            &store,
+            None,
+            &task_id,
+            WorkspaceFilesTaskOperation::ReadDirectory,
+            Some(error_code),
+        )
+        .expect("settle directory read task");
+
+        let envelope = jobs::task_error(&task_id, &safe_message);
+        let task = store
+            .get(&task_id)
+            .expect("read task")
+            .expect("task exists");
+        assert!(matches!(task.status, TaskStatus::Failed));
+        assert_eq!(task.action, "Read Workspace directory");
+        assert!(envelope.starts_with(&format!("task-error:{task_id}:")));
+        assert!(task
+            .logs
+            .iter()
+            .any(|log| { log.step_id.as_deref() == Some("read") && log.message == safe_message }));
+        assert!(!envelope.contains("/private/path"));
+        assert!(task.logs.iter().all(|log| {
+            !log.message.contains("/private/path")
+                && !log.message.contains("ssh: Connection reset")
+                && log.stdout.is_none()
+                && log.stderr.is_none()
+        }));
+    }
 }

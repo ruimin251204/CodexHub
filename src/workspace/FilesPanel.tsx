@@ -29,6 +29,8 @@ type PendingOperation = {
 type FilesHostView = {
   fileSession: WorkspaceFilesSession | null;
   page: WorkspaceDirectoryPage | null;
+  filesError: boolean;
+  failedPath: string | null;
   pathInput: string;
   history: string[];
   historyIndex: number;
@@ -143,6 +145,7 @@ export function FilesPanel({
   const [operationPreview, setOperationPreview] = useState<WorkspaceFileOperationPreview | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
   const [filesError, setFilesError] = useState(false);
+  const [failedPath, setFailedPath] = useState<string | null>(null);
   const [createdRecovery, setCreatedRecovery] = useState<WorkspaceRecovery | null>(null);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const locationRef = useRef<HTMLInputElement>(null);
@@ -154,12 +157,15 @@ export function FilesPanel({
   const hostViewsRef = useRef(new Map<string, FilesHostView>());
   const activeHostRef = useRef("");
   const currentViewRef = useRef<FilesHostView | null>(null);
+  const retryRequestRef = useRef<{ hostAlias: string; path: string | null } | null>(null);
 
   historyIndexRef.current = historyIndex;
   sortRef.current = { key: sortKey, ascending: sortAscending };
   currentViewRef.current = {
     fileSession,
     page,
+    filesError,
+    failedPath,
     pathInput,
     history,
     historyIndex,
@@ -177,6 +183,8 @@ export function FilesPanel({
   const restoreHostView = useCallback((view: FilesHostView | null) => {
     setFileSession(view?.fileSession ?? null);
     setPage(view?.page ?? null);
+    setFilesError(view?.filesError ?? false);
+    setFailedPath(view?.failedPath ?? null);
     setPathInput(view?.pathInput ?? "");
     setHistory(view?.history ?? []);
     setHistoryIndex(view?.historyIndex ?? -1);
@@ -209,6 +217,8 @@ export function FilesPanel({
         direction: sortRef.current.ascending ? "asc" : "desc"
       });
       if (requestId !== requestSequence.current) return;
+      setFilesError(false);
+      setFailedPath(null);
       pageSortSignatureRef.current = [
         session.fileSessionId,
         nextPage.canonicalPath,
@@ -229,7 +239,11 @@ export function FilesPanel({
       });
       setHistoryIndex(historyIndexRef.current + 1);
     } catch (error) {
-      if (requestId === requestSequence.current) onError(error);
+      if (requestId === requestSequence.current) {
+        setFilesError(true);
+        setFailedPath(path);
+        onError(error);
+      }
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
     }
@@ -242,31 +256,41 @@ export function FilesPanel({
     }
     activeHostRef.current = selectedHostAlias;
     requestSequence.current += 1;
-    if (!isActive) return;
-    if (!selectedHostAlias) {
-      restoreHostView(null);
-      setFilesError(false);
+    if (!isActive) {
+      if (selectedHostAlias && previousHostAlias === selectedHostAlias && currentViewRef.current) {
+        hostViewsRef.current.set(selectedHostAlias, currentViewRef.current);
+      }
       return;
     }
+    if (!selectedHostAlias) {
+      restoreHostView(null);
+      return;
+    }
+    const retryRequest = retryRequestRef.current?.hostAlias === selectedHostAlias
+      ? retryRequestRef.current
+      : null;
+    if (retryRequest) {
+      retryRequestRef.current = null;
+      hostViewsRef.current.delete(selectedHostAlias);
+    }
     const cachedView = hostViewsRef.current.get(selectedHostAlias);
-    if (cachedView) {
+    if (cachedView && !retryRequest) {
       restoreHostView(cachedView);
-      setFilesError(false);
       return;
     }
     let disposed = false;
     setLoading(true);
-    setFilesError(false);
     restoreHostView(null);
     void api.openFiles({ hostAlias: selectedHostAlias }).then(async (session) => {
       if (disposed) return;
       setFileSession(session);
       setHistory([]);
       setHistoryIndex(-1);
-      await navigate(session, null, { manual: false });
+      await navigate(session, retryRequest?.path ?? null, { manual: false });
     }).catch((error) => {
       if (!disposed) {
         setFilesError(true);
+        setFailedPath(retryRequest?.path ?? null);
         onError(error);
       }
     }).finally(() => {
@@ -747,10 +771,21 @@ export function FilesPanel({
           {!loading && filesError ? (
             <div className="workspaceEmptyState workspaceFileEmpty" role="alert">
               <p>{copy.filesUnavailable}</p>
-              <button type="button" onClick={() => setConnectionAttempt((value) => value + 1)}>{copy.retryLoad}</button>
+              <button
+                type="button"
+                onClick={() => {
+                  retryRequestRef.current = { hostAlias: selectedHostAlias, path: failedPath };
+                  setConnectionAttempt((value) => value + 1);
+                }}
+              >{copy.retryLoad}</button>
             </div>
           ) : null}
-          {!loading && !filesError && entries.length === 0 ? <div className="workspaceEmptyState workspaceFileEmpty">{selectedHostAlias ? copy.emptyDirectory : copy.noHosts}</div> : null}
+          {!loading && !filesError && page !== null && entries.length === 0
+            ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.emptyDirectory}</div>
+            : null}
+          {!loading && !filesError && page === null && !selectedHostAlias
+            ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.noHosts}</div>
+            : null}
           {loading ? <div className="workspacePaneState">{copy.loading}</div> : null}
         </div>
       </div>

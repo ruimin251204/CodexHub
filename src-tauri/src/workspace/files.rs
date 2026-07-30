@@ -15,6 +15,7 @@ use openssh_sftp_client::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
+use std::ffi::OsStr;
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -66,6 +67,11 @@ struct FileSession {
     snapshots: Mutex<HashMap<String, DirectorySnapshot>>,
 }
 
+pub(crate) struct OpenFileSession {
+    pub session: FileSessionDto,
+    pub reused: bool,
+}
+
 /// A bounded, SFTP-derived directory ordering. It prevents later pages from
 /// re-reading a mutable directory and silently changing their sort position.
 #[derive(Clone)]
@@ -94,7 +100,7 @@ impl FileSessions {
     }
     /// Uses `ssh -s sftp`; OpenSSH therefore applies Include, Match, agent,
     /// ProxyJump and known_hosts exactly as it does in the user's terminal.
-    pub async fn open(&self, request: OpenFilesRequest) -> WorkspaceResult<FileSessionDto> {
+    pub async fn open(&self, request: OpenFilesRequest) -> WorkspaceResult<OpenFileSession> {
         let _opening = self.opening.lock().await;
         if let Some(existing) = self
             .values
@@ -104,7 +110,10 @@ impl FileSessions {
             .find(|session| session.dto.host_id == request.host_id)
             .cloned()
         {
-            return Ok(existing.dto.clone());
+            return Ok(OpenFileSession {
+                session: existing.dto.clone(),
+                reused: true,
+            });
         }
         let mut connection = connect_sftp(&request.host_alias).await?;
         let home = match {
@@ -139,7 +148,10 @@ impl FileSessions {
                 snapshots: Mutex::new(HashMap::new()),
             }),
         );
-        Ok(dto)
+        Ok(OpenFileSession {
+            session: dto,
+            reused: false,
+        })
     }
     pub async fn close(&self, file_session_id: &str) -> WorkspaceResult<()> {
         let session = self
@@ -220,11 +232,14 @@ impl FileSessions {
             let mut truncated = false;
             while let Some(entry) = stream.as_mut().next().await {
                 let entry = entry.map_err(sftp_error("directory-read-failed"))?;
+                let name = entry.filename().as_os_str().to_os_string();
+                if is_dot_directory_entry(&name) {
+                    continue;
+                }
                 if all.len() >= MAX_DIRECTORY_ENTRIES {
                     truncated = true;
                     break;
                 }
-                let name = entry.filename().as_os_str().to_os_string();
                 let name_text = name.to_str().ok_or_else(|| {
                     WorkspaceError::new(
                         "unsupported-path-encoding",
@@ -821,7 +836,11 @@ impl FileSessions {
             tokio::pin!(stream);
             while let Some(item) = stream.as_mut().next().await {
                 let item = item.map_err(sftp_error("recovery-purge-failed"))?;
-                let name = item.filename().to_str().ok_or_else(|| {
+                let name = item.filename();
+                if is_dot_directory_entry(name.as_os_str()) {
+                    continue;
+                }
+                let name = name.to_str().ok_or_else(|| {
                     WorkspaceError::new(
                         "unsupported-path-encoding",
                         "This remote path is not valid UTF-8 and cannot be purged.",
@@ -1076,6 +1095,14 @@ impl FileSessions {
     pub(crate) fn operation_host_id(&self, file_session_id: &str) -> WorkspaceResult<String> {
         Ok(self.get(file_session_id)?.dto.host_id.clone())
     }
+
+    pub(crate) fn operation_host_identity(
+        &self,
+        file_session_id: &str,
+    ) -> WorkspaceResult<(String, String)> {
+        let session = self.get(file_session_id)?;
+        Ok((session.dto.host_id.clone(), session.dto.host_name.clone()))
+    }
     fn get(&self, id: &str) -> WorkspaceResult<Arc<FileSession>> {
         self.values
             .lock()
@@ -1236,8 +1263,11 @@ async fn search_task(
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            scanned = scanned.saturating_add(1);
             let name = entry.filename().as_os_str().to_os_string();
+            if is_dot_directory_entry(&name) {
+                continue;
+            }
+            scanned = scanned.saturating_add(1);
             let Some(name_text) = name.to_str() else {
                 continue;
             };
@@ -1399,6 +1429,12 @@ fn path_string(path: &Path) -> WorkspaceResult<String> {
 fn safe_child_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0'])
 }
+
+/// SFTP may return self and parent entries; never turn them into child paths.
+fn is_dot_directory_entry(name: &OsStr) -> bool {
+    name == OsStr::new(".") || name == OsStr::new("..")
+}
+
 fn ensure_plain_directory(metadata: &MetaData, code: &'static str) -> WorkspaceResult<()> {
     match metadata.file_type() {
         Some(kind) if kind.is_dir() && !kind.is_symlink() => Ok(()),
@@ -1503,8 +1539,20 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> WorkspaceError {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_remote_modified_at, is_managed_recovery_root, remote_entry_fingerprint};
+    use super::{
+        format_remote_modified_at, is_dot_directory_entry, is_managed_recovery_root,
+        remote_entry_fingerprint,
+    };
     use crate::workspace::types::RemoteFileKind;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn dot_directory_entries_are_never_used_as_child_paths() {
+        assert!(is_dot_directory_entry(OsStr::new(".")));
+        assert!(is_dot_directory_entry(OsStr::new("..")));
+        assert!(!is_dot_directory_entry(OsStr::new(".config")));
+        assert!(!is_dot_directory_entry(OsStr::new("workspace")));
+    }
 
     #[test]
     fn remote_modified_time_is_rfc3339_but_fingerprint_keeps_unix_seconds() {
