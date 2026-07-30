@@ -10,7 +10,7 @@ export type PersonalInfoMasker = {
   maskUsername: (value: string) => string;
 };
 
-const ipv4Pattern = /(^|[^\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?=$|[^\d.])/gu;
+const ipv4Pattern = /(^|[^\d.])(\d{1,3})\.(?:\d{1,3})\.(?:\d{1,3})\.(\d{1,3})(?=$|[^\d.])/gu;
 const endpointPattern = /(^|[^\p{L}\p{N}_.-])([\p{L}\p{N}_.-]+)@(\[[0-9a-f:]+\]|(?:\d{1,3}\.){3}\d{1,3}|[\p{L}\p{N}_.-]+)(:\d{1,5})?/giu;
 const homePathPattern = /([/\\](?:Users|home)[/\\])([^/\\\s]+)/giu;
 
@@ -30,7 +30,8 @@ export function maskPersonalHostAddress(value: string) {
   const bracketed = trimmed.startsWith("[") && trimmed.endsWith("]");
   const address = bracketed ? trimmed.slice(1, -1) : trimmed;
   const ipv4 = address.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u);
-  if (ipv4) return `${ipv4[1]}.xx.xx.xx`;
+  // IPv4 保留首尾两组，方便区分主机，同时隐藏中间两组。
+  if (ipv4) return `${ipv4[1]}.xx.xx.${ipv4[4]}`;
 
   if (address.includes(":")) {
     const first = address.split(":").find(Boolean) ?? "x";
@@ -80,7 +81,7 @@ export function createPersonalInfoMasker(enabled: boolean, identities: PersonalI
     ));
     for (const address of addresses) masked = replaceToken(masked, address, maskPersonalHostAddress(address));
     for (const username of usernames) masked = replaceToken(masked, username, maskPersonalUsername(username));
-    masked = masked.replace(ipv4Pattern, (_match, prefix: string, firstOctet: string) => `${prefix}${firstOctet}.xx.xx.xx`);
+    masked = masked.replace(ipv4Pattern, (_match, prefix: string, firstOctet: string, lastOctet: string) => `${prefix}${firstOctet}.xx.xx.${lastOctet}`);
     masked = masked.replace(homePathPattern, (_match, prefix: string, username: string) => `${prefix}${maskPersonalUsername(username)}`);
     return masked;
   };

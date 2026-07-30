@@ -9,9 +9,10 @@ describe("personal information masking", () => {
   it("masks the requested SSH endpoint shape while preserving its port", () => {
     const masker = createPersonalInfoMasker(true);
 
-    expect(masker.maskText("jy@192.0.2.28:22")).toBe("j*@192.xx.xx.xx:22");
+    expect(masker.maskText("jy@192.0.2.28:22")).toBe("j*@192.xx.xx.28:22");
+    expect(masker.maskText("192.0.2.28:22")).toBe("192.xx.xx.28:22");
     expect(maskPersonalUsername("jy")).toBe("j*");
-    expect(maskPersonalHostAddress("192.0.2.28")).toBe("192.xx.xx.xx");
+    expect(maskPersonalHostAddress("192.0.2.28")).toBe("192.xx.xx.28");
   });
 
   it("masks known standalone identities, hostnames, IPv6 addresses, and home paths", () => {
