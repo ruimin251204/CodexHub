@@ -11,7 +11,8 @@ use crate::{
     },
     settings::{
         AppSettings, CloseButtonBehavior, NetworkProxyMode, PlatformAppearance, SettingsSaveResult,
-        ThemeChoice,
+        ThemeChoice, WorkspaceTerminalColorScheme, WorkspaceTerminalCursorStyle,
+        WorkspaceTerminalFontFamily, WorkspaceTerminalPreferences,
     },
     ssh::{
         SshConfigHost, SshConfigWriteResult, SshHostDraft, SshKeyGenerationResult, SshKeyInfo,
@@ -20,6 +21,29 @@ use crate::{
     storage::{StorageHealth, StorageMigrationPlan, StorageRestorePlan, StorageState},
     tasks::{TaskLog, TaskLogLevel, TaskStep, TaskStepStatus},
     updater::{AppUpdateState, AppUpdateStatus},
+    workspace::{
+        events::{
+            FileSearchState, FileSearchUpdatedEvent, SessionHeartbeatEvent, SessionStateEvent,
+            TerminalCwdEvent, TerminalOutputEvent, TransferUpdatedEvent,
+        },
+        types::{
+            AttachTerminalRequest, AttachTerminalResult, CancelFileSearchRequest,
+            ConfirmFileOperationRequest, ConflictStrategy, CreateDirectoryRequest, CwdSource,
+            EnqueueTransfersRequest, FileOperationKind, FileOperationResult, FilePreview,
+            FileSearchStarted, FileSessionDto, FileSortField, InitialTerminalDirectory,
+            ListDirectoryRequest, ListDirectoryResult, LocalPathGrantDto, LocalTransferRecoveryDto,
+            LocalTransferRecoveryIdentityRequest, LocalTransferRecoveryState, OpenFilesRequest,
+            OpenTerminalRequest, PrepareFileOperationRequest, PreparedFileOperation,
+            PreparedLocalTransferRecoveryPurge, PreparedRecoveryPurge, PreviewFileRequest,
+            PreviewKind, PurgeLocalTransferRecoveryRequest, PurgeRecoveryRequest, RecoveryDto,
+            RecoveryIdentityRequest, RecoveryState, RemoteFileEntry, RemoteFileKind,
+            ResolveTransferConflictRequest, SortDirection, StartFileSearchRequest,
+            TerminalAckRequest, TerminalIdentityRequest, TerminalReplayFrame,
+            TerminalResizeRequest, TerminalSessionDto, TerminalState, TerminalWriteRequest,
+            TransferDirection, TransferDraft, TransferDto, TransferIdentityRequest,
+            TransferSnapshotDto, TransferState, ValidateTerminalCwdRequest, ValidatedCwd,
+        },
+    },
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -223,6 +247,10 @@ mod tests {
             PlatformAppearance::decl(&config),
             CloseButtonBehavior::decl(&config),
             NetworkProxyMode::decl(&config),
+            WorkspaceTerminalFontFamily::decl(&config),
+            WorkspaceTerminalColorScheme::decl(&config),
+            WorkspaceTerminalCursorStyle::decl(&config),
+            WorkspaceTerminalPreferences::decl(&config),
             AppSettings::decl(&config),
             SettingsSaveResult::decl(&config),
             AuthMethod::decl(&config),
@@ -318,8 +346,78 @@ mod tests {
             StorageHealth::decl(&config),
             StorageMigrationPlan::decl(&config),
             StorageRestorePlan::decl(&config),
+            TerminalState::decl(&config),
+            OpenTerminalRequest::decl(&config),
+            InitialTerminalDirectory::decl(&config),
+            TerminalSessionDto::decl(&config),
+            AttachTerminalRequest::decl(&config),
+            TerminalReplayFrame::decl(&config),
+            AttachTerminalResult::decl(&config),
+            TerminalWriteRequest::decl(&config),
+            TerminalResizeRequest::decl(&config),
+            TerminalAckRequest::decl(&config),
+            TerminalIdentityRequest::decl(&config),
+            OpenFilesRequest::decl(&config),
+            FileSessionDto::decl(&config),
+            RemoteFileKind::decl(&config),
+            RemoteFileEntry::decl(&config),
+            FileSortField::decl(&config),
+            SortDirection::decl(&config),
+            ListDirectoryRequest::decl(&config),
+            ListDirectoryResult::decl(&config),
+            StartFileSearchRequest::decl(&config),
+            FileSearchStarted::decl(&config),
+            CancelFileSearchRequest::decl(&config),
+            PreviewFileRequest::decl(&config),
+            PreviewKind::decl(&config),
+            FilePreview::decl(&config),
+            CreateDirectoryRequest::decl(&config),
+            CwdSource::decl(&config),
+            ValidateTerminalCwdRequest::decl(&config),
+            ValidatedCwd::decl(&config),
+            FileOperationKind::decl(&config),
+            PrepareFileOperationRequest::decl(&config),
+            PreparedFileOperation::decl(&config),
+            ConfirmFileOperationRequest::decl(&config),
+            FileOperationResult::decl(&config),
+            RecoveryState::decl(&config),
+            RecoveryDto::decl(&config),
+            RecoveryIdentityRequest::decl(&config),
+            PreparedRecoveryPurge::decl(&config),
+            PurgeRecoveryRequest::decl(&config),
+            TransferDirection::decl(&config),
+            TransferState::decl(&config),
+            ConflictStrategy::decl(&config),
+            LocalPathGrantDto::decl(&config),
+            TransferDraft::decl(&config),
+            EnqueueTransfersRequest::decl(&config),
+            TransferDto::decl(&config),
+            TransferSnapshotDto::decl(&config),
+            LocalTransferRecoveryState::decl(&config),
+            LocalTransferRecoveryDto::decl(&config),
+            LocalTransferRecoveryIdentityRequest::decl(&config),
+            PreparedLocalTransferRecoveryPurge::decl(&config),
+            PurgeLocalTransferRecoveryRequest::decl(&config),
+            TransferIdentityRequest::decl(&config),
+            ResolveTransferConflictRequest::decl(&config),
+            TerminalOutputEvent::decl(&config),
+            SessionStateEvent::decl(&config),
+            SessionHeartbeatEvent::decl(&config),
+            TerminalCwdEvent::decl(&config),
+            TransferUpdatedEvent::decl(&config),
+            FileSearchState::decl(&config),
+            FileSearchUpdatedEvent::decl(&config),
         ]
-        .map(|declaration| format!("export {declaration}"))
+        // `ts-rs` preserves whitespace before a doc-comment line break.  Keep
+        // the checked-in generated contract clean so `git diff --check` stays
+        // a meaningful release gate.
+        .map(|declaration| {
+            format!("export {declaration}")
+                .lines()
+                .map(str::trim_end)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
         .join("\n\n");
         let output = format!(
             "// Generated by `cargo test export_bindings`; do not edit.\n\n{declarations}\n"

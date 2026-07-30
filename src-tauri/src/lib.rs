@@ -17,6 +17,7 @@ mod ssh;
 mod storage;
 mod tasks;
 mod updater;
+mod workspace;
 
 pub use app_runtime::run;
 pub(crate) use app_runtime::{app_display_name, hide_main_window};

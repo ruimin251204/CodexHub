@@ -20,19 +20,24 @@ base64 = "0.22"
 sha2 = "0.10"
 toml = "0.8"
 flate2 = "1"
+futures-util = "0.3"
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 russh = { version = "0.61.2", default-features = false, features = ["flate2", "ring", "rsa"] }
+openssh-sftp-client = { version = "0.15.7", default-features = false }
+portable-pty = "0.9"
 tar = "0.4"
 trash = "5"
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "zip"] }
-tokio = { version = "1", features = ["io-util", "net", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "native-tls"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 url = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

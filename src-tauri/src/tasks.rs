@@ -8,6 +8,7 @@ pub(crate) enum TaskStatus {
     Running,
     Success,
     Failed,
+    Cancelled,
     Interrupted,
 }
 

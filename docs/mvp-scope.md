@@ -1,10 +1,10 @@
 # CodexHub MVP Scope
 
-Date: 2026-07-17
+Date: 2026-07-30
 
 ## MVP Goal
 
-Build a desktop app that helps a user manage Codex App SSH multi-server workflows safely. The first version is a control plane for remote Codex config and skills, not a replacement for Codex App.
+Build a desktop app that helps a user manage Codex App SSH multi-server workflows safely. The first version is a control plane for remote Codex config and skills, with a bounded SSH Workspace for the user's existing aliases; it does not replace Codex App or introduce private App integration.
 
 ## In Scope
 
@@ -35,6 +35,9 @@ Build a desktop app that helps a user manage Codex App SSH multi-server workflow
 - Skill library table actions for preview, install, uninstall, and delete across the local machine and configured hosts.
 - Operation log with backups and restore points.
 - Codex App fallback wizard for host enablement and reconnect guidance.
+- Workspace / 工作台: Terminal, Files, Split, and Transfers modes backed by real desktop-only Tauri commands. Terminal uses local PTY + system OpenSSH, while Files and Transfers use an alias-bound SFTP subsystem session; Mock explicitly returns `desktop-backend-required` and never invents a shell, file list, or transfer progress.
+- Bounded Workspace lifecycle: logical terminal session IDs, generation-checked output/input/resize/ACK, replay buffer, bounded auto-reconnect, close/exit cleanup, and transient heartbeat events.
+- Safe remote file browsing, preview, bounded search, regular-file upload/download queueing, pause/retry/cancel, checksum verification, explicit conflict resolution, and recovery-backed delete/overwrite/rename with a second purge confirmation. Safe no-replace destructive moves require OpenSSH `hardlink@openssh.com` and reject directory/symlink boundaries; a persisted interrupted transfer needs a fresh local grant and matching Files session before resume or retry.
 
 ## Explicitly Out Of Scope For MVP
 
@@ -45,7 +48,8 @@ Build a desktop app that helps a user manage Codex App SSH multi-server workflow
 - A standalone Host action for remote Codex reload; the first version exposes it only as part of profile apply.
 - Reading or writing local ChatGPT/Codex App private databases, sockets, caches, or IPC.
 - Broad cleanup of unmarked releases outside the verified Update adoption policy, automatic permanent deletion of staged Update backups, or cleanup of unmanaged captures, current, targeted, same/newer, in-use, invalid-marker, or identity-ambiguous Codex objects.
-- Full terminal emulator or browser-based SSH console.
+- Mandatory remote terminal daemon, tmux dependency, or any promise to restore a disconnected foreground program.
+- A claim of live SSH/PTY/SFTP compatibility before a dedicated test alias and real-device acceptance have completed.
 - Multi-user team server, RBAC, schedules, unattended fleet automation, configurable fleet-wide concurrency, and bulk Codex install/uninstall orchestration beyond the user-triggered batch Test and Update actions.
 - Storing private keys, passphrases, or tokens in plaintext.
 - Writing local credential-store key names or API key values into remote Codex config.

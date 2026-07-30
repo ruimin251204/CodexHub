@@ -958,6 +958,7 @@ pub(crate) struct AppServices {
     pub(crate) task_store: TaskStore,
     pub(crate) task_storage_error: Mutex<Option<String>>,
     pub(crate) task_event_sink: Option<adapters::TaskEventSink>,
+    pub(crate) workspace: Result<workspace::WorkspaceManager, String>,
 }
 
 pub(crate) struct AppState {
@@ -967,7 +968,7 @@ pub(crate) struct AppState {
 impl AppState {
     #[cfg(test)]
     pub(crate) fn new(task_store: TaskStore) -> Self {
-        Self::new_with_runtime(AppPaths::for_tests(), task_store, None, None)
+        Self::new_with_runtime(AppPaths::for_tests(), task_store, None, None, None)
     }
 
     pub(crate) fn new_with_runtime(
@@ -975,7 +976,30 @@ impl AppState {
         task_store: TaskStore,
         task_storage_error: Option<String>,
         task_event_sink: Option<adapters::TaskEventSink>,
+        workspace_event_sink: Option<workspace::events::WorkspaceEventSink>,
     ) -> Self {
+        let transfer_persistence =
+            storage::WorkspaceSqliteTransferPersistence::open(paths.database_path());
+        let recovery_persistence =
+            storage::WorkspaceSqliteRecoveryPersistence::open(paths.database_path());
+        let local_recovery_persistence =
+            storage::WorkspaceSqliteLocalRecoveryPersistence::open(paths.database_path());
+        let workspace = match (
+            transfer_persistence,
+            recovery_persistence,
+            local_recovery_persistence,
+        ) {
+            (Ok(transfers), Ok(recoveries), Ok(local_recoveries)) => {
+                workspace::WorkspaceManager::new(
+                    Arc::new(transfers),
+                    Box::new(recoveries),
+                    Arc::new(local_recoveries),
+                    workspace_event_sink,
+                )
+                .map_err(|error| error.to_string())
+            }
+            (Err(error), _, _) | (_, Err(error), _) | (_, _, Err(error)) => Err(error),
+        };
         Self {
             services: Arc::new(AppServices {
                 paths,
@@ -986,6 +1010,7 @@ impl AppState {
                 task_store,
                 task_storage_error: Mutex::new(task_storage_error),
                 task_event_sink,
+                workspace,
             }),
         }
     }

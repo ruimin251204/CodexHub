@@ -6,6 +6,7 @@ const cjk = /[\u3400-\u9fff]/u;
 const allowedLiteralValues = new Set(["简体中文"]);
 const violations = [];
 let uiCopyDeclaration = null;
+let workspaceCopyDeclaration = null;
 
 function sourceFiles(root) {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
@@ -17,10 +18,41 @@ function sourceFiles(root) {
   });
 }
 
-function insideCopyRegistry(node) {
+function copyRegistryBindings(source) {
+  const bindings = new Set(["uiCopy"]);
+
+  const visit = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      /Copy$/u.test(node.name.text)
+    ) {
+      bindings.add(node.name.text);
+      const initializer = unwrapExpression(node.initializer);
+      if (initializer && ts.isObjectLiteralExpression(initializer)) {
+        for (const property of initializer.properties) {
+          if (ts.isShorthandPropertyAssignment(property)) {
+            bindings.add(property.name.text);
+          } else if (
+            ts.isPropertyAssignment(property) &&
+            ts.isIdentifier(unwrapExpression(property.initializer))
+          ) {
+            bindings.add(unwrapExpression(property.initializer).text);
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(source);
+  return bindings;
+}
+
+function insideCopyRegistry(node, bindings) {
   for (let current = node; current; current = current.parent) {
     if (ts.isVariableDeclaration(current) && ts.isIdentifier(current.name)) {
-      return current.name.text === "uiCopy" || /Copy$/u.test(current.name.text);
+      return bindings.has(current.name.text) || /Copy$/u.test(current.name.text);
     }
   }
   return false;
@@ -41,6 +73,7 @@ for (const filePath of sourceFiles("src")) {
     true,
     filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   );
+  const bindings = copyRegistryBindings(source);
   const visit = (node) => {
     if (
       filePath.endsWith(`${path.sep}App.tsx`) &&
@@ -50,8 +83,16 @@ for (const filePath of sourceFiles("src")) {
     ) {
       uiCopyDeclaration = node;
     }
+    if (
+      filePath.endsWith(`${path.sep}workspace${path.sep}copy.ts`) &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "workspaceCopy"
+    ) {
+      workspaceCopyDeclaration = node;
+    }
     const value = literalText(node);
-    if (value && cjk.test(value) && !allowedLiteralValues.has(value) && !insideCopyRegistry(node)) {
+    if (value && cjk.test(value) && !allowedLiteralValues.has(value) && !insideCopyRegistry(node, bindings)) {
       const position = source.getLineAndCharacterOfPosition(node.getStart(source));
       violations.push(`${filePath}:${position.line + 1}:${position.character + 1} ${JSON.stringify(value)}`);
     }
@@ -81,7 +122,26 @@ function propertyKey(property) {
 
 function propertyValue(object, key) {
   const property = object.properties.find((candidate) => propertyKey(candidate) === key);
-  return property && ts.isPropertyAssignment(property) ? unwrapExpression(property.initializer) : null;
+  if (!property) return null;
+  if (ts.isPropertyAssignment(property)) return unwrapExpression(property.initializer);
+  if (ts.isShorthandPropertyAssignment(property)) {
+    const name = property.name.text;
+    let binding = null;
+    const findBinding = (node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === name
+      ) {
+        binding = node;
+        return;
+      }
+      ts.forEachChild(node, findBinding);
+    };
+    findBinding(object.getSourceFile());
+    return binding ? unwrapExpression(binding.initializer) : null;
+  }
+  return null;
 }
 
 function collectShape(object, prefix = "") {
@@ -102,27 +162,32 @@ function collectShape(object, prefix = "") {
   return paths;
 }
 
-if (!uiCopyDeclaration?.initializer) {
-  throw new Error("Could not locate the uiCopy registry in src/App.tsx.");
+function verifyBilingualRegistry(declaration, name) {
+  if (!declaration?.initializer) {
+    throw new Error(`Could not locate the ${name} registry.`);
+  }
+  const registry = unwrapExpression(declaration.initializer);
+  if (!registry || !ts.isObjectLiteralExpression(registry)) {
+    throw new Error(`${name} must remain an object literal so bilingual keys can be verified.`);
+  }
+  const en = propertyValue(registry, "en");
+  const zh = propertyValue(registry, "zh");
+  if (!en || !zh || !ts.isObjectLiteralExpression(en) || !ts.isObjectLiteralExpression(zh)) {
+    throw new Error(`${name} must contain object-literal en and zh registries.`);
+  }
+  const enShape = collectShape(en);
+  const zhShape = collectShape(zh);
+  const missingInZh = [...enShape].filter((key) => !zhShape.has(key));
+  const missingInEn = [...zhShape].filter((key) => !enShape.has(key));
+  if (missingInZh.length > 0 || missingInEn.length > 0) {
+    throw new Error(
+      `${name} bilingual keys are incomplete:\nmissing in zh: ${missingInZh.join(", ") || "none"}\nmissing in en: ${missingInEn.join(", ") || "none"}`
+    );
+  }
 }
-const registry = unwrapExpression(uiCopyDeclaration.initializer);
-if (!registry || !ts.isObjectLiteralExpression(registry)) {
-  throw new Error("uiCopy must remain an object literal so bilingual keys can be verified.");
-}
-const en = propertyValue(registry, "en");
-const zh = propertyValue(registry, "zh");
-if (!en || !zh || !ts.isObjectLiteralExpression(en) || !ts.isObjectLiteralExpression(zh)) {
-  throw new Error("uiCopy must contain object-literal en and zh registries.");
-}
-const enShape = collectShape(en);
-const zhShape = collectShape(zh);
-const missingInZh = [...enShape].filter((key) => !zhShape.has(key));
-const missingInEn = [...zhShape].filter((key) => !enShape.has(key));
-if (missingInZh.length > 0 || missingInEn.length > 0) {
-  throw new Error(
-    `Bilingual copy keys are incomplete:\nmissing in zh: ${missingInZh.join(", ") || "none"}\nmissing in en: ${missingInEn.join(", ") || "none"}`
-  );
-}
+
+verifyBilingualRegistry(uiCopyDeclaration, "uiCopy");
+verifyBilingualRegistry(workspaceCopyDeclaration, "workspaceCopy");
 
 const appSource = fs.readFileSync("src/App.tsx", "utf8");
 for (const token of [

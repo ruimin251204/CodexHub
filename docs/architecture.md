@@ -1,6 +1,6 @@
 # CodexHub Architecture
 
-Date: 2026-07-20
+Date: 2026-07-30
 Target: Cross-platform desktop MVP using Tauri 2, React, TypeScript, Vite, and Rust, with Windows, macOS, and Ubuntu/Debian x86_64 plus arm64 Linux deb release-build support.
 
 ## Architecture Principle
@@ -45,6 +45,19 @@ flowchart LR
 - Operations: backup, apply, restore, dry-run, and audit log.
 - Codex App Fallback: manual steps for enabling SSH hosts and reconnecting in the local ChatGPT/Codex App.
 - Settings: local data location, remote paths, OpenSSH binary overrides, theme, and privacy controls.
+- Workspace / 工作台: a dedicated Terminal, Files, Split, and Transfers surface. It owns its own scroll containers and xterm refs; terminal bytes never enter React state or durable task logs.
+
+## Workspace Session Layer
+
+`WorkspaceManager` owns the short-lived interactive resources separately from the existing one-shot SSH executor. It starts no remote daemon and never reads, copies, or persists a private key. Every connection names the user's existing OpenSSH alias, so OpenSSH continues to resolve `Include`, `Match`, `ProxyJump`, `IdentityFile`, agent, and `known_hosts` behavior.
+
+- Terminal sessions use `portable-pty` with the system `ssh -tt` client, platform-native PTY support, `ServerAliveInterval=15`, `ServerAliveCountMax=3`, and TCP keepalive. A logical `term-<uuid>` survives reconnect while each PTY receives a strictly increasing generation. Raw output is Base64 framed at 32 KiB, coalesced for at most 16 ms, retained for replay until frontend ACK, and bounded by a 4 MiB unacknowledged buffer. Inputs, resize, and ACK require the current generation. Network failures retry at 1/2/5/10/30 seconds; authentication, host-key failures, normal shell exit, and explicit close do not retry.
+- Files sessions use `ssh -T -s <alias> sftp` with `openssh-sftp-client`. One session is reused per host for metadata, directory pagination, preview, cwd canonicalization, and transfer stream access. Files starts at the remote SFTP home, follows no symlink during recursive search, and keeps opaque entry references as the mutation authority. SFTP handles are intentionally in-memory: a recovery action reopens or reuses a session from its persisted host alias and host ID, and rejects a changed host identity before it can restore or purge anything.
+- For aliases whose resolved `ssh -G` output reports `remotecommand none`, Terminal sends a per-generation nonce-bound PID probe and Files canonicalizes `/proc/<pid>/cwd` through the matching SFTP session. An unavailable `/proc` path falls back to an SFTP-canonicalized OSC 7 candidate; prompt parsing is never used. A Files-originated “open terminal here” request undergoes the same host/canonical-directory check. CodexHub sends the one backend-built, single-quoted `cd` only when `ssh -G` confirms that the alias has no `RemoteCommand`; otherwise it returns an explicit unavailable error. Reconnects may attempt the same safe restore from the last verified cwd but never replay user input or foreground programs.
+- Transfer rows and remote recovery records are durable SQLite state; task rows are a redacted audit trail. Workers have fixed global/per-host slots and record `preflight`, `transfer`, `verify`, and `commit` task steps without storing paths, file content, terminal output, or credentials. High-frequency progress uses transient events. A durable transfer row never preserves browser/local-path authority: after process memory loses its plan, resume or retry requires a newly selected one-time native grant plus a matching Files session, then rechecks the saved fingerprint and parent boundary.
+- Files mutations use prepare → explicit UI confirmation → fresh lstat/fingerprint verification → recovery record. Delete, overwrite, and rename place recoverable remote backups under the same-parent `.codexhub-workspace-backups/<recoveryId>/`; purge requires a separate prepared confirmation. A race-safe no-replace move is available only for regular files when the server advertises OpenSSH `hardlink@openssh.com`; directory and symlink move boundaries, or servers without that extension, are rejected rather than downgraded to an unsafe rename.
+
+Workspace events are versioned by terminal generation/revision or transfer/search revision. The desktop API treats them as authoritative state updates and rejects stale generations/revisions. Mock mode returns `desktop-backend-required` for every Workspace action and never fabricates a PTY, remote directory, transfer, or progress event.
 
 ## Feedback And Accessibility
 

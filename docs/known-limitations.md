@@ -1,6 +1,6 @@
 # CodexHub Known Limitations
 
-Date: 2026-07-20
+Date: 2026-07-30
 
 ## macOS
 
@@ -36,6 +36,20 @@ If no replacement App service is observed within 15 seconds, the saved configura
 CodexHub never reads or writes local ChatGPT/Codex App private files, databases, sockets, caches, or IPC. The normal host-registration fallback still uses verified SSH aliases, copyable commands, and manual App settings steps.
 
 If Codex App supports a public documented SSH deep link on the tester's machine, CodexHub may present it as a convenience only after writing `~/.ssh/config`. It must not depend on undocumented Codex App files, databases, sockets, or private IPC.
+
+## Workspace Terminal And Files
+
+Workspace deliberately uses the local system OpenSSH client and the user's alias; it has no remote daemon, does not parse private keys, and cannot preserve a foreground process or terminal screen across a network loss. Reconnection always creates a new shell and never replays input. For aliases whose resolved `ssh -G` output has `remotecommand none`, CodexHub can validate the nonce-bound shell PID's `/proc/<pid>/cwd` through SFTP; if `/proc` is unavailable it may use a canonicalized OSC 7 candidate. A last verified cwd can be restored only under that same no-`RemoteCommand` condition. Aliases with `RemoteCommand`, an inspection failure, unsupported control characters in the path, or an unavailable SFTP session retain a clear unavailable state instead.
+
+The first terminal renderer is UTF-8. Terminal bytes remain opaque until xterm, but a non-UTF-8 remote locale can render poorly. Remote non-UTF-8 file names are visible as read-only placeholders and cannot be changed. The `/proc` PID probe and OSC 7 are optional, are never inferred from a prompt, and still require matching-host SFTP verification; without it, Split cwd follow remains disabled.
+
+Remote Files supports regular-file uploads. Directory and symbolic-link upload sources are explicitly rejected before any queue item is created, so no partial directory tree is sent. Recursive file search has a 30-second/10,000-result cap and does not follow symlinks. HTML and SVG previews remain inert text/metadata; Workspace never executes remote content.
+
+The SFTP protocol does not provide a portable cross-server atomic no-replace rename primitive. When the server advertises OpenSSH `hardlink@openssh.com`, CodexHub uses its create-if-absent hard-link operation followed by source unlink for regular-file recovery moves; this closes the overwrite race for that supported case. Without the extension, or for directory/symlink and other non-regular move boundaries, delete, overwrite, rename, and restore are refused rather than silently downgraded to an unsafe rename. A separately prepared permanent purge is limited to a managed recovery directory and unlinks symlinks without traversing them. Recovery commands reopen an alias-bound Files session from the persisted host ID and alias, and block if that identity no longer matches.
+
+Transfer rows survive an app restart, while local-picker grants and live SFTP handles do not. Resuming or retrying an unbound interrupted transfer requires the user to select the original local source or destination again, provide a matching active Files session, and pass durable fingerprint and parent-boundary checks. CodexHub does not resume from a stored browser path or silently reuse a prior local authorization.
+
+No dedicated Workspace test alias has been supplied yet. Current verification is local Rust/TypeScript/desktop-contract coverage only; real PTY allocation, SSH config edge cases, host-key behavior, disconnect/reconnect, large-file transfer, and assistive-technology checks still require the user-provided alias and real Windows/macOS/Linux devices.
 
 ## Managed Runtime Versions And Disk Cleanup
 

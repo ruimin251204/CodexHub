@@ -59,6 +59,81 @@ pub(crate) enum NetworkProxyMode {
     Manual,
 }
 
+/// Workspace-only terminal preferences are persisted with ordinary CodexHub
+/// settings. They never contain terminal contents, SSH material or App data.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename = "WorkspaceTerminalFontFamilyDto")]
+pub(crate) enum WorkspaceTerminalFontFamily {
+    SystemMono,
+    Cascadia,
+    Jetbrains,
+    SfMono,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename = "WorkspaceTerminalColorSchemeDto")]
+pub(crate) enum WorkspaceTerminalColorScheme {
+    FollowApp,
+    Light,
+    Dark,
+    HighContrast,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename = "WorkspaceTerminalCursorStyleDto")]
+pub(crate) enum WorkspaceTerminalCursorStyle {
+    Block,
+    Bar,
+    Underline,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "WorkspaceTerminalPreferencesDto")]
+pub(crate) struct WorkspaceTerminalPreferences {
+    pub(crate) font_family: WorkspaceTerminalFontFamily,
+    pub(crate) font_size: u8,
+    /// Decimal string keeps comparison/durable JSON deterministic.
+    pub(crate) line_height: String,
+    pub(crate) color_scheme: WorkspaceTerminalColorScheme,
+    pub(crate) scrollback: u16,
+    pub(crate) cursor_style: WorkspaceTerminalCursorStyle,
+    pub(crate) screen_reader_mode: bool,
+    pub(crate) confirm_large_paste: bool,
+}
+
+impl Default for WorkspaceTerminalPreferences {
+    fn default() -> Self {
+        Self {
+            font_family: WorkspaceTerminalFontFamily::SystemMono,
+            font_size: 14,
+            line_height: "1.25".into(),
+            color_scheme: WorkspaceTerminalColorScheme::FollowApp,
+            scrollback: 5_000,
+            cursor_style: WorkspaceTerminalCursorStyle::Block,
+            screen_reader_mode: false,
+            confirm_large_paste: true,
+        }
+    }
+}
+
+impl WorkspaceTerminalPreferences {
+    fn normalized(mut self) -> Self {
+        self.font_size = self.font_size.clamp(12, 24);
+        self.scrollback = self.scrollback.clamp(100, 20_000);
+        let parsed = self
+            .line_height
+            .parse::<f32>()
+            .unwrap_or(1.25)
+            .clamp(1.0, 2.0);
+        self.line_height = format!("{parsed:.2}");
+        self
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "AppSettingsDto")]
@@ -86,6 +161,8 @@ pub(crate) struct AppSettings {
     pub(crate) host_operation_log_popups: bool,
     #[serde(default)]
     pub(crate) setup_guide_dismissed: bool,
+    #[serde(default)]
+    pub(crate) workspace_terminal_preferences: WorkspaceTerminalPreferences,
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
@@ -112,6 +189,7 @@ impl Default for AppSettings {
             sidebar_completion_indicators: true,
             host_operation_log_popups: true,
             setup_guide_dismissed: false,
+            workspace_terminal_preferences: WorkspaceTerminalPreferences::default(),
         }
     }
 }
@@ -128,6 +206,7 @@ impl AppSettings {
             .map(|alias| alias.trim().to_string())
             .filter(|alias| !alias.is_empty() && seen.insert(alias.clone()))
             .collect();
+        self.workspace_terminal_preferences = self.workspace_terminal_preferences.normalized();
         self
     }
 }

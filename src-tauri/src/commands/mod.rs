@@ -5,6 +5,7 @@ mod skills;
 mod storage;
 mod tasks;
 mod updater;
+mod workspace;
 
 pub(crate) use host_ssh::*;
 pub(crate) use profiles::*;
@@ -20,3 +21,4 @@ pub(crate) use tasks::{
     acknowledge_task, clear_task_history, get_task, list_tasks, query_tasks, record_frontend_error,
 };
 pub(crate) use updater::*;
+pub(crate) use workspace::*;

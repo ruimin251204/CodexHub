@@ -20,7 +20,19 @@ export type CloseButtonBehaviorDto = "ask" | "exit" | "minimize-to-tray";
 
 export type NetworkProxyModeDto = "auto" | "direct" | "manual";
 
-export type AppSettingsDto = { theme: ThemeChoiceDto, fontPreset: "english" | "zh-cn", platformAppearance: PlatformAppearanceDto, closeButtonBehavior: CloseButtonBehaviorDto, networkProxyMode: NetworkProxyModeDto, networkProxyUrl: string, resourceMonitorAutoRefresh: boolean, resourceMonitorHostOrder: Array<string>, resourceMonitorRefreshSeconds: number, sidebarCompletionIndicators: boolean, hostOperationLogPopups: boolean, setupGuideDismissed: boolean, };
+export type WorkspaceTerminalFontFamilyDto = "system-mono" | "cascadia" | "jetbrains" | "sf-mono";
+
+export type WorkspaceTerminalColorSchemeDto = "follow-app" | "light" | "dark" | "high-contrast";
+
+export type WorkspaceTerminalCursorStyleDto = "block" | "bar" | "underline";
+
+export type WorkspaceTerminalPreferencesDto = { fontFamily: WorkspaceTerminalFontFamilyDto, fontSize: number,
+/**
+ * Decimal string keeps comparison/durable JSON deterministic.
+ */
+lineHeight: string, colorScheme: WorkspaceTerminalColorSchemeDto, scrollback: number, cursorStyle: WorkspaceTerminalCursorStyleDto, screenReaderMode: boolean, confirmLargePaste: boolean, };
+
+export type AppSettingsDto = { theme: ThemeChoiceDto, fontPreset: "english" | "zh-cn", platformAppearance: PlatformAppearanceDto, closeButtonBehavior: CloseButtonBehaviorDto, networkProxyMode: NetworkProxyModeDto, networkProxyUrl: string, resourceMonitorAutoRefresh: boolean, resourceMonitorHostOrder: Array<string>, resourceMonitorRefreshSeconds: number, sidebarCompletionIndicators: boolean, hostOperationLogPopups: boolean, setupGuideDismissed: boolean, workspaceTerminalPreferences: WorkspaceTerminalPreferencesDto, };
 
 export type SettingsSaveResultDto = { settings: AppSettingsDto, changed: boolean, backupPath: string | null, };
 
@@ -40,7 +52,7 @@ export type ProfileDraftDto = { name: string, description?: string, model: strin
 
 export type ProfilePatchDto = { name?: string, description?: string, model?: string, provider?: string, baseUrl?: string, apiKeyEnvVar?: string, modelReasoningEffort?: string, planModeReasoningEffort?: string, fastMode?: boolean, serviceTier?: string, approvalPolicy?: string, sandboxMode?: string, extraToml?: string, source?: string, credentialStored?: boolean, hostIds?: Array<string>, };
 
-export type TaskStatus = "queued" | "running" | "success" | "failed" | "interrupted";
+export type TaskStatus = "queued" | "running" | "success" | "failed" | "cancelled" | "interrupted";
 
 export type TaskStepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 
@@ -209,3 +221,158 @@ export type StorageHealth = { store: string, path: string, state: StorageState, 
 export type StorageMigrationPlan = { token: string, store: string, path: string, sourceSha256: string, fromSchemaVersion: number, toSchemaVersion: number, backupDirectory: string, message: string, };
 
 export type StorageRestorePlan = { token: string, store: string, targetPath: string, backupPath: string, backupSha256: string, message: string, };
+
+export type WorkspaceTerminalStateDto = "creating" | "connecting" | "connected" | "reconnecting" | "disconnected" | "closing" | "closed" | "failed";
+
+export type WorkspaceOpenTerminalRequestDto = { hostId: string, hostName: string, hostAlias: string,
+/**
+ * A Files session must canonicalize this directory before a shell may
+ * receive it. It is intentionally optional for ordinary Home sessions.
+ */
+initialDirectory?: WorkspaceInitialTerminalDirectoryDto, rows: number, cols: number, autoReconnect: boolean, };
+
+export type WorkspaceInitialTerminalDirectoryDto = { fileSessionId: string, path: string, };
+
+export type WorkspaceTerminalSessionDto = { sessionId: string, createdAt: string, hostId: string, hostName: string, hostAlias: string, generation: number, revision: number, state: WorkspaceTerminalStateDto, reconnectable: boolean, attempt: number, autoReconnect: boolean, rows: number, cols: number, verifiedCwd: string | null, reason: string | null, };
+
+export type WorkspaceAttachTerminalRequestDto = { sessionId: string, generation: number, afterSequence: number, };
+
+export type WorkspaceTerminalReplayFrameDto = { sequence: number, dataBase64: string, };
+
+export type WorkspaceAttachTerminalResultDto = { session: WorkspaceTerminalSessionDto, gap: boolean, frames: Array<WorkspaceTerminalReplayFrameDto>, latestSequence: number, };
+
+export type WorkspaceTerminalWriteRequestDto = { sessionId: string, generation: number, dataBase64: string, };
+
+export type WorkspaceTerminalResizeRequestDto = { sessionId: string, generation: number, rows: number, cols: number, };
+
+export type WorkspaceTerminalAckRequestDto = { sessionId: string, generation: number, sequence: number, };
+
+export type WorkspaceTerminalIdentityRequestDto = { sessionId: string, generation: number, };
+
+export type WorkspaceOpenFilesRequestDto = { hostId: string, hostName: string, hostAlias: string, };
+
+export type WorkspaceFileSessionDto = { fileSessionId: string, hostId: string, hostName: string, hostAlias: string, homePath: string, supportsFsync: boolean,
+/**
+ * A remote hard link gives regular files an atomic create-if-absent
+ * publish path. Workspace refuses a claimed no-replace move without it.
+ */
+supportsHardlink: boolean, supportsPosixRename: boolean, };
+
+export type RemoteFileKindDto = "file" | "directory" | "symlink" | "fifo" | "socket" | "block-device" | "character-device" | "unknown";
+
+export type RemoteFileEntryDto = { entryRef: string, path: string, name: string, kind: RemoteFileKindDto,
+/**
+ * String avoids losing precision in JavaScript for very large files.
+ */
+size: string | null, modifiedAt: string | null, permissions: string | null, uid: number | null, gid: number | null, symlinkTarget: string | null, fingerprint: string, writableName: boolean, };
+
+export type WorkspaceFileSortFieldDto = "name" | "type" | "size" | "modified";
+
+export type WorkspaceSortDirectionDto = "asc" | "desc";
+
+export type WorkspaceListDirectoryRequestDto = { fileSessionId: string, path: string, snapshotId: string | null, pageToken: string | null, sort: WorkspaceFileSortFieldDto | null, direction: WorkspaceSortDirectionDto | null, };
+
+export type WorkspaceListDirectoryResultDto = { canonicalPath: string, snapshotId: string, entries: Array<RemoteFileEntryDto>, nextPageToken: string | null, totalEntries: number, truncated: boolean, };
+
+export type WorkspaceStartFileSearchRequestDto = { fileSessionId: string, path: string, query: string, };
+
+export type WorkspaceFileSearchStartedDto = { searchId: string, };
+
+export type WorkspaceCancelFileSearchRequestDto = { searchId: string, };
+
+export type WorkspacePreviewFileRequestDto = { fileSessionId: string, entryRef: string, };
+
+export type WorkspacePreviewKindDto = "text" | "image" | "metadata";
+
+export type WorkspaceFilePreviewDto = { entry: RemoteFileEntryDto, kind: WorkspacePreviewKindDto, mimeType: string, text: string | null, dataBase64: string | null, truncated: boolean, };
+
+export type WorkspaceCreateDirectoryRequestDto = { fileSessionId: string, parentPath: string, name: string, };
+
+export type WorkspaceCwdSourceDto = "osc7" | "proc";
+
+export type WorkspaceValidateTerminalCwdRequestDto = { sessionId: string, generation: number, fileSessionId: string, };
+
+export type WorkspaceValidatedCwdDto = { sessionId: string, generation: number, revision: number, path: string, source: WorkspaceCwdSourceDto, };
+
+export type WorkspaceFileOperationKindDto = "delete" | "rename" | "overwrite";
+
+export type WorkspacePrepareFileOperationRequestDto = { fileSessionId: string, kind: WorkspaceFileOperationKindDto, sourceEntryRef: string, destinationPath: string | null,
+/**
+ * Overwrite commits a previously verified staging file. It must also be
+ * represented by a fresh entry ref instead of a frontend-provided path.
+ */
+stagingEntryRef: string | null, };
+
+export type WorkspacePreparedFileOperationDto = { operationToken: string, kind: WorkspaceFileOperationKindDto, hostAlias: string, sourcePath: string, destinationPath: string | null, recoveryPath: string, expiresAt: string, requiresDestinationBackup: boolean, };
+
+export type WorkspaceConfirmFileOperationRequestDto = { operationToken: string, };
+
+export type WorkspaceFileOperationResultDto = { recoveryId: string, taskId: string | null, recovery: WorkspaceRecoveryDto, };
+
+export type WorkspaceRecoveryStateDto = "prepared" | "available" | "restoring" | "restored" | "purge-prepared" | "purged" | "failed";
+
+export type WorkspaceRecoveryDto = { recoveryId: string,
+/**
+ * Stable host identity is durable. A FileSession is a short-lived SFTP
+ * handle and must never be used to recover a mutation after app restart.
+ */
+hostId: string, hostAlias: string, kind: WorkspaceFileOperationKindDto, originalPath: string, currentPath: string | null, backupPath: string | null, state: WorkspaceRecoveryStateDto, taskId: string | null, reason: string | null, createdAt: string, restoredAt: string | null, purgedAt: string | null, };
+
+export type WorkspaceRecoveryIdentityRequestDto = { recoveryId: string, };
+
+export type WorkspacePreparedRecoveryPurgeDto = { purgeToken: string, recovery: WorkspaceRecoveryDto, expiresAt: string, };
+
+export type WorkspacePurgeRecoveryRequestDto = { purgeToken: string, };
+
+export type WorkspaceTransferDirectionDto = "upload" | "download";
+
+export type WorkspaceTransferStateDto = "queued" | "running" | "pausing" | "paused" | "waiting-conflict" | "verifying" | "finalizing" | "completed" | "failed" | "cancelled" | "interrupted";
+
+export type WorkspaceConflictStrategyDto = "ask" | "skip" | "keep-both" | "replace-with-backup";
+
+export type WorkspaceLocalPathGrantDto = { grantId: string, displayName: string, isDirectory: boolean, totalBytes: number | null, expiresAt: string, };
+
+export type WorkspaceTransferDraftDto = { direction: WorkspaceTransferDirectionDto, hostId: string, hostName: string, hostAlias: string, sourceRef: string,
+/**
+ * Required by downloads: opaque local-directory grant used only in Rust.
+ */
+localGrantId: string | null, destinationPath: string, totalBytes: number | null, conflictStrategy: WorkspaceConflictStrategyDto | null, };
+
+export type WorkspaceEnqueueTransfersRequestDto = { fileSessionId: string, items: Array<WorkspaceTransferDraftDto>, };
+
+export type WorkspaceTransferDto = { transferId: string, taskId: string | null, direction: WorkspaceTransferDirectionDto, hostId: string, hostName: string, hostAlias: string, sourceRef: string, destinationPath: string, state: WorkspaceTransferStateDto, revision: number, bytes: number, total: number | null, speed: number | null, etaSeconds: number | null, attempt: number, resumable: boolean, resumeOffset: number | null, conflictStrategy: WorkspaceConflictStrategyDto, conflictRevision: number | null, errorCode: string | null, fingerprintStatus: string | null, };
+
+export type WorkspaceTransferSnapshotDto = { transfers: Array<WorkspaceTransferDto>, recoveries: Array<WorkspaceRecoveryDto>, localRecoveries: Array<WorkspaceLocalTransferRecoveryDto>, };
+
+export type WorkspaceLocalTransferRecoveryStateDto = "prepared" | "available" | "restored" | "purged" | "failed";
+
+export type WorkspaceLocalTransferRecoveryDto = { recoveryId: string, transferId: string, destinationName: string, backupName: string, state: WorkspaceLocalTransferRecoveryStateDto, createdAt: string, restoredAt: string | null, purgedAt: string | null, };
+
+export type WorkspaceLocalTransferRecoveryIdentityRequestDto = { recoveryId: string, };
+
+export type WorkspacePreparedLocalTransferRecoveryPurgeDto = { purgeToken: string, recovery: WorkspaceLocalTransferRecoveryDto, expiresAt: string, };
+
+export type WorkspacePurgeLocalTransferRecoveryRequestDto = { purgeToken: string, };
+
+export type WorkspaceTransferIdentityRequestDto = { transferId: string, revision: number | null,
+/**
+ * Resume after an app restart must receive fresh native-path authority.
+ * Pause/cancel keep these absent and never resolve local paths.
+ */
+fileSessionId: string | null, localGrantId: string | null, restart: boolean, };
+
+export type WorkspaceResolveTransferConflictRequestDto = { transferId: string, conflictRevision: number, strategy: WorkspaceConflictStrategyDto, applyToBatch: boolean, };
+
+export type WorkspaceTerminalOutputEventDto = { sessionId: string, generation: number, sequence: number, dataBase64: string, };
+
+export type WorkspaceSessionStateEventDto = { sessionId: string, generation: number, revision: number, state: WorkspaceTerminalStateDto, reconnectable: boolean, attempt: number, nextRetryAt: string | null, reason: string | null, };
+
+export type WorkspaceSessionHeartbeatEventDto = { sessionId: string, generation: number, revision: number, observedAt: string, };
+
+export type WorkspaceTerminalCwdEventDto = { sessionId: string, generation: number, revision: number, path: string, source: WorkspaceCwdSourceDto, };
+
+export type WorkspaceTransferUpdatedEventDto = { transferId: string, revision: number, state: WorkspaceTransferStateDto, bytes: number, total: number | null, speed: number | null, etaSeconds: number | null, attempt: number, resumable: boolean, errorCode: string | null, taskId: string | null, };
+
+export type WorkspaceFileSearchStateDto = "running" | "completed" | "cancelled" | "failed";
+
+export type WorkspaceFileSearchUpdatedEventDto = { searchId: string, fileSessionId: string, revision: number, state: WorkspaceFileSearchStateDto, entries: Array<RemoteFileEntryDto>, scanned: number, truncated: boolean, errorCode: string | null, };

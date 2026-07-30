@@ -1214,6 +1214,7 @@ fn status_label(status: &TaskStatus) -> &'static str {
         TaskStatus::Running => "running",
         TaskStatus::Success => "success",
         TaskStatus::Failed => "failed",
+        TaskStatus::Cancelled => "cancelled",
         TaskStatus::Interrupted => "interrupted",
     }
 }
@@ -1223,6 +1224,7 @@ fn parse_status(value: &str) -> TaskStatus {
         "queued" => TaskStatus::Queued,
         "running" => TaskStatus::Running,
         "success" => TaskStatus::Success,
+        "cancelled" => TaskStatus::Cancelled,
         "interrupted" => TaskStatus::Interrupted,
         _ => TaskStatus::Failed,
     }

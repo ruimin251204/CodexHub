@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEventHandler, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -69,7 +69,8 @@ import {
   loadMockSettings,
   normalizeSettings,
   normalizeResourceMonitorRefreshSeconds,
-  resolvePlatformAppearance
+  resolvePlatformAppearance,
+  workspaceTerminalPreferences
 } from "./settings";
 import type { AppSettings, CloseButtonBehavior, FontPreset, NetworkProxyMode, PlatformAppearance, ThemeChoice } from "./settings";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
@@ -89,7 +90,14 @@ import {
   type OperationStepPresentation
 } from "./ui/OperationProgress";
 
-type SectionId = "dashboard" | "hosts" | "profiles" | "skills" | "monitor" | "tasks" | "settings";
+// Workspace pulls in the files and terminal controllers only after its
+// sidebar entry is selected; xterm itself remains a second-level lazy chunk.
+const WorkspacePage = lazy(async () => {
+  const module = await import("./workspace/WorkspacePage");
+  return { default: module.WorkspacePage };
+});
+
+type SectionId = "dashboard" | "hosts" | "terminal" | "profiles" | "skills" | "monitor" | "tasks" | "settings";
 type NavIconId = SectionId;
 type PlatformIconId =
   | SectionId
@@ -376,6 +384,7 @@ export const uiCopy = {
     navItems: [
       { id: "dashboard", label: "Home" },
       { id: "hosts", label: "Hosts" },
+      { id: "terminal", label: "Terminal" },
       { id: "monitor", label: "Monitor" },
       { id: "profiles", label: "Profiles" },
       { id: "skills", label: "Skills" },
@@ -392,6 +401,11 @@ export const uiCopy = {
         title: "Hosts",
         eyebrow: "Server inventory",
         body: "Add CodexHub-managed SSH config blocks without disturbing user-owned SSH settings."
+      },
+      terminal: {
+        title: "Workspace",
+        eyebrow: "Workspace",
+        body: "Use your existing SSH aliases for Terminal, Files, Split, and Transfers."
       },
       profiles: {
         title: "Profiles",
@@ -447,6 +461,7 @@ export const uiCopy = {
       migrationRequired: "Local data must be migrated before this operation can continue.",
       storageCorrupt: "Local data requires recovery before this operation can continue.",
       partialFailure: "The operation completed partially. Review the task details.",
+      safeNoReplaceUnsupported: "This remote host cannot safely commit without replacing an existing target. No file was overwritten; choose another path or handle the destination manually.",
       errorTitles: {
         "backend-unavailable": "Desktop backend unavailable",
         "invalid-arguments": "Check the requested values",
@@ -1043,6 +1058,7 @@ export const uiCopy = {
         running: (action: string) => `${action} is running.`,
         success: (action: string) => `${action} completed.`,
         failed: (action: string) => `${action} failed. Review the logs for details.`,
+        cancelled: (action: string) => `${action} was cancelled.`,
         interrupted: (action: string) => `${action} was interrupted.`
       }
     },
@@ -1081,6 +1097,32 @@ export const uiCopy = {
       font: "Font",
       sidebarCompletionIndicators: "Sidebar visual hints",
       hostOperationLogPopups: "Log pop-up prompts",
+      workspaceTerminal: "Workspace terminal",
+      terminalFontFamily: "Font family",
+      terminalFontSize: "Font size",
+      terminalLineHeight: "Line height",
+      terminalColorScheme: "Color scheme",
+      terminalScrollback: "Scrollback",
+      terminalCursor: "Cursor",
+      terminalScreenReader: "Screen reader mode",
+      terminalConfirmLargePaste: "Confirm multiline or large paste",
+      terminalFontOptions: {
+        "system-mono": "System monospace",
+        cascadia: "Cascadia Mono",
+        jetbrains: "JetBrains Mono",
+        "sf-mono": "SF Mono"
+      },
+      terminalColorOptions: {
+        "follow-app": "Follow app",
+        light: "Light",
+        dark: "Dark",
+        "high-contrast": "High contrast"
+      },
+      terminalCursorOptions: {
+        block: "Block",
+        bar: "Bar",
+        underline: "Underline"
+      },
       runtime: "Runtime",
       backend: "Backend",
       app: "App",
@@ -1178,6 +1220,7 @@ export const uiCopy = {
         running: "running",
         success: "success",
         failed: "failed",
+        cancelled: "cancelled",
         interrupted: "interrupted"
       },
       log: {
@@ -1191,6 +1234,7 @@ export const uiCopy = {
     navItems: [
       { id: "dashboard", label: "主页" },
       { id: "hosts", label: "主机" },
+      { id: "terminal", label: "终端" },
       { id: "monitor", label: "监控" },
       { id: "profiles", label: "配置" },
       { id: "skills", label: "技能" },
@@ -1207,6 +1251,11 @@ export const uiCopy = {
         title: "主机",
         eyebrow: "服务器清单",
         body: "添加 CodexHub 管理的 SSH config 块，不影响用户已有 SSH 设置。"
+      },
+      terminal: {
+        title: "工作台",
+        eyebrow: "工作台",
+        body: "使用已有 SSH alias 打开终端、文件、分屏和传输队列。"
       },
       profiles: {
         title: "配置",
@@ -1262,6 +1311,7 @@ export const uiCopy = {
       migrationRequired: "本地数据需要先完成迁移，随后才能继续该操作。",
       storageCorrupt: "本地数据需要先完成恢复，随后才能继续该操作。",
       partialFailure: "操作部分完成，请查看任务详情。",
+      safeNoReplaceUnsupported: "此远端主机不支持安全的“不覆盖原目标”提交。文件未被覆盖；请改用其他路径或手动处理目标文件。",
       errorTitles: {
         "backend-unavailable": "桌面后端不可用",
         "invalid-arguments": "请检查操作参数",
@@ -1858,6 +1908,7 @@ export const uiCopy = {
         running: (action: string) => `${action}正在执行。`,
         success: (action: string) => `${action}已完成。`,
         failed: (action: string) => `${action}失败，请查看日志详情。`,
+        cancelled: (action: string) => `${action}已取消。`,
         interrupted: (action: string) => `${action}已中断。`
       }
     },
@@ -1896,6 +1947,32 @@ export const uiCopy = {
       font: "字体",
       sidebarCompletionIndicators: "侧边栏视觉提示",
       hostOperationLogPopups: "日志弹窗提示",
+      workspaceTerminal: "工作台终端",
+      terminalFontFamily: "字体",
+      terminalFontSize: "字号",
+      terminalLineHeight: "行高",
+      terminalColorScheme: "配色",
+      terminalScrollback: "回滚行数",
+      terminalCursor: "光标",
+      terminalScreenReader: "屏幕阅读模式",
+      terminalConfirmLargePaste: "多行或大粘贴前确认",
+      terminalFontOptions: {
+        "system-mono": "系统等宽字体",
+        cascadia: "Cascadia Mono",
+        jetbrains: "JetBrains Mono",
+        "sf-mono": "SF Mono"
+      },
+      terminalColorOptions: {
+        "follow-app": "跟随应用",
+        light: "浅色",
+        dark: "深色",
+        "high-contrast": "高对比度"
+      },
+      terminalCursorOptions: {
+        block: "方块",
+        bar: "竖线",
+        underline: "下划线"
+      },
       runtime: "运行时",
       backend: "后端",
       app: "应用",
@@ -1993,6 +2070,7 @@ export const uiCopy = {
         running: "运行中",
         success: "成功",
         failed: "失败",
+        cancelled: "已取消",
         interrupted: "已中断"
       },
       log: {
@@ -2181,8 +2259,11 @@ function useActionErrorReporter(copy: UICopy) {
 }
 
 function localizeFeedbackMessage(message: string, copy: UICopy, tone: FeedbackTone) {
-  if (copy.common.locale !== "zh-CN") return message;
   const normalized = message.toLowerCase();
+  if (normalized.includes("safe-no-replace-unsupported")) {
+    return copy.feedback.safeNoReplaceUnsupported;
+  }
+  if (copy.common.locale !== "zh-CN") return message;
   if (normalized.includes("storage-migration-required") || normalized.includes("migration-required")) {
     return copy.feedback.migrationRequired;
   }
@@ -4350,6 +4431,20 @@ function App() {
             onUpdateOutdatedCodexHosts={handleUpdateOutdatedCodexHosts}
           />
         );
+      case "terminal":
+        return (
+          <Suspense fallback={<section aria-busy="true" className="workspacePage workspacePageLoading">{copy.common.loading}</section>}>
+            <WorkspacePage
+              api={api.workspace}
+              hosts={hosts.map((host) => ({ id: host.id, name: host.name, hostAlias: host.hostAlias, status: host.status }))}
+              locale={locale}
+              platform={runtimePlatform}
+              terminalPreferences={workspaceTerminalPreferences(settings)}
+              onError={(error) => setErrorNotice(formatError(error), taskIdForError(error))}
+              onOpenTask={openTaskDetail}
+            />
+          </Suspense>
+        );
       case "profiles":
         return (
           <ProfilesView
@@ -4459,6 +4554,7 @@ function App() {
             }}
             onSidebarCompletionIndicatorsChange={(sidebarCompletionIndicators) => persistSettings({ ...settings, sidebarCompletionIndicators })}
             onThemeChange={(theme) => persistSettings({ ...settings, theme })}
+            onWorkspaceTerminalPreferencesChange={(workspaceTerminalPreferences) => persistSettings({ ...settings, workspaceTerminalPreferences })}
           />
         );
       default:
@@ -9489,7 +9585,8 @@ function SettingsView({
   onRefreshSsh,
   onRetrySettings,
   onSidebarCompletionIndicatorsChange,
-  onThemeChange
+  onThemeChange,
+  onWorkspaceTerminalPreferencesChange
 }: {
   appUpdateChecking: boolean;
   appUpdateInstalling: boolean;
@@ -9512,6 +9609,7 @@ function SettingsView({
   onRetrySettings: () => Promise<boolean>;
   onSidebarCompletionIndicatorsChange: (enabled: boolean) => void;
   onThemeChange: (theme: ThemeChoice) => void;
+  onWorkspaceTerminalPreferencesChange: (preferences: AppSettings["workspaceTerminalPreferences"]) => void;
 }) {
   const publicKey = sshStatus?.ed25519.publicKey ?? "";
   const appUpdateBusy = appUpdateChecking || appUpdateInstalling;
@@ -9520,6 +9618,11 @@ function SettingsView({
     appUpdateStatus.channel === "stable" && appUpdateStatus.configured && appUpdateStatus.state === "available" && !appUpdateBusy;
   const appLatestVersionLabel = appUpdateLatestVersionLabel(appUpdateStatus, copy);
   const [publicKeyCopied, setPublicKeyCopied] = useState(false);
+  const terminalPreferences = settings.workspaceTerminalPreferences;
+
+  const updateTerminalPreferences = (patch: Partial<AppSettings["workspaceTerminalPreferences"]>) => {
+    onWorkspaceTerminalPreferencesChange({ ...terminalPreferences, ...patch });
+  };
 
   useEffect(() => {
     setPublicKeyCopied(false);
@@ -9628,6 +9731,54 @@ function SettingsView({
             >
               <span className="pillToggleThumb" aria-hidden="true" />
             </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel spanWide">
+        <div className="panelHeader compact">
+          <div><TitleWithIcon icon="terminal" level={2}>{copy.settings.workspaceTerminal}</TitleWithIcon></div>
+        </div>
+        <div className="settingsRows dividedSettingsRows">
+          <label className="settingControlRow" data-divider="true">
+            <span>{copy.settings.terminalFontFamily}</span>
+            <select disabled={settingsSaving} value={terminalPreferences.fontFamily} onChange={(event) => updateTerminalPreferences({ fontFamily: event.target.value as AppSettings["workspaceTerminalPreferences"]["fontFamily"] })}>
+              {(Object.keys(copy.settings.terminalFontOptions) as Array<AppSettings["workspaceTerminalPreferences"]["fontFamily"]>).map((choice) => <option key={choice} value={choice}>{copy.settings.terminalFontOptions[choice]}</option>)}
+            </select>
+          </label>
+          <label className="settingControlRow">
+            <span>{copy.settings.terminalColorScheme}</span>
+            <select disabled={settingsSaving} value={terminalPreferences.colorScheme} onChange={(event) => updateTerminalPreferences({ colorScheme: event.target.value as AppSettings["workspaceTerminalPreferences"]["colorScheme"] })}>
+              {(Object.keys(copy.settings.terminalColorOptions) as Array<AppSettings["workspaceTerminalPreferences"]["colorScheme"]>).map((choice) => <option key={choice} value={choice}>{copy.settings.terminalColorOptions[choice]}</option>)}
+            </select>
+          </label>
+          <label className="settingControlRow">
+            <span>{copy.settings.terminalFontSize}</span>
+            <input disabled={settingsSaving} max={24} min={12} step={1} type="number" value={terminalPreferences.fontSize} onChange={(event) => updateTerminalPreferences({ fontSize: Math.min(24, Math.max(12, Number(event.target.value) || 14)) })} />
+          </label>
+          <label className="settingControlRow">
+            <span>{copy.settings.terminalLineHeight}</span>
+            <input disabled={settingsSaving} max={1.6} min={1} step={0.05} type="number" value={terminalPreferences.lineHeight} onChange={(event) => updateTerminalPreferences({ lineHeight: Math.min(1.6, Math.max(1, Number(event.target.value) || 1.25)).toFixed(2) })} />
+          </label>
+          <label className="settingControlRow">
+            <span>{copy.settings.terminalScrollback}</span>
+            <select disabled={settingsSaving} value={terminalPreferences.scrollback} onChange={(event) => updateTerminalPreferences({ scrollback: Number(event.target.value) })}>
+              {[1000, 5000, 10000].map((value) => <option key={value} value={value}>{value.toLocaleString()}</option>)}
+            </select>
+          </label>
+          <label className="settingControlRow">
+            <span>{copy.settings.terminalCursor}</span>
+            <select disabled={settingsSaving} value={terminalPreferences.cursorStyle} onChange={(event) => updateTerminalPreferences({ cursorStyle: event.target.value as AppSettings["workspaceTerminalPreferences"]["cursorStyle"] })}>
+              {(Object.keys(copy.settings.terminalCursorOptions) as Array<AppSettings["workspaceTerminalPreferences"]["cursorStyle"]>).map((choice) => <option key={choice} value={choice}>{copy.settings.terminalCursorOptions[choice]}</option>)}
+            </select>
+          </label>
+          <div className="settingControlRow">
+            <span>{copy.settings.terminalScreenReader}</span>
+            <button aria-checked={terminalPreferences.screenReaderMode} aria-label={copy.settings.terminalScreenReader} className="pillToggle" data-enabled={terminalPreferences.screenReaderMode} disabled={settingsSaving} role="switch" type="button" onClick={() => updateTerminalPreferences({ screenReaderMode: !terminalPreferences.screenReaderMode })}><span className="pillToggleThumb" aria-hidden="true" /></button>
+          </div>
+          <div className="settingControlRow">
+            <span>{copy.settings.terminalConfirmLargePaste}</span>
+            <button aria-checked={terminalPreferences.confirmLargePaste} aria-label={copy.settings.terminalConfirmLargePaste} className="pillToggle" data-enabled={terminalPreferences.confirmLargePaste} disabled={settingsSaving} role="switch" type="button" onClick={() => updateTerminalPreferences({ confirmLargePaste: !terminalPreferences.confirmLargePaste })}><span className="pillToggleThumb" aria-hidden="true" /></button>
           </div>
         </div>
       </section>

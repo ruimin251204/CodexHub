@@ -45,6 +45,7 @@ import { getCodexSkillsPath, getPlatform } from "../platform";
 import type { AppSettings, CloseButtonBehavior } from "../settings";
 import { loadMockSettings, normalizeSettings, saveMockSettings } from "../settings";
 import type { CodexHubApi } from "./contracts";
+import { unavailableWorkspaceApi } from "./workspace";
 import type { TaskEvent } from "../generated/rust-contracts";
 import { normalizeProfile, normalizeProfileApplyOptions, normalizeProfileApplyResult } from "./normalize";
 import {
@@ -1487,6 +1488,7 @@ function mockUpdateLibrarySkillAbout(skillId: string, about: string): SkillPack[
 }
 
 export const mockApi: CodexHubApi = {
+  workspace: unavailableWorkspaceApi,
   getHealth: async () => fallbackHealth,
   getAppUpdateStatus: async () => fallbackAppUpdateStatus,
   checkStableUpdate: async () => fallbackAppUpdateStatus,

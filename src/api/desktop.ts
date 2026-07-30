@@ -70,6 +70,7 @@ import type {
 } from "../generated/rust-contracts";
 import { normalizeSettings, saveDesktopSettingsCache } from "../settings";
 import type { CodexHubApi } from "./contracts";
+import { desktopWorkspaceApi } from "./workspace";
 import type { TauriCommand } from "./commands";
 import { assertTauriRuntime, requireHostAlias, requiredInvoke } from "./invoke";
 import {
@@ -149,6 +150,7 @@ async function runWithRemoteProbeBatchEvents<T>(
 }
 
 export const desktopApi: CodexHubApi = {
+  workspace: desktopWorkspaceApi,
   getHealth: () => requiredInvoke<HealthDto>("app_health"),
   getAppUpdateStatus: () => requiredInvoke<AppUpdateStatusDto>("get_app_update_status"),
   checkStableUpdate: () => requiredInvoke<AppUpdateStatusDto>("check_stable_update"),

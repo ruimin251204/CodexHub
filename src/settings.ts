@@ -8,6 +8,7 @@ import type {
   SettingsSaveResultDto,
   ThemeChoiceDto
 } from "./generated/rust-contracts";
+import type { WorkspaceTerminalPreferences } from "./workspace/types";
 
 export type ThemeChoice = ThemeChoiceDto;
 export type FontPreset = "english" | "zh-cn";
@@ -39,7 +40,17 @@ export const defaultSettings: AppSettings = {
   resourceMonitorRefreshSeconds: 60,
   sidebarCompletionIndicators: true,
   hostOperationLogPopups: true,
-  setupGuideDismissed: false
+  setupGuideDismissed: false,
+  workspaceTerminalPreferences: {
+    fontFamily: "system-mono",
+    fontSize: 14,
+    lineHeight: "1.25",
+    colorScheme: "follow-app",
+    scrollback: 5000,
+    cursorStyle: "block",
+    screenReaderMode: false,
+    confirmLargePaste: true
+  }
 };
 
 const windowsUiFont = '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI Variable", "Segoe UI", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif';
@@ -106,7 +117,44 @@ export function normalizeSettings(value: unknown): AppSettings {
     resourceMonitorRefreshSeconds: normalizeResourceMonitorRefreshSeconds(candidate.resourceMonitorRefreshSeconds),
     sidebarCompletionIndicators: candidate.sidebarCompletionIndicators !== false,
     hostOperationLogPopups: candidate.hostOperationLogPopups !== false,
-    setupGuideDismissed: candidate.setupGuideDismissed === true
+    setupGuideDismissed: candidate.setupGuideDismissed === true,
+    workspaceTerminalPreferences: normalizeWorkspaceTerminalPreferences(candidate.workspaceTerminalPreferences)
+  };
+}
+
+function normalizeWorkspaceTerminalPreferences(value: unknown): AppSettings["workspaceTerminalPreferences"] {
+  const current = value as Partial<AppSettings["workspaceTerminalPreferences"]> | null;
+  const defaults = defaultSettings.workspaceTerminalPreferences;
+  const lineHeight = Number(current?.lineHeight);
+  return {
+    fontFamily: ["system-mono", "cascadia", "jetbrains", "sf-mono"].includes(current?.fontFamily ?? "")
+      ? current!.fontFamily!
+      : defaults.fontFamily,
+    fontSize: typeof current?.fontSize === "number" ? Math.max(12, Math.min(24, Math.round(current.fontSize))) : defaults.fontSize,
+    lineHeight: Number.isFinite(lineHeight) ? Math.max(1, Math.min(2, lineHeight)).toFixed(2) : defaults.lineHeight,
+    colorScheme: ["follow-app", "light", "dark", "high-contrast"].includes(current?.colorScheme ?? "")
+      ? current!.colorScheme!
+      : defaults.colorScheme,
+    scrollback: typeof current?.scrollback === "number" ? Math.max(100, Math.min(20000, Math.round(current.scrollback))) : defaults.scrollback,
+    cursorStyle: ["block", "bar", "underline"].includes(current?.cursorStyle ?? "")
+      ? current!.cursorStyle!
+      : defaults.cursorStyle,
+    screenReaderMode: current?.screenReaderMode === true,
+    confirmLargePaste: current?.confirmLargePaste !== false
+  };
+}
+
+export function workspaceTerminalPreferences(settings: AppSettings): WorkspaceTerminalPreferences {
+  const value = normalizeWorkspaceTerminalPreferences(settings.workspaceTerminalPreferences);
+  return {
+    fontFamily: value.fontFamily,
+    fontSize: value.fontSize,
+    lineHeight: Number(value.lineHeight),
+    colorScheme: value.colorScheme,
+    scrollback: value.scrollback,
+    cursorStyle: value.cursorStyle,
+    screenReaderMode: value.screenReaderMode,
+    confirmLargePaste: value.confirmLargePaste
   };
 }
 

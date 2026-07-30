@@ -5684,3 +5684,689 @@ td code {
     flex-direction: column-reverse;
   }
 }
+
+/* Workspace: interactive PTY output is rendered by xterm; these rules only
+   provide the surrounding desktop chrome and never mirror terminal content. */
+.workspacePage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: min(720px, calc(100vh - 120px));
+  max-width: none;
+}
+
+.workspacePageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+}
+
+.workspacePageHeader h1 {
+  color: var(--text);
+  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
+  line-height: 1.08;
+}
+
+.workspacePageHeader p {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.workspaceModeBar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-md) + 2px);
+  background: var(--surface-muted);
+}
+
+.workspaceModeBar button,
+.workspacePaneToolbar button,
+.workspaceTerminalTab > button,
+.workspaceTransferActions button,
+.workspaceRecoveryActions button,
+.workspaceDialogActions button,
+.workspaceContextMenu button,
+.workspaceLoadMore {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 9px;
+  color: var(--text);
+  line-height: 1.2;
+  background: var(--surface-solid);
+  box-shadow: none;
+}
+
+.workspaceModeBar button {
+  border-color: transparent;
+  border-radius: calc(var(--radius-sm) + 1px);
+  padding: 6px 11px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 720;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.workspaceModeBar button[aria-selected="true"] {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+}
+
+.workspaceModeBar button:not([aria-selected="true"]):hover,
+.workspacePaneToolbar button:not(:disabled):hover,
+.workspaceTransferActions button:not(:disabled):hover,
+.workspaceRecoveryActions button:not(:disabled):hover,
+.workspaceContextMenu button:not(:disabled):hover,
+.workspaceLoadMore:not(:disabled):hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+}
+
+.workspaceModeBar button:disabled,
+.workspacePaneToolbar button:disabled,
+.workspaceTransferActions button:disabled,
+.workspaceRecoveryActions button:disabled,
+.workspaceLoadMore:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.workspacePageBody,
+.workspaceTerminalPanel,
+.workspaceFilesPanel,
+.workspaceTransfersPanel,
+.workspaceSplitLayout,
+.workspaceSplitTerminal,
+.workspaceSplitFiles {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspacePageBody {
+  display: flex;
+  flex: 1 1 auto;
+}
+
+/* A single mounted pane keeps PTY and SFTP state intact while modes only change layout. */
+.workspaceModeTerminal,
+.workspaceModeFiles {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspacePageBody[data-mode="terminal"] .workspaceModeFiles,
+.workspacePageBody[data-mode="files"] .workspaceModeTerminal,
+.workspacePageBody[data-mode="terminal"] .workspaceSplitHandle,
+.workspacePageBody[data-mode="files"] .workspaceSplitHandle,
+.workspacePageBody[data-mode="transfers"] .workspaceModeTerminal,
+.workspacePageBody[data-mode="transfers"] .workspaceModeFiles,
+.workspacePageBody[data-mode="transfers"] .workspaceSplitHandle {
+  display: none;
+}
+
+.workspacePageBody[data-mode="split"] {
+  display: grid;
+  grid-template-columns: minmax(0, var(--workspace-split-ratio, 60%)) 9px minmax(0, 1fr);
+  min-height: 560px;
+}
+
+.workspaceSplitLayout {
+  display: grid;
+  grid-template-columns: minmax(0, var(--workspace-split-ratio, 60%)) 9px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 560px;
+}
+
+.workspaceSplitTerminal,
+.workspaceSplitFiles {
+  display: flex;
+  flex: 1 1 auto;
+}
+
+.workspaceTerminalPanel,
+.workspaceFilesPanel,
+.workspaceTransfersPanel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.workspacePaneToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
+}
+
+.workspacePaneToolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.workspacePaneToolbar input,
+.workspacePaneToolbar select,
+.workspaceOperationDialog input,
+.workspaceTerminalSearch input {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  color: var(--text);
+  outline: none;
+  background: var(--surface-solid);
+}
+
+.workspaceTerminalToolbar {
+  flex-wrap: wrap;
+}
+
+.workspaceTerminalToolbar label select {
+  min-width: min(260px, 52vw);
+}
+
+.workspaceTerminalTabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-height: 43px;
+  overflow-x: auto;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.workspaceTerminalTab {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.workspaceTerminalTab[data-active="true"] {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.workspaceTerminalTab > button:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: center;
+  min-width: 132px;
+  max-width: 220px;
+  border: 0;
+  border-radius: 0;
+  padding: 5px 8px;
+  text-align: left;
+  background: transparent;
+}
+
+.workspaceTerminalTab > button:first-child > span:not(.workspaceConnectionDot) {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTerminalTab small {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTerminalTab > button:last-child {
+  align-self: center;
+  min-height: 25px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.workspaceTerminalTab > button:last-child:hover {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+
+.workspaceConnectionDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gray);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gray) 15%, transparent);
+}
+
+.workspaceConnectionDot[data-state="connected"] { background: var(--green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 16%, transparent); }
+.workspaceConnectionDot[data-state="connecting"],
+.workspaceConnectionDot[data-state="creating"],
+.workspaceConnectionDot[data-state="reconnecting"] { background: var(--yellow); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yellow) 16%, transparent); }
+.workspaceConnectionDot[data-state="failed"],
+.workspaceConnectionDot[data-state="disconnected"] { background: var(--red); box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 16%, transparent); }
+
+.workspaceTerminalStage {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 260px;
+  background: var(--surface-solid);
+}
+
+.workspaceTerminalInstance {
+  display: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspaceTerminalInstance[data-active="true"] { display: flex; }
+
+.workspaceXterm {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspaceXtermCanvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+}
+
+.workspaceXtermCanvas .xterm {
+  height: 100%;
+  padding: 4px;
+}
+
+.workspaceXtermCanvas .xterm-viewport { scrollbar-color: var(--border-strong) transparent; }
+
+.workspaceTerminalSearch {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+}
+
+.workspaceTerminalSearch input { width: min(250px, 50vw); }
+.workspaceTerminalSearch button { min-width: 28px; border: 0; border-radius: var(--radius-sm); padding: 4px; color: var(--text); background: transparent; }
+.workspaceTerminalSearch button:hover { background: var(--surface-muted); }
+.workspaceRendererRetry { position: absolute; z-index: 4; right: 12px; bottom: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 9px; color: var(--text); background: var(--surface-solid); box-shadow: var(--shadow-soft); }
+
+.workspaceTerminalStatus {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 37px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  background: var(--surface-muted);
+}
+
+.workspaceTerminalStatus > button { margin-left: auto; }
+.workspaceTerminalEncoding { color: var(--text-faint); font-family: var(--font-mono); }
+
+.workspaceStatusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: var(--surface-solid);
+}
+
+.workspaceStatusChip[data-state="completed"],
+.workspaceStatusChip[data-state="available"],
+.workspaceStatusChip[data-state="connected"] { border-color: color-mix(in srgb, var(--green) 42%, var(--border)); color: var(--green); }
+.workspaceStatusChip[data-state="failed"],
+.workspaceStatusChip[data-state="cancelled"],
+.workspaceStatusChip[data-state="purged"] { border-color: color-mix(in srgb, var(--red) 42%, var(--border)); color: var(--red); }
+.workspaceStatusChip[data-state="running"],
+.workspaceStatusChip[data-state="verifying"],
+.workspaceStatusChip[data-state="finalizing"],
+.workspaceStatusChip[data-state="waiting-conflict"] { border-color: color-mix(in srgb, var(--yellow) 45%, var(--border)); color: var(--yellow); }
+
+.workspaceFilesPanel { position: relative; }
+.workspaceFilesHostToolbar,
+.workspaceFilesNavigation,
+.workspaceFilesActions { flex-wrap: wrap; }
+.workspaceFilesActions { gap: 7px; }
+.workspaceFilesActions > button { margin-left: auto; }
+
+.workspaceButtonGroup { display: inline-flex; gap: 3px; }
+.workspaceButtonGroup button { min-width: 30px; padding-inline: 7px; }
+.workspaceLocationForm { flex: 1 1 280px; min-width: 160px; }
+.workspaceLocationForm input { width: 100%; }
+.workspaceSearchForm { display: flex; flex: 1 1 210px; align-items: center; gap: 4px; min-width: 180px; }
+.workspaceSearchForm input { width: 100%; }
+.workspaceCompactSelect select { max-width: 130px; }
+.workspaceToggleButton[aria-pressed="true"] { border-color: color-mix(in srgb, var(--blue) 60%, var(--border)); color: var(--blue); background: color-mix(in srgb, var(--blue) 9%, var(--surface-solid)); }
+
+.workspaceInfoBar,
+.workspaceSearchSummary {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  background: color-mix(in srgb, var(--blue) 5%, var(--surface-muted));
+}
+
+.workspaceRecoveryNotice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--green) 35%, var(--border));
+  color: var(--green);
+  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--green) 7%, var(--surface-muted));
+}
+
+.workspaceRecoveryNotice button {
+  min-height: 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 3px 7px;
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: transparent;
+}
+
+.workspaceRecoveryNotice button:first-of-type { text-decoration: underline; }
+.workspaceRecoveryNotice button:last-child { margin-left: auto; }
+
+.workspaceFileGrid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 210px;
+  overflow: auto;
+}
+
+.workspaceFileGridHeader,
+.workspaceFileRow {
+  display: grid;
+  grid-template-columns: minmax(210px, 2.4fr) minmax(90px, 0.8fr) minmax(88px, 0.8fr) minmax(142px, 1fr);
+  min-width: 600px;
+  column-gap: 12px;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.workspaceFileGridHeader {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  min-height: 36px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: var(--surface-muted);
+}
+
+.workspaceFileGridBody { min-width: min-content; }
+.workspaceFileRow {
+  min-height: 38px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  color: var(--text-muted);
+  font-size: 0.83rem;
+  outline: none;
+}
+
+.workspaceFileRow:hover,
+.workspaceFileRow[aria-selected="true"] { background: color-mix(in srgb, var(--blue) 7%, var(--surface)); }
+.workspaceFileRow[aria-selected="true"] { box-shadow: inset 3px 0 0 var(--blue); }
+.workspaceFileRow[data-kind="directory"] .workspaceFileName { color: var(--blue); }
+.workspaceFileName { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.workspaceFileName > span { flex: 0 0 auto; color: var(--text-faint); }
+.workspaceFileRow [role="gridcell"]:not(.workspaceFileName) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspaceFileEmpty { margin: 18px; }
+.workspaceLoadMore { align-self: center; margin: 10px; }
+
+.workspaceContextMenu {
+  position: fixed;
+  z-index: 20;
+  display: grid;
+  min-width: 184px;
+  max-width: min(280px, calc(100vw - 20px));
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+}
+
+.workspaceContextMenu button { border: 0; border-radius: var(--radius-sm); text-align: left; }
+.workspaceContextMenu button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.workspaceTransfersPanel { gap: 0; overflow: auto; padding: 0; }
+.workspaceTransfersTableWrap { min-width: 0; overflow-x: auto; }
+.workspaceTransfersTable { min-width: 1060px; table-layout: fixed; }
+.workspaceTransfersTable th,
+.workspaceTransfersTable td { padding: 10px; }
+.workspaceTransfersTable td { overflow-wrap: anywhere; }
+.workspaceTransfersTable td:nth-child(1) { width: 120px; }
+.workspaceTransfersTable td:nth-child(2),
+.workspaceTransfersTable td:nth-child(3) { max-width: 170px; }
+.workspaceTransfersTable td:nth-child(4) { width: 175px; }
+.workspaceTransfersTable td:nth-child(9) { width: 185px; }
+.workspaceTransfersTable small { display: block; margin-top: 2px; color: var(--text-faint); font-family: var(--font-mono); font-size: 0.66rem; }
+.workspaceTransferDirection { display: inline-grid; width: 22px; height: 22px; place-items: center; margin-right: 5px; border-radius: 999px; color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.workspaceTransferDirection[data-direction="download"] { color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
+.workspaceProgressLabel { display: flex; justify-content: space-between; gap: 8px; color: var(--text-muted); font-size: 0.7rem; }
+.workspaceTransfersTable progress { width: 100%; height: 5px; accent-color: var(--blue); }
+.workspaceTransferActions,
+.workspaceRecoveryActions,
+.workspaceDialogActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.workspaceTransferActions button { min-height: 27px; padding: 4px 7px; font-size: 0.72rem; }
+.workspaceTransferFailure { margin-top: 7px; color: var(--text-muted); font-size: 0.74rem; }
+.workspaceTransferFailure summary { cursor: pointer; color: var(--blue); }
+.workspaceTransferFailure dl,
+.workspaceRecoveryCard dl,
+.workspaceOperationPreview dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 9px; margin-top: 7px; }
+.workspaceTransferFailure dt,
+.workspaceRecoveryCard dt,
+.workspaceOperationPreview dt { color: var(--text-faint); }
+.workspaceTransferFailure dd,
+.workspaceRecoveryCard dd,
+.workspaceOperationPreview dd { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.workspaceTransferFailure p { margin-top: 6px; white-space: pre-wrap; }
+
+.workspaceRecoveries { display: grid; gap: 10px; padding: 16px; border-top: 1px solid var(--border); background: var(--surface-muted); }
+.workspaceRecoveries h2 { color: var(--text); font-size: 0.95rem; }
+.workspaceRecoveries > p { color: var(--text-muted); font-size: 0.84rem; }
+.workspaceRecoveryList { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.workspaceRecoveryCard { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-solid); }
+.workspaceRecoveryCard header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.workspaceRecoveryCard strong { color: var(--text); font-size: 0.84rem; text-transform: capitalize; }
+
+.workspacePrimaryButton { border-color: color-mix(in srgb, var(--blue) 72%, var(--border)) !important; color: #fff !important; background: var(--blue) !important; }
+.workspaceDangerButton { border-color: color-mix(in srgb, var(--red) 68%, var(--border)) !important; color: #fff !important; background: var(--red) !important; }
+
+.workspaceInlineDialogBackdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20, 26, 38, 0.34);
+  backdrop-filter: blur(5px);
+}
+
+.workspaceInlineDialog {
+  display: grid;
+  gap: 14px;
+  width: min(520px, 100%);
+  max-height: min(680px, calc(100vh - 40px));
+  overflow: auto;
+  padding: 19px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+}
+
+.workspaceInlineDialog h3 { font-size: 1rem; }
+.workspaceInlineDialog p { color: var(--text-muted); line-height: 1.5; }
+.workspaceDialogActions { justify-content: flex-end; }
+.workspaceDialogActions > :first-child { margin-right: auto; }
+.workspacePreviewDialog { width: min(780px, 100%); }
+.workspacePreviewDialog header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.workspacePreviewDialog header button { border: 0; border-radius: 999px; width: 30px; height: 30px; color: var(--text-muted); background: var(--surface-muted); }
+.workspacePreviewBody { min-height: 80px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-strong); }
+.workspacePreviewBody pre { margin: 0; padding: 12px; color: var(--text); font-size: 0.78rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workspacePreviewBody img { display: block; width: auto; max-width: 100%; max-height: 60vh; margin: 0 auto; object-fit: contain; }
+.workspacePreviewDialog footer { color: var(--text-faint); font-family: var(--font-mono); font-size: 0.72rem; }
+.workspaceOperationDialog label { display: grid; gap: 6px; color: var(--text-muted); font-size: 0.82rem; }
+.workspaceOperationPreview { padding: 10px; border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--yellow) 7%, var(--surface-solid)); }
+.workspaceWarningText { color: var(--yellow) !important; font-size: 0.8rem; }
+.workspaceConflictChoices { display: grid; gap: 7px; margin: 0; border: 0; padding: 0; }
+.workspaceConflictChoices label,
+.workspaceCheckbox { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 0.84rem; }
+
+.workspacePaneState,
+.workspaceEmptyState {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 140px;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.workspaceTerminalStage .workspaceEmptyState { border: 0; color: #b5bac6; background: transparent; }
+.workspaceTerminalStage .workspaceEmptyState span { font-family: var(--font-mono); font-size: 2rem; }
+.workspacePaneError { color: var(--red); }
+.workspaceVisuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+.workspaceSplitHandle { position: relative; z-index: 2; cursor: col-resize; outline: none; background: transparent; }
+.workspaceSplitHandle::after { content: ""; position: absolute; top: 18px; bottom: 18px; left: 3px; width: 3px; border-radius: 999px; background: var(--border-strong); }
+.workspaceSplitHandle:hover::after,
+.workspaceSplitHandle:focus-visible::after { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent); }
+
+.workspacePage :is(button, input, select, [role="row"], [role="tab"], [role="separator"]):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+:root[data-platform="macos"] .workspaceTerminalPanel,
+:root[data-platform="macos"] .workspaceFilesPanel,
+:root[data-platform="macos"] .workspaceTransfersPanel,
+:root[data-platform="macos"] .workspaceInlineDialog { backdrop-filter: blur(24px) saturate(1.12); }
+
+:root[data-platform="macos"] .workspaceModeBar,
+:root[data-platform="macos"] .workspaceTerminalTab,
+:root[data-platform="macos"] .workspaceTerminalTab > button:first-child { border-radius: 9px; }
+
+@media (max-width: 900px) {
+  .workspacePage { min-height: 0; }
+  .workspacePageHeader { align-items: flex-start; flex-direction: column; }
+  .workspaceModeBar { width: 100%; overflow-x: auto; }
+  .workspaceModeBar button { flex: 1 0 auto; }
+  .workspaceSplitLayout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(300px, 3fr) 9px minmax(280px, 2fr); min-height: 780px; }
+  .workspacePageBody[data-mode="split"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(300px, 3fr) 9px minmax(280px, 2fr); min-height: 780px; }
+  .workspaceSplitHandle { cursor: row-resize; }
+  .workspaceSplitHandle::after { top: 3px; right: 18px; bottom: auto; left: 18px; width: auto; height: 3px; }
+}
+
+@media (max-width: 620px) {
+  .workspacePageHeader h1 { font-size: 1.45rem; }
+  .workspacePaneToolbar { align-items: stretch; }
+  .workspaceTerminalTabs { padding-inline: 4px; }
+  .workspaceTerminalTab > button:first-child { min-width: 112px; max-width: 175px; }
+  .workspaceFilesActions > button { margin-left: 0; }
+  .workspaceLocationForm,
+  .workspaceSearchForm { flex-basis: 100%; }
+  .workspaceTerminalStatus { flex-wrap: wrap; }
+  .workspaceTerminalStatus > button { margin-left: 0; }
+  .workspaceInlineDialogBackdrop { padding: 12px; }
+  .workspaceInlineDialog { padding: 15px; }
+  .workspaceDialogActions { flex-direction: column-reverse; }
+  .workspaceDialogActions > :first-child { margin-right: 0; }
+  .workspaceDialogActions button { width: 100%; }
+}
+
+@media (forced-colors: active) {
+  .workspaceTerminalPanel,
+  .workspaceFilesPanel,
+  .workspaceTransfersPanel,
+  .workspaceInlineDialog,
+  .workspaceModeBar,
+  .workspaceFileRow[aria-selected="true"] { forced-color-adjust: auto; border-color: CanvasText; }
+  .workspaceConnectionDot { border: 1px solid CanvasText; box-shadow: none; }
+  .workspaceSplitHandle::after { background: CanvasText; }
+  .workspacePrimaryButton,
+  .workspaceDangerButton { border: 1px solid ButtonText !important; color: ButtonText !important; background: ButtonFace !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspacePage *,
+  .workspacePage *::before,
+  .workspacePage *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

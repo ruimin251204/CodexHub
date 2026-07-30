@@ -51,6 +51,7 @@ import type {
   TaskRun
 } from "../models";
 import type { AppSettings, CloseButtonBehavior, SettingsSaveResult } from "../settings";
+import type { WorkspaceApi } from "../workspace/types";
 import type {
   StorageHealth,
   StorageMigrationPlan,
@@ -68,6 +69,7 @@ export type RemoteCodexProgressHandler = HostOperationProgressHandler;
 export type TaskUpdatedHandler = (event: TaskEvent) => void;
 
 export type CodexHubApi = {
+  workspace: WorkspaceApi;
   getHealth: () => Promise<Health>;
   getAppUpdateStatus: () => Promise<AppUpdateStatus>;
   checkStableUpdate: () => Promise<AppUpdateStatus>;

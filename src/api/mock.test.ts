@@ -1,6 +1,14 @@
 import { expect, test, vi } from "vitest";
 import type { HostOperationProgressEvent, HostResourceProgressEvent } from "../models";
 import { mockApi } from "./mock";
+import { unavailableWorkspaceApi } from "./workspace";
+
+test("Mock Workspace methods and nested events explicitly require desktop", async () => {
+  await expect(unavailableWorkspaceApi.listTerminalSessions())
+    .rejects.toThrow("desktop-backend-required");
+  await expect(unavailableWorkspaceApi.events.onSessionState(() => undefined))
+    .rejects.toThrow("desktop-backend-required");
+});
 
 test("Mock profile apply mirrors each remote reload mode without exposing process command lines", async () => {
   const profile = (await mockApi.listProfiles())[0] ?? await mockApi.createProfile({

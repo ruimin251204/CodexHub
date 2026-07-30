@@ -21,11 +21,18 @@ pub fn run() {
                     .emit("task-updated", event)
                     .map_err(|error| error.to_string())
             });
+            let workspace_event_app = app.handle().clone();
+            let workspace_event_sink = Arc::new(move |event_name, payload| {
+                workspace_event_app
+                    .emit(event_name, payload)
+                    .map_err(|error| error.to_string())
+            });
             app.manage(AppState::new_with_runtime(
                 paths,
                 task_store,
                 task_storage_error,
                 Some(task_event_sink),
+                Some(workspace_event_sink),
             ));
             setup_window_chrome(app.handle())?;
             setup_app_tray(app.handle())?;
@@ -33,6 +40,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             handle_window_close_request(window, event);
+            handle_workspace_native_drop(window, event);
         })
         .invoke_handler(tauri::generate_handler![
             app_health,
@@ -101,10 +109,65 @@ pub fn run() {
             apply_storage_migration,
             preview_storage_restore,
             restore_storage_backup,
-            list_skill_packs
+            list_skill_packs,
+            workspace_open_terminal,
+            workspace_list_terminal_sessions,
+            workspace_attach_terminal,
+            workspace_terminal_write,
+            workspace_terminal_resize,
+            workspace_terminal_ack,
+            workspace_reconnect_terminal,
+            workspace_close_terminal,
+            workspace_open_files,
+            workspace_list_directory,
+            workspace_start_file_search,
+            workspace_cancel_file_search,
+            workspace_preview_file,
+            workspace_create_directory,
+            workspace_validate_terminal_cwd,
+            workspace_close_files,
+            workspace_prepare_file_operation,
+            workspace_confirm_file_operation,
+            workspace_restore_recovery,
+            workspace_prepare_recovery_purge,
+            workspace_purge_recovery,
+            workspace_restore_local_transfer_recovery,
+            workspace_prepare_local_transfer_recovery_purge,
+            workspace_purge_local_transfer_recovery,
+            workspace_enqueue_transfers,
+            workspace_list_transfers,
+            workspace_pause_transfer,
+            workspace_resume_transfer,
+            workspace_cancel_transfer,
+            workspace_retry_transfer,
+            workspace_resolve_transfer_conflict,
+            workspace_select_upload_sources,
+            workspace_select_download_target
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running CodexHub");
+        .build(tauri::generate_context!())
+        .expect("error while building CodexHub")
+        .run({
+            // Window hide/minimize keeps Workspace sessions alive. Only a true
+            // application exit closes PTYs and SFTP subprocesses.
+            let shutdown_once = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            move |app, event| {
+                if matches!(
+                    event,
+                    tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+                ) && !shutdown_once.swap(true, std::sync::atomic::Ordering::AcqRel)
+                {
+                    let state = app.state::<AppState>();
+                    if let Ok(workspace) = state.workspace.as_ref() {
+                        if let Err(error) = tauri::async_runtime::block_on(workspace.shutdown()) {
+                            eprintln!(
+                                "Could not clean up Workspace resources: {}",
+                                redact_error_text(&error.to_string())
+                            );
+                        }
+                    }
+                }
+            }
+        });
 }
 
 fn setup_window_chrome(app: &AppHandle) -> tauri::Result<()> {
@@ -179,6 +242,39 @@ fn handle_window_close_request(window: &Window, event: &WindowEvent) {
             log_best_effort("hide application window", window.hide());
         }
     }
+}
+
+/// Native drops are converted to opaque one-shot grants before the webview is
+/// notified. The raw operating-system paths never become Workspace state.
+fn handle_workspace_native_drop(window: &Window, event: &WindowEvent) {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return;
+    }
+    let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event else {
+        return;
+    };
+    let app = window.app_handle().clone();
+    let services = app.state::<AppState>().services.clone();
+    let paths = paths.clone();
+    tauri::async_runtime::spawn(async move {
+        let Ok(workspace) = services.workspace.as_ref() else {
+            return;
+        };
+        let mut grants = Vec::new();
+        for path in paths {
+            if let Ok(grant) = workspace
+                .transfer_io
+                .local_grants
+                .grant_upload_file(path)
+                .await
+            {
+                grants.push(grant);
+            }
+        }
+        if !grants.is_empty() {
+            let _ = app.emit("workspace-local-drop", grants);
+        }
+    });
 }
 
 pub(crate) fn app_display_name(app: &AppHandle) -> String {

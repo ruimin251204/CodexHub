@@ -2,6 +2,7 @@ mod json_store;
 mod paths;
 mod task_store;
 mod transaction;
+mod workspace_store;
 
 pub(crate) use json_store::{
     apply_migration, ensure_stores_current, list_store_health, load_cache_document, load_document,
@@ -11,3 +12,7 @@ pub(crate) use json_store::{
 pub(crate) use paths::AppPaths;
 pub(crate) use task_store::TaskStore;
 pub(crate) use transaction::{save_related_documents, JsonStoreUpdate, RelatedWriteResult};
+pub(crate) use workspace_store::{
+    WorkspaceSqliteLocalRecoveryPersistence, WorkspaceSqliteRecoveryPersistence,
+    WorkspaceSqliteTransferPersistence,
+};
