@@ -5711,6 +5711,16 @@ td code {
   background: var(--surface-muted);
 }
 
+.workspaceTopActions {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.workspaceTopActions .workspaceModeBar {
+  width: auto;
+  align-self: auto;
+}
+
 .workspaceModeBar button,
 .workspacePaneToolbar button,
 .workspaceTerminalTab > button,

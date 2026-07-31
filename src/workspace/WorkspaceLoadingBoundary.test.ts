@@ -34,6 +34,13 @@ test("Workspace uses the Terminal page title without rendering a duplicate page 
   expect(workspacePageSource).not.toContain("<p>{copy.description}</p>");
 });
 
+test("Workspace mode tabs mount in the global title bar so the main panel keeps the standard top spacing", () => {
+  expect(appSource).toContain('className="topActions workspaceTopActions"');
+  expect(appSource).toContain("modeBarHost={workspaceModeBarHost}");
+  expect(workspacePageSource).toContain('import { createPortal } from "react-dom"');
+  expect(workspacePageSource).toContain("createPortal(modeBar, modeBarHost)");
+});
+
 test("terminal chrome avoids duplicate aliases and keeps Split Files-first", () => {
   expect(terminalPanelSource).toContain("host.name === host.hostAlias ? host.hostAlias");
   expect(terminalPanelSource).toContain("session.title !== session.hostAlias");

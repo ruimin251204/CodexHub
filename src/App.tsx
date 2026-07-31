@@ -2707,6 +2707,7 @@ function WindowsIcon({ id }: { id: PlatformIconId }) {
 function App() {
   const { notify, configure: configureFeedback } = useFeedback();
   const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
+  const [workspaceModeBarHost, setWorkspaceModeBarHost] = useState<HTMLDivElement | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() =>
     apiMode === "mock" ? loadMockSettings() : loadDesktopSettingsCache()
   );
@@ -4461,6 +4462,7 @@ function App() {
               api={api.workspace}
               hosts={hosts.map((host) => ({ id: host.id, name: host.name, hostAlias: host.hostAlias, status: host.status }))}
               locale={locale}
+              modeBarHost={workspaceModeBarHost}
               platform={runtimePlatform}
               terminalPreferences={workspaceTerminalPreferences(settings)}
               onError={(error) => setErrorNotice(formatError(error), taskIdForError(error))}
@@ -4667,7 +4669,11 @@ function App() {
             <div>
               <TitleWithIcon icon={activeSection} level={1}>{selectedCopy.title}</TitleWithIcon>
             </div>
-            {pageActions.length > 0 ? <CommandBarActions ariaLabel={selectedCopy.title} className="topActions" actions={pageActions} /> : null}
+            {activeSection === "terminal" ? (
+              <div className="topActions workspaceTopActions" ref={setWorkspaceModeBarHost} />
+            ) : pageActions.length > 0 ? (
+              <CommandBarActions ariaLabel={selectedCopy.title} className="topActions" actions={pageActions} />
+            ) : null}
           </header>
         ) : null}
 

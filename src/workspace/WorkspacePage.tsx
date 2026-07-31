@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { workspaceCopy } from "./copy";
 import { useWorkspaceController } from "./controller";
 import { FilesPanel, WORKSPACE_FILES_LOCATION_EVENT } from "./FilesPanel";
@@ -43,6 +44,7 @@ export function WorkspacePage({
   hosts,
   initialHostAlias = "",
   locale,
+  modeBarHost,
   onError,
   onTerminalRendererError,
   onModeChange,
@@ -56,6 +58,7 @@ export function WorkspacePage({
   hosts: WorkspaceHost[];
   initialHostAlias?: string;
   locale: WorkspaceLocale;
+  modeBarHost?: HTMLElement | null;
   onError: (error: unknown) => void;
   onTerminalRendererError: (failure: TerminalRendererFailure) => void;
   onModeChange?: (mode: WorkspaceMode) => void;
@@ -284,35 +287,40 @@ export function WorkspacePage({
     />
   );
 
+  const modeBar = (
+    <div
+      className="workspaceModeBar"
+      role="tablist"
+      aria-label={copy.title}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") { event.preventDefault(); selectRelativeMode(-1); }
+        if (event.key === "ArrowRight") { event.preventDefault(); selectRelativeMode(1); }
+        if (event.key === "Home") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[0]); }
+        if (event.key === "End") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[WORKSPACE_MODES.length - 1]); }
+      }}
+    >
+      {WORKSPACE_MODES.map((entry) => (
+        <button
+          aria-controls="workspace-mode-content"
+          aria-selected={mode === entry}
+          key={entry}
+          ref={(node) => {
+            if (node) modeTabRefs.current.set(entry, node);
+            else modeTabRefs.current.delete(entry);
+          }}
+          role="tab"
+          tabIndex={mode === entry ? 0 : -1}
+          type="button"
+          onClick={() => chooseMode(entry)}
+        >{copy.modes[entry]}</button>
+      ))}
+    </div>
+  );
+
   return (
     <section className={`workspacePage${className ? ` ${className}` : ""}`} aria-label={copy.title}>
-      <div
-        className="workspaceModeBar"
-        role="tablist"
-        aria-label={copy.title}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft") { event.preventDefault(); selectRelativeMode(-1); }
-          if (event.key === "ArrowRight") { event.preventDefault(); selectRelativeMode(1); }
-          if (event.key === "Home") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[0]); }
-          if (event.key === "End") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[WORKSPACE_MODES.length - 1]); }
-        }}
-      >
-        {WORKSPACE_MODES.map((entry) => (
-          <button
-            aria-controls="workspace-mode-content"
-            aria-selected={mode === entry}
-            key={entry}
-            ref={(node) => {
-              if (node) modeTabRefs.current.set(entry, node);
-              else modeTabRefs.current.delete(entry);
-            }}
-            role="tab"
-            tabIndex={mode === entry ? 0 : -1}
-            type="button"
-            onClick={() => chooseMode(entry)}
-          >{copy.modes[entry]}</button>
-        ))}
-      </div>
+      {/* App supplies the title-bar host; isolated previews retain the inline fallback. */}
+      {modeBarHost === undefined ? modeBar : modeBarHost ? createPortal(modeBar, modeBarHost) : null}
 
       <div
         ref={splitRef}
