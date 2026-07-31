@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { workspaceCopy } from "./copy";
 import { FilesPanel, formatModifiedAt } from "./FilesPanel";
+import { workspaceHostLabel } from "./hostLabel";
 import type {
   RemoteFileEntry,
   WorkspaceApi,
@@ -43,6 +44,13 @@ const directory: RemoteFileEntry = {
   writable: true
 };
 
+const hiddenDirectory: RemoteFileEntry = {
+  ...directory,
+  entryRef: "entry-hidden",
+  canonicalPath: "/home/demo/.config",
+  name: ".config"
+};
+
 function page(path: string, entries: RemoteFileEntry[]): WorkspaceDirectoryPage {
   return {
     fileSessionId: session.fileSessionId,
@@ -55,11 +63,11 @@ function page(path: string, entries: RemoteFileEntry[]): WorkspaceDirectoryPage 
   };
 }
 
-function renderPanel() {
+function renderPanel(entries: RemoteFileEntry[] = [directory]) {
   const listDirectory = vi.fn(async ({ path }: { path: string | null }) =>
     path === directory.canonicalPath
       ? page(directory.canonicalPath, [])
-      : page(session.homePath, [directory]));
+      : page(session.homePath, entries));
   const stop = () => undefined;
   const api = {
     openFiles: vi.fn().mockResolvedValue(session),
@@ -125,6 +133,40 @@ test("invalid remote timestamps never render Invalid Date", () => {
   expect(formatModifiedAt("not-a-date")).toBe("—");
   expect(formatModifiedAt("2024-07-03T09:46:40Z")).not.toBe("—");
   expect(formatModifiedAt("2024-07-03T09:46:40Z")).not.toContain("Invalid");
+});
+
+test("matching host names and aliases render only once", () => {
+  expect(workspaceHostLabel({ ...host, name: "demo" })).toBe("demo");
+  expect(workspaceHostLabel(host)).toBe("Demo host · demo");
+});
+
+test("the local Files landing does not open an SSH file session", async () => {
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn(),
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn(), { selectedHostAlias: "" }));
+
+  expect(await screen.findByText(workspaceCopy.en.localFiles, { selector: "strong" })).toBeInTheDocument();
+  expect(api.openFiles).not.toHaveBeenCalled();
+});
+
+test("dot-prefixed paths are hidden by default and can be revealed", async () => {
+  renderPanel([directory, hiddenDirectory]);
+
+  expect(await screen.findByRole("row", { name: /projects/i })).toBeInTheDocument();
+  expect(screen.queryByRole("row", { name: /.config/i })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.showHidden }));
+  expect(await screen.findByRole("row", { name: /.config/i })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.hideHidden }));
+  expect(screen.queryByRole("row", { name: /.config/i })).not.toBeInTheDocument();
 });
 
 test.each(["double-click", "enter"])("%s opens a directory by canonical POSIX path", async (action) => {

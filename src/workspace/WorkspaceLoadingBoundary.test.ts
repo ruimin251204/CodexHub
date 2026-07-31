@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import appSource from "../App.tsx?raw";
+import filesPanelSource from "./FilesPanel.tsx?raw";
 import terminalPanelSource from "./TerminalPanel.tsx?raw";
 import workspacePageSource from "./WorkspacePage.tsx?raw";
 
@@ -42,7 +43,7 @@ test("Workspace mode tabs mount in the global title bar so the main panel keeps 
 });
 
 test("terminal chrome avoids duplicate aliases and keeps Split Files-first", () => {
-  expect(terminalPanelSource).toContain("host.name === host.hostAlias ? host.hostAlias");
+  expect(terminalPanelSource).toContain("workspaceHostLabel(host)");
   expect(terminalPanelSource).toContain("session.title !== session.hostAlias");
   expect(terminalPanelSource).not.toContain("workspaceTerminalStatus");
   expect(terminalPanelSource).not.toContain('>UTF-8<');
@@ -53,4 +54,20 @@ test("terminal chrome avoids duplicate aliases and keeps Split Files-first", () 
   expect(workspacePageSource.indexOf('className="workspaceModeFiles"')).toBeLessThan(
     workspacePageSource.indexOf('className="workspaceModeTerminal"')
   );
+});
+
+test("Files starts locally, shares host labels, and keeps Split linked without leaving it", () => {
+  expect(workspacePageSource).not.toContain("setSelectedHostAlias(hosts[0].hostAlias)");
+  expect(workspacePageSource).toContain('const keepSplit = mode === "split"');
+  expect(workspacePageSource).toContain('chooseMode(keepSplit ? "split" : "terminal")');
+  expect(workspacePageSource).toContain('if (mode !== "split" || !activeTerminal) return;');
+  expect(filesPanelSource).toContain("workspaceHostLabel(host)");
+  expect(terminalPanelSource).toContain("workspaceHostLabel(host)");
+});
+
+test("Files toolbar places search with the host and wraps secondary actions below narrow paths", () => {
+  expect(filesPanelSource.indexOf('className="workspaceSearchForm"')).toBeLessThan(
+    filesPanelSource.indexOf('className="workspacePaneToolbar workspaceFilesNavigation"')
+  );
+  expect(filesPanelSource).toContain('className="workspaceFilesSecondaryActions"');
 });

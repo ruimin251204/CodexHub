@@ -84,11 +84,6 @@ export function WorkspacePage({
   const cwd = activeTerminal ? controller.state.cwdBySession[activeTerminal.sessionId] ?? null : null;
 
   useEffect(() => {
-    if (selectedHostAlias || hosts.length === 0) return;
-    setSelectedHostAlias(hosts[0].hostAlias);
-  }, [hosts, selectedHostAlias]);
-
-  useEffect(() => {
     if (activeSessionId && sessions.some((session) => session.sessionId === activeSessionId)) return;
     setActiveSessionId(sessions[sessions.length - 1]?.sessionId ?? null);
   }, [activeSessionId, sessions]);
@@ -115,12 +110,16 @@ export function WorkspacePage({
     initialDirectory?: { fileSessionId: string; path: string }
   ) => {
     if (!hostAlias) return;
+    const keepSplit = mode === "split";
     try {
       const existing = sessions.find((session) => session.hostAlias === hostAlias && session.state !== "closing");
       if (!initialDirectory && existing) {
         setActiveSessionId(existing.sessionId);
-        setSelectedHostAlias(hostAlias);
-        chooseMode("terminal");
+        if (keepSplit) {
+          setSelectedHostAlias(hostAlias);
+          setFollowCwd(true);
+        }
+        chooseMode(keepSplit ? "split" : "terminal");
         return;
       }
       const session = await api.openTerminal({
@@ -131,12 +130,19 @@ export function WorkspacePage({
       });
       controller.upsertSession(session);
       setActiveSessionId(session.sessionId);
-      setSelectedHostAlias(hostAlias);
-      chooseMode("terminal");
+      if (keepSplit || initialDirectory) setSelectedHostAlias(hostAlias);
+      if (keepSplit) setFollowCwd(true);
+      chooseMode(keepSplit ? "split" : "terminal");
     } catch (error) {
       onError(error);
     }
   };
+
+  useEffect(() => {
+    if (mode !== "split" || !activeTerminal) return;
+    setSelectedHostAlias(activeTerminal.hostAlias);
+    setFollowCwd(true);
+  }, [activeTerminal?.hostAlias, activeTerminal?.sessionId, mode]);
 
   const reconnect = async (session: WorkspaceTerminalSession) => {
     try {

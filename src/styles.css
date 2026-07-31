@@ -5714,6 +5714,7 @@ td code {
 .workspaceTopActions {
   min-width: 0;
   justify-content: flex-end;
+  transform: translateY(20px);
 }
 
 .workspaceTopActions .workspaceModeBar {
@@ -6059,21 +6060,55 @@ td code {
 .workspaceStatusChip[data-state="finalizing"],
 .workspaceStatusChip[data-state="waiting-conflict"] { border-color: color-mix(in srgb, var(--yellow) 45%, var(--border)); color: var(--yellow); }
 
-.workspaceFilesPanel { position: relative; }
+.workspaceFilesPanel {
+  position: relative;
+  container: workspace-files / inline-size;
+}
 .workspaceFilesHostToolbar,
-.workspaceFilesNavigation,
-.workspaceFilesActions { flex-wrap: wrap; }
-.workspaceFilesActions { gap: 7px; }
-.workspaceFilesActions > button { margin-left: auto; }
+.workspaceFilesNavigation { flex-wrap: wrap; }
+
+.workspaceFilesHostToolbar { flex-wrap: nowrap; }
+
+.workspaceFilesHostToolbar > label { flex: 0 1 240px; }
+
+.workspaceFilesHostToolbar .workspaceSearchForm {
+  flex: 1 1 220px;
+  max-width: 360px;
+  min-width: 130px;
+  margin-left: auto;
+}
 
 .workspaceButtonGroup { display: inline-flex; gap: 3px; }
 .workspaceButtonGroup button { min-width: 30px; padding-inline: 7px; }
-.workspaceLocationForm { flex: 1 1 280px; min-width: 160px; }
+.workspaceLocationForm { flex: 1 1 190px; min-width: 140px; }
 .workspaceLocationForm input { width: 100%; }
 .workspaceSearchForm { display: flex; flex: 1 1 210px; align-items: center; gap: 4px; min-width: 180px; }
 .workspaceSearchForm input { width: 100%; }
 .workspaceCompactSelect select { max-width: 130px; }
+.workspaceFilesSecondaryActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
 .workspaceToggleButton[aria-pressed="true"] { border-color: color-mix(in srgb, var(--blue) 60%, var(--border)); color: var(--blue); background: color-mix(in srgb, var(--blue) 9%, var(--surface-solid)); }
+
+@container workspace-files (max-width: 900px) {
+  .workspaceFilesSecondaryActions { gap: 3px; }
+  .workspaceFilesSecondaryActions .workspaceActionLabel { display: none; }
+  .workspaceFilesSecondaryActions button { min-width: 28px; padding-inline: 4px; }
+  .workspaceFilesSecondaryActions select { max-width: 70px; }
+}
+
+@container workspace-files (max-width: 640px) {
+  .workspaceFilesSecondaryActions {
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+}
 
 .workspaceInfoBar,
 .workspaceSearchSummary {
@@ -6313,9 +6348,10 @@ td code {
 
 @media (max-width: 620px) {
   .workspacePaneToolbar { align-items: stretch; }
+  .workspaceTopActions { transform: none; }
+  .workspaceFilesHostToolbar .workspaceSearchForm { flex-basis: 130px; }
   .workspaceTerminalTabs { padding-inline: 4px; }
   .workspaceTerminalTab > button:first-child { min-width: 112px; max-width: 175px; }
-  .workspaceFilesActions > button { margin-left: 0; }
   .workspaceLocationForm,
   .workspaceSearchForm { flex-basis: 100%; }
   .workspaceInlineDialogBackdrop { padding: 12px; }

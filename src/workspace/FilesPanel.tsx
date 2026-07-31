@@ -15,6 +15,7 @@ import type {
   WorkspaceTerminalCwdEvent,
   WorkspaceTerminalSession
 } from "./types";
+import { workspaceHostLabel } from "./hostLabel";
 
 export const WORKSPACE_FILES_LOCATION_EVENT = "codexhub:workspace-files-location";
 
@@ -133,6 +134,7 @@ export function FilesPanel({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAscending, setSortAscending] = useState(true);
   const [query, setQuery] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
   const [searchId, setSearchId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<RemoteFileEntry[] | null>(null);
   const [searchScanned, setSearchScanned] = useState(0);
@@ -419,10 +421,18 @@ export function FilesPanel({
 
   const entries = useMemo(() => {
     const source = searchResults ?? page?.entries ?? [];
+    const root = page?.canonicalPath ?? "/";
+    const visible = showHidden ? source : source.filter((entry) => {
+      const prefix = root === "/" ? "/" : `${root.replace(/\/+$/, "")}/`;
+      const relativePath = entry.canonicalPath.startsWith(prefix)
+        ? entry.canonicalPath.slice(prefix.length)
+        : entry.name;
+      return !relativePath.split("/").some((segment) => segment.startsWith(".") && segment.length > 1);
+    });
     return searchResults === null && query
-      ? source.filter((entry) => entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-      : source;
-  }, [page?.entries, query, searchResults]);
+      ? visible.filter((entry) => entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+      : visible;
+  }, [page?.canonicalPath, page?.entries, query, searchResults, showHidden]);
 
   const selectedEntries = entries.filter((entry) => selectedRefs.has(entry.entryRef));
 
@@ -656,19 +666,18 @@ export function FilesPanel({
         <label>
           <span>{copy.host}</span>
           <select value={selectedHostAlias} onChange={(event) => onHostSelected(event.target.value)}>
-            <option value="">{copy.selectHost}</option>
-            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{host.name} · {host.hostAlias}</option>)}
+            <option value="">{copy.localFiles}</option>
+            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{workspaceHostLabel(host)}</option>)}
           </select>
         </label>
-        <button
-          aria-pressed={followCwd}
-          className="workspaceToggleButton"
-          disabled={!canLocate}
-          title={!canLocate ? copy.cwdUnavailable : copy.followCwd}
-          type="button"
-          onClick={() => { if (followCwd) onFollowCwdChange(false); else void locateTerminal(); }}
-        >◎ {copy.followCwd}</button>
-        <button disabled={!canLocate} title={!canLocate ? copy.cwdUnavailable : copy.locateTerminal} type="button" onClick={() => void locateTerminal()}>⌾</button>
+        <form className="workspaceSearchForm" onSubmit={(event) => { event.preventDefault(); void startSearch(); }}>
+          <label className="workspaceVisuallyHidden" htmlFor="workspace-file-search">{copy.searchFiles}</label>
+          <input id="workspace-file-search" placeholder={copy.searchFiles} title={copy.recursiveSearch} value={query} onChange={(event) => {
+            setQuery(event.target.value);
+            if (!event.target.value) setSearchResults(null);
+          }} />
+          <button type="submit" disabled={!query.trim()}>{searchId ? copy.stopSearch : "⌕"}</button>
+        </form>
       </div>
 
       <div className="workspacePaneToolbar workspaceFilesNavigation">
@@ -702,30 +711,39 @@ export function FilesPanel({
           <label className="workspaceVisuallyHidden" htmlFor="workspace-files-location">{copy.location}</label>
           <input ref={locationRef} id="workspace-files-location" value={pathInput} onChange={(event) => setPathInput(event.target.value)} />
         </form>
-      </div>
-
-      <div className="workspacePaneToolbar workspaceFilesActions">
-        <form className="workspaceSearchForm" onSubmit={(event) => { event.preventDefault(); void startSearch(); }}>
-          <label className="workspaceVisuallyHidden" htmlFor="workspace-file-search">{copy.searchFiles}</label>
-          <input id="workspace-file-search" placeholder={copy.searchFiles} title={copy.recursiveSearch} value={query} onChange={(event) => {
-            setQuery(event.target.value);
-            if (!event.target.value) setSearchResults(null);
-          }} />
-          <button type="submit" disabled={!query.trim()}>{searchId ? copy.stopSearch : "⌕"}</button>
-        </form>
-        <label className="workspaceCompactSelect">
-          <span className="workspaceVisuallyHidden">{copy.sortBy}</span>
-          <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
-            <option value="name">{copy.sortName}</option>
-            <option value="type">{copy.sortType}</option>
-            <option value="size">{copy.sortSize}</option>
-            <option value="modified">{copy.sortModified}</option>
-          </select>
-        </label>
-        <button aria-label={sortAscending ? copy.ascending : copy.descending} title={sortAscending ? copy.ascending : copy.descending} type="button" onClick={() => setSortAscending((value) => !value)}>{sortAscending ? "↑" : "↓"}</button>
-        <button disabled={!fileSession} type="button" onClick={() => void upload()}>⇧ {copy.upload}</button>
-        <button disabled={selectedEntries.length === 0} type="button" onClick={() => void download()}>⇩ {copy.download}</button>
-        <button disabled={!fileSession || !page} type="button" onClick={() => askOperation("create-directory", null, page?.canonicalPath ?? null)}>＋ {copy.newFolder}</button>
+        <div className="workspaceFilesSecondaryActions">
+          <button
+            aria-label={copy.followCwd}
+            aria-pressed={followCwd}
+            className="workspaceToggleButton"
+            disabled={!canLocate}
+            title={!canLocate ? copy.cwdUnavailable : copy.followCwd}
+            type="button"
+            onClick={() => { if (followCwd) onFollowCwdChange(false); else void locateTerminal(); }}
+          >◎ <span className="workspaceActionLabel">{copy.followCwd}</span></button>
+          <button aria-label={copy.locateTerminal} disabled={!canLocate} title={!canLocate ? copy.cwdUnavailable : copy.locateTerminal} type="button" onClick={() => void locateTerminal()}>⌾</button>
+          <button
+            aria-label={showHidden ? copy.hideHidden : copy.showHidden}
+            aria-pressed={showHidden}
+            className="workspaceToggleButton"
+            title={showHidden ? copy.hideHidden : copy.showHidden}
+            type="button"
+            onClick={() => setShowHidden((value) => !value)}
+          >.* <span className="workspaceActionLabel">{showHidden ? copy.hideHidden : copy.showHidden}</span></button>
+          <label className="workspaceCompactSelect">
+            <span className="workspaceVisuallyHidden">{copy.sortBy}</span>
+            <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+              <option value="name">{copy.sortName}</option>
+              <option value="type">{copy.sortType}</option>
+              <option value="size">{copy.sortSize}</option>
+              <option value="modified">{copy.sortModified}</option>
+            </select>
+          </label>
+          <button aria-label={sortAscending ? copy.ascending : copy.descending} title={sortAscending ? copy.ascending : copy.descending} type="button" onClick={() => setSortAscending((value) => !value)}>{sortAscending ? "↑" : "↓"}</button>
+          <button aria-label={copy.upload} disabled={!fileSession} type="button" onClick={() => void upload()}>⇧ <span className="workspaceActionLabel">{copy.upload}</span></button>
+          <button aria-label={copy.download} disabled={selectedEntries.length === 0} type="button" onClick={() => void download()}>⇩ <span className="workspaceActionLabel">{copy.download}</span></button>
+          <button aria-label={copy.newFolder} disabled={!fileSession || !page} type="button" onClick={() => askOperation("create-directory", null, page?.canonicalPath ?? null)}>＋ <span className="workspaceActionLabel">{copy.newFolder}</span></button>
+        </div>
       </div>
 
       {!followCwd && activeTerminal?.hostAlias === selectedHostAlias ? <div className="workspaceInfoBar">{copy.followCwdPaused}</div> : null}
@@ -811,7 +829,12 @@ export function FilesPanel({
             ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.emptyDirectory}</div>
             : null}
           {!loading && !filesError && page === null && !selectedHostAlias
-            ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.noHosts}</div>
+            ? (
+              <div className="workspaceEmptyState workspaceFileEmpty">
+                <strong>{copy.localFiles}</strong>
+                <p>{hosts.length === 0 ? copy.noHosts : copy.localFilesHint}</p>
+              </div>
+            )
             : null}
           {loading ? <div className="workspacePaneState">{copy.loading}</div> : null}
         </div>

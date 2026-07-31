@@ -7,6 +7,7 @@ import type {
   WorkspaceTerminalPreferences,
   WorkspaceTerminalSession
 } from "./types";
+import { workspaceHostLabel } from "./hostLabel";
 import { WORKSPACE_TERMINAL_SEARCH_EVENT, XtermTerminal } from "./XtermTerminal";
 import type { TerminalRendererFailure } from "./XtermTerminal";
 
@@ -27,10 +28,6 @@ function cycleSession(sessions: WorkspaceTerminalSession[], activeSessionId: str
   if (sessions.length === 0) return null;
   const currentIndex = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
   return sessions[(currentIndex + delta + sessions.length) % sessions.length].sessionId;
-}
-
-function hostOptionLabel(host: WorkspaceHost) {
-  return host.name === host.hostAlias ? host.hostAlias : `${host.name} · ${host.hostAlias}`;
 }
 
 export function TerminalPanel({
@@ -85,7 +82,7 @@ export function TerminalPanel({
             if (event.target.value) onHostSelected(event.target.value);
           }}>
             <option value="">{copy.selectHost}</option>
-            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{hostOptionLabel(host)}</option>)}
+            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{workspaceHostLabel(host)}</option>)}
           </select>
         </label>
         <button type="button" disabled={hosts.length === 0} onClick={() => {
