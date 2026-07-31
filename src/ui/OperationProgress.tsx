@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { HostOperationKind, TaskLog, TaskLogLevel, TaskRun, TaskStep, TaskStepStatus } from "../models";
 import { ModalFrame } from "./ModalFrame";
+import { usePersonalInfoMasking } from "./PersonalInfoMasking";
 
 export type OperationOverallStatus = "running" | "success" | "failed" | "partial";
 
@@ -152,6 +153,7 @@ export function OperationStepCard({
   presentation: OperationStepPresentation;
   step: TaskStep;
 }) {
+  const { maskText } = usePersonalInfoMasking();
   const [expanded, setExpanded] = useState(false);
   const contentId = `operation-step-${safeDomId(step.taskRunId)}-${safeDomId(step.stepId)}`;
 
@@ -161,14 +163,14 @@ export function OperationStepCard({
       <button
         aria-controls={contentId}
         aria-expanded={expanded}
-        aria-label={`${presentation.title}. ${presentation.summary}. ${copy.status[step.status]}`}
+        aria-label={`${maskText(presentation.title)}. ${maskText(presentation.summary)}. ${copy.status[step.status]}`}
         className="operationStepSummary"
         type="button"
         onClick={() => setExpanded((current) => !current)}
       >
         <span className="operationStepText">
-          <strong>{presentation.title}</strong>
-          <small>{presentation.summary}</small>
+          <strong>{maskText(presentation.title)}</strong>
+          <small>{maskText(presentation.summary)}</small>
         </span>
         <span className="operationStepState">{copy.status[step.status]}</span>
         <OperationStatusIcon status={step.status} />
@@ -182,12 +184,12 @@ export function OperationStepCard({
                 <details className="taskLogFlowRow operationStepLogEntry" data-level={log.level} key={log.id}>
                   <summary className="codexOperationLogRow" data-level={log.level}>
                     <strong>{copy.logLevel[log.level]}</strong>
-                    <span>{log.message}</span>
+                    <span>{maskText(log.message)}</span>
                   </summary>
                   <div className="taskLogFlowDetails">
                     <span className="operationStepDetailsTitle">{copy.details}</span>
                     <div className="taskLogMetaGrid">
-                      <OperationDetail label={copy.command} value={log.command ?? "-"} code />
+                      <OperationDetail label={copy.command} value={maskText(log.command ?? "-")} code />
                       <OperationDetail label={copy.exitCode} value={log.exitCode ?? "-"} code />
                       <OperationDetail label={copy.duration} value={typeof log.durationMs === "number" ? `${log.durationMs} ms` : "-"} code />
                       <OperationDetail
@@ -197,8 +199,8 @@ export function OperationStepCard({
                       />
                     </div>
                     <div className="taskLogStreamGrid">
-                      <OperationDetail label={copy.stdout} value={log.stdout || copy.noOutput} pre />
-                      <OperationDetail label={copy.stderr} value={log.stderr || copy.noOutput} pre />
+                      <OperationDetail label={copy.stdout} value={maskText(log.stdout || copy.noOutput)} pre />
+                      <OperationDetail label={copy.stderr} value={maskText(log.stderr || copy.noOutput)} pre />
                     </div>
                   </div>
                 </details>
@@ -220,6 +222,7 @@ export function OperationProgressPanel({
   hosts: OperationProgressHost[];
   resolveStep: (step: TaskStep) => OperationStepPresentation;
 }) {
+  const { maskText } = usePersonalInfoMasking();
   const [selectedHostAlias, setSelectedHostAlias] = useState(() => hosts[0]?.hostAlias ?? "");
   const hostTabRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -253,7 +256,7 @@ export function OperationProgressPanel({
             return (
               <button
                 aria-controls={selected ? `operation-host-panel-${safeDomId(host.hostAlias)}` : undefined}
-                aria-label={`${host.hostName}. ${operationHostStatusLabel(copy, host.status)}. ${complete}/${host.steps.length}`}
+                aria-label={`${maskText(host.hostName)}. ${operationHostStatusLabel(copy, host.status)}. ${complete}/${host.steps.length}`}
                 aria-selected={selected}
                 className="operationHostTab"
                 data-status={host.status}
@@ -270,7 +273,7 @@ export function OperationProgressPanel({
                 onKeyDown={(event) => selectHostFromKeyboard(event, index)}
               >
                 <HostStatusDot status={host.status} />
-                <span>{host.hostName}</span>
+                <span>{maskText(host.hostName)}</span>
                 <small>{complete}/{host.steps.length}</small>
               </button>
             );
@@ -285,8 +288,8 @@ export function OperationProgressPanel({
       >
         {hosts.length > 1 ? (
           <div className="operationSelectedHostHeader">
-            <strong>{selectedHost.hostName}</strong>
-            <span>{selectedHost.message}</span>
+            <strong>{maskText(selectedHost.hostName)}</strong>
+            <span>{maskText(selectedHost.message ?? "")}</span>
           </div>
         ) : null}
         <div className="operationStepList">
@@ -328,6 +331,7 @@ export function OperationProgressModal({
   resolveStep: (step: TaskStep) => OperationStepPresentation;
   title: string;
 }) {
+  const { maskText } = usePersonalInfoMasking();
   const titleId = "operation-progress-modal-title";
   return (
     <div className="modalBackdrop" role="presentation">
@@ -346,7 +350,7 @@ export function OperationProgressModal({
             <button className="modalCloseButton" type="button" aria-label={copy.close} onClick={onClose}>×</button>
           </div>
         </header>
-        <p aria-live="polite" className="operationProgressMessage">{message}</p>
+        <p aria-live="polite" className="operationProgressMessage">{maskText(message)}</p>
         <OperationProgressPanel copy={copy} hosts={hosts} resolveStep={resolveStep} />
         <div className="modalActions codexOperationActions">
           {onViewTasks ? <button className="secondaryButton" type="button" onClick={onViewTasks}>{copy.viewTasks}</button> : null}

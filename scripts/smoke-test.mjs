@@ -120,7 +120,7 @@ for (const file of requiredFiles) {
 }
 
 const packageJson = JSON.parse(read("package.json"));
-if (packageJson.version !== "0.4.9") fail("package version should be 0.4.9");
+if (packageJson.version !== "0.4.10") fail("package version should be 0.4.10");
 for (const script of ["tauri", "dev", "dev:web", "dev:mock", "build", "build:tauri", "build:tauri:dev", "build:linux:release", "build:linux:updater", "build:macos:release", "build:macos:updater", "build:installer:nsis", "build:installer:nsis:updater", "build:installer:nsis:dev", "build:installer:msi", "build:installer:msi:dev", "release:portable", "release:portable:dev", "release:updater-feed", "release:linux-updater-feed", "release:macos-updater-feed", "validate:release", "validate:release:dev", "audit:public", "smoke", "smoke:mock", "test"]) {
   if (!packageJson.scripts?.[script]) fail(`missing package script ${script}`);
 }
@@ -151,11 +151,11 @@ const devTauriConfig = JSON.parse(read("src-tauri/tauri.dev.conf.json"));
 const updaterTauriConfig = JSON.parse(read("src-tauri/tauri.updater.conf.json"));
 if (tauriConfig.productName !== "CodexHub") fail("stable productName should be CodexHub");
 if (tauriConfig.identifier !== "app.codexhub.desktop") fail("stable identifier should be app.codexhub.desktop");
-if (tauriConfig.version !== "0.4.9") fail("stable Tauri version should be 0.4.9");
+if (tauriConfig.version !== "0.4.10") fail("stable Tauri version should be 0.4.10");
 if (tauriConfig.app?.windows?.[0]?.title !== "CodexHub") fail("stable window title should be CodexHub");
 if (devTauriConfig.productName !== "CodexHub Dev") fail("dev productName should be CodexHub Dev");
 if (devTauriConfig.identifier !== "dev.codexhub.desktop") fail("dev identifier should be dev.codexhub.desktop");
-if (devTauriConfig.version !== "0.4.9") fail("dev Tauri version should be 0.4.9");
+if (devTauriConfig.version !== "0.4.10") fail("dev Tauri version should be 0.4.10");
 if (devTauriConfig.app?.windows?.[0]?.title !== "CodexHub Dev") fail("dev window title should be CodexHub Dev");
 if (tauriConfig.identifier === devTauriConfig.identifier) fail("stable and dev identifiers must differ for app data isolation");
 if (tauriConfig.identifier?.endsWith(".app")) fail("Tauri identifier should not end with .app");
@@ -263,9 +263,9 @@ const requiredText = [
   [readme, "CodexHub is a desktop control console"],
   [zhReadme, "通用桌面控制台，支持 Windows、macOS 和 Linux"],
   [readme, "latest stable build"],
-  [readme, "CodexHub_0.4.9_aarch64.dmg"],
-  [readme, "CodexHub_0.4.9_amd64.deb"],
-  [readme, "CodexHub_0.4.9_arm64.deb"],
+  [readme, "CodexHub_0.4.10_aarch64.dmg"],
+  [readme, "CodexHub_0.4.10_amd64.deb"],
+  [readme, "CodexHub_0.4.10_arm64.deb"],
   [readme, "update checks fail"],
   [zhReadme, "检查更新失败"],
   [readme, "Settings > Codex > Connections"],
@@ -1292,7 +1292,7 @@ for (const token of [
 ]) {
   if (!app.includes(token)) fail(`missing close-button UI token: ${token}`);
 }
-for (const token of ["appUpdateStatus", "appUpdateFailureTask", "appUpdateChecking", "appUpdateInstalling", "copy.settings.appUpdates", "copy.settings.dailyUpdateCheck", "copy.settings.softwareName", "copy.settings.installedAt", "copy.settings.updatedAt", "copy.settings.checkStableUpdate", "copy.settings.installStableUpdate", "copy.settings.checkFailed", "copy.settings.updateCheckFailureHint", "copy.settings.pendingConfiguration", 'className="sshHostsTable versionInfoTable"', "appUpdateStatus.softwareName", "appUpdateStatus.installedAt ?? copy.settings.unknown", "appVersionTone(appUpdateStatus.currentVersion, appUpdateStatus.latestVersion)", "appUpdateLatestVersionLabel(appUpdateStatus, copy)", "appLatestVersionTone(appUpdateStatus)", "title={appUpdateStatus.message}", "appUpdateStatus.checkedAt ?? copy.settings.notChecked", "latestAppUpdateTask", "latestAppInstallTask", "footer={("]) {
+for (const token of ["appUpdateStatus", "appUpdateFailureTask", "appUpdateChecking", "appUpdateInstalling", "copy.settings.appUpdates", "copy.settings.dailyUpdateCheck", "copy.settings.softwareName", "copy.settings.installedAt", "copy.settings.updatedAt", "copy.settings.checkStableUpdate", "copy.settings.installStableUpdate", "copy.settings.checkFailed", "copy.settings.updateCheckFailureHint", "copy.settings.pendingConfiguration", 'className="sshHostsTable versionInfoTable"', "appUpdateStatus.softwareName", "appUpdateStatus.installedAt ?? copy.settings.unknown", "appVersionTone(appUpdateStatus.currentVersion, appUpdateStatus.latestVersion)", "appUpdateLatestVersionLabel(appUpdateStatus, copy)", "appLatestVersionTone(appUpdateStatus)", "title={personalInfo.maskText(appUpdateStatus.message)}", "appUpdateStatus.checkedAt ?? copy.settings.notChecked", "latestAppUpdateTask", "latestAppInstallTask", "footer={("]) {
   if (!app.includes(token)) fail(`missing stable updater Settings UI token: ${token}`);
 }
 for (const token of ["NetworkProxyManualModal", "networkProxyManualOpen", "handleNetworkProxyChoice", "copy.settings.networkProxy", "copy.settings.networkProxyOptions", "copy.settings.networkProxyManualTitle", "copy.settings.networkProxyPort", "copy.settings.networkProxySave", "onNetworkProxyModeChange", "onNetworkProxyManualRequest", "networkProxyControl"]) {
@@ -1540,8 +1540,8 @@ for (const token of [
 ]) {
   if (!operationProgressSource.includes(token)) fail(`missing shared operation progress behavior: ${token}`);
 }
-if (!/\{expanded \? \([\s\S]*?<details className="taskLogFlowRow operationStepLogEntry"[\s\S]*?<summary className="codexOperationLogRow"[\s\S]*?\{log\.message\}[\s\S]*?<div className="taskLogFlowDetails">/u.test(operationProgressSource)) {
-  fail("operation step cards must reveal concise log rows before each row reveals full command/output details");
+if (!/\{expanded \? \([\s\S]*?<details className="taskLogFlowRow operationStepLogEntry"[\s\S]*?<summary className="codexOperationLogRow"[\s\S]*?\{maskText\(log\.message\)\}[\s\S]*?<div className="taskLogFlowDetails">/u.test(operationProgressSource)) {
+  fail("operation step cards must reveal masked concise log rows before each row reveals full command/output details");
 }
 if (operationProgressSource.includes("operationStepChevron")) {
   fail("operation step cards must not render the removed right-side chevron");
@@ -2147,7 +2147,7 @@ const settings = read("src/settings.ts");
 for (const fontPreset of ["English", "简体中文", "zh-cn"]) {
   if (!settings.includes(fontPreset)) fail(`missing font preset: ${fontPreset}`);
 }
-for (const token of ["setupGuideDismissed", "setupGuideDismissed: false", "platformAppearance", "platformAppearance: \"auto\"", "networkProxyMode", "networkProxyMode: \"auto\"", "networkProxyUrl", "sidebarCompletionIndicators", "sidebarCompletionIndicators: true", "candidate.sidebarCompletionIndicators !== false", "hostOperationLogPopups", "hostOperationLogPopups: true", "candidate.hostOperationLogPopups !== false", "resolvePlatformAppearance", "applyPlatformAppearance"]) {
+for (const token of ["setupGuideDismissed", "setupGuideDismissed: false", "platformAppearance", "platformAppearance: \"auto\"", "networkProxyMode", "networkProxyMode: \"auto\"", "networkProxyUrl", "sidebarCompletionIndicators", "sidebarCompletionIndicators: true", "candidate.sidebarCompletionIndicators !== false", "hostOperationLogPopups", "hostOperationLogPopups: true", "candidate.hostOperationLogPopups !== false", "personalInfoMasking", "personalInfoMasking: true", "candidate.personalInfoMasking !== false", "resolvePlatformAppearance", "applyPlatformAppearance"]) {
   if (!settings.includes(token)) fail(`missing settings token: ${token}`);
 }
 if (!settings.includes('isWindows(platform) ? "windows" : "macos"')) {
@@ -2249,8 +2249,12 @@ if (!/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings
 }
 const sidebarVisualHintRow = app.indexOf("<span>{copy.settings.sidebarCompletionIndicators}</span>");
 const logPopupHintRow = app.indexOf("<span>{copy.settings.hostOperationLogPopups}</span>");
+const personalInfoMaskingRow = app.indexOf("<span>{copy.settings.personalInfoMasking}</span>");
 if (sidebarVisualHintRow < 0 || logPopupHintRow <= sidebarVisualHintRow) {
   fail("appearance settings must place the log pop-up pill directly after sidebar visual hints");
+}
+if (personalInfoMaskingRow <= logPopupHintRow) {
+  fail("appearance settings must place personal information masking after the log pop-up pill");
 }
 for (const token of [
   "onHostOperationLogPopupsChange",
@@ -2259,6 +2263,14 @@ for (const token of [
   "onHostOperationLogPopupsChange(!settings.hostOperationLogPopups)"
 ]) {
   if (!app.includes(token)) fail(`missing host-operation log pop-up Settings pill behavior: ${token}`);
+}
+for (const token of [
+  "onPersonalInfoMaskingChange",
+  "data-enabled={settings.personalInfoMasking}",
+  "aria-checked={settings.personalInfoMasking}",
+  "onPersonalInfoMaskingChange(!settings.personalInfoMasking)"
+]) {
+  if (!app.includes(token)) fail(`missing personal information masking Settings pill behavior: ${token}`);
 }
 if (!/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings\.closeButtonBehavior}<\/span>/.test(app)) {
   fail("other settings card should place a divider above the close button behavior row");

@@ -1,5 +1,5 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent, MouseEventHandler, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, InputHTMLAttributes, MouseEventHandler, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { loadInitialAppData } from "./app/bootstrap";
@@ -62,6 +62,8 @@ import type {
 import type { ApiErrorCode, StorageHealth, StorageMigrationPlan, StorageRestorePlan } from "./generated/rust-contracts";
 import { getPlatform, isWindows } from "./platform";
 import type { RuntimePlatform } from "./platform";
+import { createPersonalInfoMasker } from "./personalInfo";
+import type { PersonalInfoMasker } from "./personalInfo";
 import {
   applyAppSettings,
   fontPresets,
@@ -78,6 +80,7 @@ import { AlertModalFrame } from "./ui/AlertModalFrame";
 import { useFeedback } from "./ui/feedback";
 import type { FeedbackPlacement, FeedbackTone } from "./ui/feedback";
 import { ModalFrame } from "./ui/ModalFrame";
+import { PersonalInfoMaskingProvider, usePersonalInfoMasking } from "./ui/PersonalInfoMasking";
 import {
   OperationProgressModal,
   OperationProgressPanel,
@@ -1097,6 +1100,7 @@ export const uiCopy = {
       font: "Font",
       sidebarCompletionIndicators: "Sidebar visual hints",
       hostOperationLogPopups: "Log pop-up prompts",
+      personalInfoMasking: "Personal information masking",
       workspaceTerminal: "Workspace terminal",
       terminalFontFamily: "Font family",
       terminalFontSize: "Font size",
@@ -1947,6 +1951,7 @@ export const uiCopy = {
       font: "字体",
       sidebarCompletionIndicators: "侧边栏视觉提示",
       hostOperationLogPopups: "日志弹窗提示",
+      personalInfoMasking: "个人信息脱敏",
       workspaceTerminal: "工作台终端",
       terminalFontFamily: "字体",
       terminalFontSize: "字号",
@@ -2246,16 +2251,17 @@ function AppTitleBar({
 
 function useActionErrorReporter(copy: UICopy) {
   const { notify } = useFeedback();
+  const { maskText } = usePersonalInfoMasking();
   return useCallback((error: unknown) => {
     const structured = parseApiError(error);
     const code: ApiErrorCode = structured?.code ?? "operation-failed";
     notify({
       title: copy.feedback.errorTitles[code],
-      message: localizeFeedbackMessage(formatError(error), copy, "error"),
+      message: maskText(localizeFeedbackMessage(formatError(error), copy, "error")),
       taskId: structured?.taskId ?? undefined,
       tone: "error"
     });
-  }, [copy.feedback.errorTitles, notify]);
+  }, [copy, maskText, notify]);
 }
 
 function localizeFeedbackMessage(message: string, copy: UICopy, tone: FeedbackTone) {
@@ -2377,6 +2383,7 @@ function StorageHealthCenter({
   health: StorageHealth[];
   onChanged: () => Promise<StorageHealth[]>;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const { notify } = useFeedback();
   const [plan, setPlan] = useState<StorageActionPlan | null>(null);
   const [busyStore, setBusyStore] = useState<string | null>(null);
@@ -2389,7 +2396,7 @@ function StorageHealthCenter({
     try {
       setPlan({ kind: "restore", plan: await api.previewStorageRestore(item.store) });
     } catch (error) {
-      notify({ message: localizeFeedbackMessage(formatError(error), copy, "error"), taskId: taskIdForError(error), tone: "error" });
+      notify({ message: personalInfo.maskText(localizeFeedbackMessage(formatError(error), copy, "error")), taskId: taskIdForError(error), tone: "error" });
     } finally {
       setBusyStore(null);
     }
@@ -2401,7 +2408,7 @@ function StorageHealthCenter({
       const plans = await Promise.all(migrations.map((item) => api.previewStorageMigration(item.store)));
       setPlan({ kind: "migration", plans });
     } catch (error) {
-      notify({ message: localizeFeedbackMessage(formatError(error), copy, "error"), taskId: taskIdForError(error), tone: "error" });
+      notify({ message: personalInfo.maskText(localizeFeedbackMessage(formatError(error), copy, "error")), taskId: taskIdForError(error), tone: "error" });
     } finally {
       setBusyStore(null);
     }
@@ -2421,7 +2428,7 @@ function StorageHealthCenter({
       setPlan(null);
       await onChanged();
     } catch (error) {
-      notify({ message: localizeFeedbackMessage(formatError(error), copy, "error"), taskId: taskIdForError(error), tone: "error" });
+      notify({ message: personalInfo.maskText(localizeFeedbackMessage(formatError(error), copy, "error")), taskId: taskIdForError(error), tone: "error" });
     } finally {
       setBusyStore(null);
     }
@@ -2496,7 +2503,7 @@ function StorageHealthCenter({
                   </header>
                   <div className="storagePlanField">
                     <span>{copy.storage.path}</span>
-                    <code className="storagePlanCode">{item.path}</code>
+                    <code className="storagePlanCode">{personalInfo.maskText(item.path)}</code>
                   </div>
                   <div className="storagePlanField">
                     <span>{copy.storage.fingerprint}</span>
@@ -2504,7 +2511,7 @@ function StorageHealthCenter({
                   </div>
                   <div className="storagePlanField">
                     <span>{copy.storage.backupLocation}</span>
-                    <code className="storagePlanCode">{item.backup}</code>
+                    <code className="storagePlanCode">{personalInfo.maskText(item.backup)}</code>
                   </div>
                 </section>
               ))}
@@ -2772,18 +2779,23 @@ function App() {
 
   const locale: Locale = settings.fontPreset === "zh-cn" ? "zh" : "en";
   const copy = uiCopy[locale];
+  const personalInfoMasker = useMemo(() => createPersonalInfoMasker(settings.personalInfoMasking, [
+    ...hosts.map((host) => ({ username: host.username, address: host.address })),
+    ...sshConfigHosts.map((host) => ({ username: host.user, address: host.hostName })),
+    ...setupGuideSshConfigHosts.map((host) => ({ username: host.user, address: host.hostName }))
+  ]), [hosts, settings.personalInfoMasking, setupGuideSshConfigHosts, sshConfigHosts]);
   const setNotice = useCallback((message: string) => {
-    notify({ message: localizeFeedbackMessage(message, copy, "success"), tone: "success" });
-  }, [copy, notify]);
+    notify({ message: personalInfoMasker.maskText(localizeFeedbackMessage(message, copy, "success")), tone: "success" });
+  }, [copy, notify, personalInfoMasker]);
   const setInfoNotice = useCallback((message: string, placement: FeedbackPlacement = "detail") => {
-    notify({ message: localizeFeedbackMessage(message, copy, "info"), placement, tone: "info" });
-  }, [copy, notify]);
+    notify({ message: personalInfoMasker.maskText(localizeFeedbackMessage(message, copy, "info")), placement, tone: "info" });
+  }, [copy, notify, personalInfoMasker]);
   const setErrorNotice = useCallback((message: string, taskId?: string) => {
-    notify({ message: localizeFeedbackMessage(message, copy, "error"), taskId, tone: "error" });
-  }, [copy, notify]);
+    notify({ message: personalInfoMasker.maskText(localizeFeedbackMessage(message, copy, "error")), taskId, tone: "error" });
+  }, [copy, notify, personalInfoMasker]);
   const setWarningNotice = useCallback((message: string, taskId?: string) => {
-    notify({ message, taskId, tone: "warning" });
-  }, [notify]);
+    notify({ message: personalInfoMasker.maskText(message), taskId, tone: "warning" });
+  }, [notify, personalInfoMasker]);
   const handleTerminalRendererError = useCallback((failure: {
     sessionId: string;
     generation: number;
@@ -4571,6 +4583,7 @@ function App() {
             onCopyPublicKey={handleCopyPublicKey}
             onFontPresetChange={(fontPreset) => persistSettings({ ...settings, fontPreset })}
             onHostOperationLogPopupsChange={(hostOperationLogPopups) => persistSettings({ ...settings, hostOperationLogPopups })}
+            onPersonalInfoMaskingChange={(personalInfoMasking) => persistSettings({ ...settings, personalInfoMasking })}
             onNetworkProxyModeChange={(networkProxyMode) => persistSettings({ ...settings, networkProxyMode })}
             onNetworkProxyManualRequest={() => setNetworkProxyManualOpen(true)}
             onPlatformAppearanceChange={(platformAppearance) => persistSettings({ ...settings, platformAppearance })}
@@ -4602,7 +4615,8 @@ function App() {
   ];
 
   return (
-    <PlatformAppearanceContext.Provider value={effectivePlatform}>
+    <PersonalInfoMaskingProvider value={personalInfoMasker}>
+      <PlatformAppearanceContext.Provider value={effectivePlatform}>
       <div className="desktopFrame" data-os={runtimePlatform} data-custom-titlebar={usesCustomTitleBar}>
         {usesCustomTitleBar ? <AppTitleBar copy={copy} onCloseRequest={handleTitleBarCloseRequest} /> : null}
         <div className="appShell" data-api-mode={apiMode}>
@@ -4681,7 +4695,7 @@ function App() {
           <section className="panel" role="alert">
             <TitleWithIcon icon="warning" level={2}>{copy.common.backendUnavailableTitle}</TitleWithIcon>
             <p>{copy.common.backendUnavailableBody}</p>
-            <p className="monoText">{bootstrapError}</p>
+            <p className="monoText">{personalInfoMasker.maskText(bootstrapError)}</p>
           </section>
         ) : renderContent()}
       </main>
@@ -4810,7 +4824,8 @@ function App() {
       ) : null}
         </div>
       </div>
-    </PlatformAppearanceContext.Provider>
+      </PlatformAppearanceContext.Provider>
+    </PersonalInfoMaskingProvider>
   );
 }
 
@@ -4882,6 +4897,7 @@ function SetupGuideModal({
   onPreferencesNext: (preferences: Pick<AppSettings, "theme" | "platformAppearance" | "fontPreset">) => Promise<unknown>;
   onSkip: () => Promise<unknown>;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const [preferenceDraft, setPreferenceDraft] = useState<Pick<AppSettings, "theme" | "platformAppearance" | "fontPreset">>({
     theme: currentSettings.theme,
     platformAppearance: currentSettings.platformAppearance,
@@ -4985,7 +5001,7 @@ function SetupGuideModal({
               description={detectionPending ? copy.setupGuide.detecting : hasLocalHosts ? copy.setupGuide.bodyWithHosts(sshConfigHosts.length) : copy.setupGuide.bodyEmpty}
               icon="hosts"
             >
-              <code>{copy.setupGuide.detectedPath(configPath)}</code>
+              <code>{copy.setupGuide.detectedPath(personalInfo.maskText(configPath))}</code>
             </ModalHeader>
 
             <article className="setupGuideKeyCard">
@@ -5008,9 +5024,9 @@ function SetupGuideModal({
                 </div>
                 {visibleHosts.map((host) => (
                   <div className="setupGuideHostRow" key={`${host.source}-${host.alias}`} role="row">
-                    <strong role="cell">{host.alias}</strong>
-                    <span role="cell">{host.hostName || host.alias}</span>
-                    <span role="cell">{host.user || copy.hosts.unknown}</span>
+                    <strong role="cell">{personalInfo.maskText(host.alias)}</strong>
+                    <span role="cell">{personalInfo.maskHostAddress(host.hostName || host.alias)}</span>
+                    <span role="cell">{host.user ? personalInfo.maskUsername(host.user) : copy.hosts.unknown}</span>
                     <span role="cell"><Badge tone={host.managed ? "blue" : "gray"}>{sshHostSourceLabel(copy, host)}</Badge></span>
                   </div>
                 ))}
@@ -5086,12 +5102,13 @@ function CodexUninstallConfirmModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   return (
       <AlertModalFrame className="taskLogModal simpleDeleteModal" titleId="codex-uninstall-confirm-title" onCancel={onCancel}>
         <ModalHeader
           className="taskLogModalHeader"
           titleId="codex-uninstall-confirm-title"
-          title={copy.hosts.uninstallCodexConfirmTitle(target.hostAlias)}
+          title={copy.hosts.uninstallCodexConfirmTitle(personalInfo.maskText(target.hostAlias))}
           description={copy.hosts.uninstallCodexConfirmBody}
           icon="delete"
         />
@@ -5357,6 +5374,7 @@ function MonitorView({
   onRefresh: () => Promise<HostResourceBatchResult | null>;
   onRefreshSecondsChange: (seconds: number) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const [dragState, setDragState] = useState<MonitorDragState | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const pendingFlipRectsRef = useRef<Map<string, DOMRect> | null>(null);
@@ -5609,7 +5627,7 @@ function MonitorView({
           </CommandBar>
         </div>
 
-        {error ? <p className="monitorError">{error}</p> : null}
+        {error ? <p className="monitorError">{personalInfo.maskText(error)}</p> : null}
       </section>
 
       {hosts.length === 0 ? (
@@ -5721,6 +5739,7 @@ function MonitorHostCard({
   onCardElement: (alias: string, element: HTMLElement | null) => void;
   onDragHandlePointerDown: (alias: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const cardRef = useRef<HTMLElement | null>(null);
   const [rowSpan, setRowSpan] = useState(44);
   const cpuPercent = monitorCpuPercent(snapshot?.cpu);
@@ -5776,12 +5795,12 @@ function MonitorHostCard({
       </button>
       <header className="monitorHostHeader">
         <div>
-          <h3>{host.hostAlias}</h3>
+          <h3>{personalInfo.maskText(host.hostAlias)}</h3>
         </div>
         <MonitorHostStatusIndicator copy={copy} refreshing={refreshing} snapshot={snapshot} />
       </header>
 
-      {snapshot?.error ? <small className="monitorCellNote">{snapshot.error}</small> : null}
+      {snapshot?.error ? <small className="monitorCellNote">{personalInfo.maskText(snapshot.error)}</small> : null}
 
       <div className="monitorSummaryGrid">
         <MonitorSummaryTile
@@ -6006,6 +6025,7 @@ function MonitorHostDragGhost({
   refreshing: boolean;
   snapshot: HostResourceSnapshot | null;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const cpuPercent = monitorCpuPercent(snapshot?.cpu);
   const memoryPercent = snapshot?.memory?.usedPercent ?? null;
   const hostMemoryTotalBytes = snapshot?.memory?.totalBytes ?? null;
@@ -6023,7 +6043,7 @@ function MonitorHostDragGhost({
     >
       <span className="monitorDragGhostHandle" aria-hidden="true" />
       <header className="monitorHostHeader">
-        <h3>{host.hostAlias}</h3>
+        <h3>{personalInfo.maskText(host.hostAlias)}</h3>
         <MonitorHostStatusIndicator copy={copy} refreshing={refreshing} snapshot={snapshot} />
       </header>
       <div className="monitorSummaryGrid">
@@ -6121,6 +6141,7 @@ function ServerMatrix({
   onAddServer: () => void;
   onTestAllSshHosts: () => Promise<unknown>;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const anyHostBusy = sshConfigHosts.some((host) => Boolean(hostBusy[host.alias]));
   const testingAll = sshConfigHosts.length > 0 && sshConfigHosts.every((host) => hostBusy[host.alias] === "test");
   const hostInventoryByAlias = new Map(inventoryStatus.hostInventories.map((inventory) => [inventory.hostAlias.toLowerCase(), inventory]));
@@ -6157,8 +6178,8 @@ function ServerMatrix({
             <article className="hostCard" key={host.id}>
               <div className="hostHeader">
                 <div>
-                  <TitleWithIcon icon="hosts" level={3}>{host.name}</TitleWithIcon>
-                  <p>{formatEndpoint(host)}</p>
+                  <TitleWithIcon icon="hosts" level={3}>{personalInfo.maskText(host.name)}</TitleWithIcon>
+                  <p>{formatEndpoint(host, personalInfo)}</p>
                 </div>
                 <HostStatusIndicator copy={copy} status={host.status} />
               </div>
@@ -6241,6 +6262,7 @@ function HostsView({
   onTestHost: (id: string) => void;
   onUpdateOutdatedCodexHosts: (aliases: string[]) => Promise<unknown>;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const reportActionError = useActionErrorReporter(copy);
   const identityFile = sshStatus?.ed25519.privateExists ? sshStatus.ed25519.privatePath : "";
   const hostByAlias = useMemo(
@@ -6377,12 +6399,12 @@ function HostsView({
 
                   return (
                     <tr className="selectableRow" data-selected={selectedHostAlias === sshHost.alias} key={sshHost.alias} onClick={() => setSelectedHostAlias(sshHost.alias)}>
-                      <td className="sshHostsAliasCol"><strong>{sshHost.alias}</strong></td>
+                      <td className="sshHostsAliasCol"><strong>{personalInfo.maskText(sshHost.alias)}</strong></td>
                       <td className="sshHostsOnlineCol"><HostStatusIndicator copy={copy} status={hostStatus} /></td>
                       <td className="sshHostsSourceCol"><Badge tone={sshHost.managed ? "blue" : "gray"}>{sshHostSourceLabel(copy, sshHost)}</Badge></td>
-                      <td className="sshHostsAddressCol">{sshHost.hostName}</td>
+                      <td className="sshHostsAddressCol">{personalInfo.maskHostAddress(sshHost.hostName)}</td>
                       <td className="sshHostsPortCol">{sshHost.port}</td>
-                      <td className="sshHostsUserCol">{sshHost.user}</td>
+                      <td className="sshHostsUserCol">{personalInfo.maskUsername(sshHost.user)}</td>
                       <td className="sshHostsVersionCol"><Badge tone={codexStatus.tone}>{codexStatus.label}</Badge></td>
                       <td className="sshHostsLatestVersionCol"><Badge tone={latestStatus.tone} title={latestStatus.title}>{latestStatus.label}</Badge></td>
                       <td className="sshHostsActionsCol">
@@ -6420,9 +6442,9 @@ function HostsView({
       {deleteHostAlias ? (
         <SimpleDeleteConfirmModal
           busy={deleteHostBusy}
-          body={copy.hosts.deleteConfirm(deleteHostAlias)}
+          body={copy.hosts.deleteConfirm(personalInfo.maskText(deleteHostAlias))}
           copy={copy}
-          title={`${copy.hosts.delete}: ${deleteHostAlias}`}
+          title={`${copy.hosts.delete}: ${personalInfo.maskText(deleteHostAlias)}`}
           onClose={() => setDeleteHostAlias(null)}
           onDelete={() => void handleDelete().catch(reportActionError)}
         />
@@ -6453,6 +6475,15 @@ function SshHostModal({
   onGenerateEd25519Key: () => Promise<unknown>;
 }) {
   const [draft, setDraft] = useState<SshHostDraft>(() => initialDraft ?? emptySshHostDraft(defaultIdentityFile));
+  const basePersonalInfo = usePersonalInfoMasking();
+  const draftPersonalInfo = useMemo(() => createPersonalInfoMasker(basePersonalInfo.enabled, [{
+    username: draft.user,
+    address: draft.hostName
+  }]), [basePersonalInfo.enabled, draft.hostName, draft.user]);
+  const maskDraftText = useCallback(
+    (value: string) => basePersonalInfo.maskText(draftPersonalInfo.maskText(value)),
+    [basePersonalInfo, draftPersonalInfo]
+  );
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -6557,16 +6588,16 @@ function SshHostModal({
           onClose={closeModal}
         />
 
-        {message ? <p className="sshHostMessage" data-tone={messageTone} role={messageTone === "error" ? "alert" : "status"}>{message}</p> : null}
+        {message ? <p className="sshHostMessage" data-tone={messageTone} role={messageTone === "error" ? "alert" : "status"}>{maskDraftText(message)}</p> : null}
 
         <form className="modalForm" onSubmit={handleSubmit}>
           <label className="fieldGroup">
             <span>{copy.hosts.hostAlias}</span>
-            <input disabled={connecting} readOnly={editing} value={draft.alias} onChange={(event) => updateDraft("alias", event.target.value)} placeholder="HostAlias" required />
+            <PersonalInfoInput disabled={connecting} maskKind="text" readOnly={editing} value={draft.alias} onChange={(event) => updateDraft("alias", event.target.value)} placeholder="HostAlias" required />
           </label>
           <label className="fieldGroup">
             <span>{copy.hosts.hostName}</span>
-            <input disabled={connecting} value={draft.hostName} onChange={(event) => updateDraft("hostName", event.target.value)} placeholder="127.0.0.1" required />
+            <PersonalInfoInput disabled={connecting} maskKind="address" value={draft.hostName} onChange={(event) => updateDraft("hostName", event.target.value)} placeholder="127.0.0.1" required />
           </label>
           <label className="fieldGroup">
             <span>{copy.hosts.port}</span>
@@ -6574,7 +6605,7 @@ function SshHostModal({
           </label>
           <label className="fieldGroup">
             <span>{copy.hosts.user}</span>
-            <input disabled={connecting} value={draft.user} onChange={(event) => updateDraft("user", event.target.value)} placeholder="Username" required />
+            <PersonalInfoInput disabled={connecting} maskKind="username" value={draft.user} onChange={(event) => updateDraft("user", event.target.value)} placeholder="Username" required />
           </label>
           <label className="fieldGroup">
             <span>{copy.hosts.bootstrapPassword}</span>
@@ -6615,7 +6646,7 @@ function SshHostModal({
           </ModalActions>
         </form>
 
-        {showProgress ? <BootstrapProgressLog copy={copy} steps={steps} /> : null}
+        {showProgress ? <BootstrapProgressLog copy={copy} maskText={maskDraftText} steps={steps} /> : null}
       </ModalFrame>
       <ConfirmDialog
         copy={{
@@ -6629,6 +6660,43 @@ function SshHostModal({
         onConfirm={onClose}
       />
     </div>
+  );
+}
+
+function PersonalInfoInput({
+  maskKind,
+  onBlur,
+  onFocus,
+  readOnly,
+  value,
+  ...inputProps
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "value"> & {
+  maskKind: "address" | "text" | "username";
+  value: string;
+}) {
+  const personalInfo = usePersonalInfoMasking();
+  const [revealed, setRevealed] = useState(false);
+  const maskedValue = maskKind === "address"
+    ? personalInfo.maskHostAddress(value)
+    : maskKind === "username"
+      ? personalInfo.maskUsername(value)
+      : personalInfo.maskText(value);
+  const privacyLocked = personalInfo.enabled && !revealed && Boolean(value);
+
+  return (
+    <input
+      {...inputProps}
+      readOnly={readOnly || privacyLocked}
+      value={privacyLocked ? maskedValue : value}
+      onBlur={(event) => {
+        setRevealed(false);
+        onBlur?.(event);
+      }}
+      onFocus={(event) => {
+        if (!readOnly) setRevealed(true);
+        onFocus?.(event);
+      }}
+    />
   );
 }
 
@@ -6672,7 +6740,7 @@ function markBootstrapFailureIfNeeded(steps: BootstrapStepState[], detail: strin
   return steps.map((step) => (step.step === firstRunning ? { ...step, status: "failed", message: copy.hosts.connectionFailed, detail } : step));
 }
 
-function BootstrapProgressLog({ copy, steps }: { copy: UICopy; steps: BootstrapStepState[] }) {
+function BootstrapProgressLog({ copy, maskText, steps }: { copy: UICopy; maskText: (value: string) => string; steps: BootstrapStepState[] }) {
   return (
     <section className="bootstrapLogCard">
       <div className="bootstrapLogHeader">
@@ -6685,14 +6753,14 @@ function BootstrapProgressLog({ copy, steps }: { copy: UICopy; steps: BootstrapS
             <div className="bootstrapStepMain">
               <div>
                 <strong>{step.label}</strong>
-                <span>{step.message}</span>
+                <span>{maskText(step.message)}</span>
               </div>
               <StepStatusIcon status={step.status} />
             </div>
             {step.status === "failed" ? (
               <div className="bootstrapFailureDetail">
                 <strong>{copy.hosts.failureDetails}</strong>
-                <pre>{step.stderr || step.detail || step.stdout || copy.hosts.noFailureDetails}</pre>
+                <pre>{maskText(step.stderr || step.detail || step.stdout || copy.hosts.noFailureDetails)}</pre>
               </div>
             ) : null}
           </article>
@@ -6721,6 +6789,7 @@ function HostDetailsPanel({
   inventoryStatus: SkillInventoryStatus;
   latestCodexVersion: LatestCodexVersion | null;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const codexStatus = hostCodexStatus(copy, host, undefined, hosts, latestCodexVersion);
   const codexInstalledStatus = hostCodexInstalledStatus(copy, host);
   const hostInventoryByAlias = new Map(inventoryStatus.hostInventories.map((inventory) => [inventory.hostAlias.toLowerCase(), inventory]));
@@ -6731,7 +6800,7 @@ function HostDetailsPanel({
     <section className="panel spanWide">
       <div className="panelHeader">
         <div>
-          <TitleWithIcon icon="hosts" level={2}>{copy.hosts.detailsTitle(host?.hostAlias ?? copy.hosts.unknown)}</TitleWithIcon>
+          <TitleWithIcon icon="hosts" level={2}>{copy.hosts.detailsTitle(personalInfo.maskText(host?.hostAlias ?? copy.hosts.unknown))}</TitleWithIcon>
         </div>
         <div className="calloutMeta largeStatus">
           <HostStatusIndicator copy={copy} status={host?.status ?? "unknown"} />
@@ -6832,6 +6901,7 @@ export function ProfilesView({
   onSetProfileApiKey: (profileId: string, apiKey: string) => Promise<Profile>;
   onUpdateProfile: (id: string, patch: ProfilePatch) => Promise<Profile>;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const reportActionError = useActionErrorReporter(copy);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profiles[0]?.id ?? null);
@@ -7131,8 +7201,8 @@ export function ProfilesView({
             <Badge tone={ccDetectionError ? "red" : ccDetection?.detected ? "green" : busy === "detect" ? "blue" : "gray"}>
               cc-switch
             </Badge>
-            <span>{ccSwitchStatus}</span>
-            {ccDetection?.sourcePath ? <code>{ccDetection.sourcePath}</code> : null}
+            <span>{personalInfo.maskText(ccSwitchStatus)}</span>
+            {ccDetection?.sourcePath ? <code>{personalInfo.maskText(ccDetection.sourcePath)}</code> : null}
           </div>
         ) : null}
 
@@ -7227,10 +7297,10 @@ export function ProfilesView({
                       key={host.id}
                     >
                       <td className="sshHostsAliasCol">
-                        <strong>{host.hostAlias}</strong>
+                        <strong>{personalInfo.maskText(host.hostAlias)}</strong>
                       </td>
                       <td className="sshHostsSourceCol"><Badge tone={host.source === "managed" ? "blue" : "gray"}>{hostSourceLabel(copy, host)}</Badge></td>
-                      <td className="sshHostsAddressCol">{host.address}</td>
+                      <td className="sshHostsAddressCol">{personalInfo.maskHostAddress(host.address)}</td>
                       <td className="sshHostsVersionCol"><Badge tone={codexStatus.tone}>{codexStatus.label}</Badge></td>
                       <td className="profileApplyConfigCol"><HostApiConfigBadge copy={copy} host={host} profileById={profileById} /></td>
                       <td className="sshHostsActionsCol">
@@ -7335,6 +7405,7 @@ function ProfileHostSelectModal({
   onNext: (profile: Profile, hostIds: string[]) => void;
   onClose: () => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const [selectedHostIds, setSelectedHostIds] = useState<string[]>([]);
   const applyingHostIdSet = useMemo(() => new Set(applyingHostIds), [applyingHostIds]);
   const eligibleHosts = useMemo(
@@ -7389,7 +7460,7 @@ function ProfileHostSelectModal({
             return (
               <label className="profileHostSelectRow" data-disabled={disabled} data-selected={selected} key={host.id}>
                 <input checked={selected} disabled={disabled} type="checkbox" onChange={() => toggleHost(host)} />
-                <strong>{host.name}</strong>
+                <strong>{personalInfo.maskText(host.name)}</strong>
                 <span className="profileHostSelectStatus">
                   <HostApiConfigBadge copy={copy} host={host} profileById={profileById} />
                   {alreadyApplied ? <Badge tone="green">{copy.profiles.alreadyApplied}</Badge> : null}
@@ -7425,6 +7496,7 @@ function ProfileApplyConfirmModal({
   onClose: () => void;
   onConfirm: (options: ProfileApplyOptions) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const [reloadMode, setReloadMode] = useState<RemoteCodexReloadMode>("app-services");
   const [allCodexAcknowledged, setAllCodexAcknowledged] = useState(false);
 
@@ -7473,7 +7545,7 @@ function ProfileApplyConfirmModal({
       <p className="modalLead" id="profile-apply-confirm-description">
         {copy.profiles.applyConfirmBody(request.profile.name, request.hostIds.length)}
       </p>
-      <small className="profileApplyConfirmHosts">{request.hostNames.join(", ")}</small>
+      <small className="profileApplyConfirmHosts">{personalInfo.maskText(request.hostNames.join(", "))}</small>
 
       <fieldset className="profileReloadOptions">
         <legend>{copy.profiles.reloadChoiceTitle}</legend>
@@ -7571,6 +7643,7 @@ function ProfileApplyOperationModal({
   onClose: () => void;
   onViewTask: (taskId: string) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const presentation = profileApplyOperationPresentation(copy, operation.status);
   const taskToView = operation.tasks.find((task) => task.status === "failed") ?? operation.tasks[0];
   const logRows = operation.logs.slice(-24);
@@ -7597,8 +7670,8 @@ function ProfileApplyOperationModal({
 
         <div className="codexOperationSummary">
           <span>{copy.codexOperation.summary}</span>
-          <strong>{operation.error ?? operation.message ?? copy.profiles.applyOperationWaiting}</strong>
-          <small>{operation.hostNames.join(", ")}</small>
+          <strong>{personalInfo.maskText(operation.error ?? operation.message ?? copy.profiles.applyOperationWaiting)}</strong>
+          <small>{personalInfo.maskText(operation.hostNames.join(", "))}</small>
         </div>
 
         {operation.results.length > 0 ? (
@@ -7608,16 +7681,16 @@ function ProfileApplyOperationModal({
               const reload = reloadStatusPresentation(copy, result.reload.status);
               return (
                 <div className="profileApplyResultRow" key={result.hostId || result.hostAlias} role="listitem">
-                  <strong>{result.hostName}</strong>
+                  <strong>{personalInfo.maskText(result.hostName)}</strong>
                   <div>
                     <span>{copy.profiles.configurationResult}</span>
                     <Badge tone={config.tone}>{config.label}</Badge>
-                    <small>{result.message}</small>
+                    <small>{personalInfo.maskText(result.message)}</small>
                   </div>
                   <div>
                     <span>{copy.profiles.reloadResult}</span>
                     <Badge tone={reload.tone}>{reload.label}</Badge>
-                    <small>{result.reload.message}</small>
+                    <small>{personalInfo.maskText(result.reload.message)}</small>
                   </div>
                 </div>
               );
@@ -7641,12 +7714,12 @@ function ProfileApplyOperationModal({
             {logRows.length > 0 ? logRows.map((log, index) => (
               <div className="codexOperationLogRow" data-level={log.level} key={`${log.message}-${index}`}>
                 <strong>{copy.status.log[log.level]}</strong>
-                <span>{log.message}</span>
+                <span>{personalInfo.maskText(log.message)}</span>
               </div>
             )) : (
               <div className="codexOperationLogRow" data-level={operation.status === "failed" ? "error" : "info"}>
                 <strong>{operation.status === "failed" ? copy.status.log.error : copy.status.log.info}</strong>
-                <span>{operation.error ?? copy.profiles.applyOperationWaiting}</span>
+                <span>{personalInfo.maskText(operation.error ?? copy.profiles.applyOperationWaiting)}</span>
               </div>
             )}
           </div>
@@ -7973,6 +8046,7 @@ function ProfileApplyPreviewModal({
   onNext: () => void;
   onClose: () => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   if (!open) return null;
 
   return (
@@ -8000,8 +8074,8 @@ function ProfileApplyPreviewModal({
                 </div>
                 {preview.targetFiles.map((target) => (
                   <div className="profileTargetFileRow" key={target.hostId}>
-                    <strong>{target.hostName}</strong>
-                    <code>{target.path}</code>
+                    <strong>{personalInfo.maskText(target.hostName)}</strong>
+                    <code>{personalInfo.maskText(target.path)}</code>
                   </div>
                 ))}
               </>
@@ -8015,7 +8089,7 @@ function ProfileApplyPreviewModal({
           <div className="profileSubhead">
             <strong>{copy.profiles.renderedToml}</strong>
           </div>
-          <pre>{preview?.renderedToml ?? copy.profiles.noPreview}</pre>
+          <pre>{personalInfo.maskText(preview?.renderedToml ?? copy.profiles.noPreview)}</pre>
         </div>
 
         <ModalActions>
@@ -8092,6 +8166,7 @@ export function SkillsView({
   onUpdateLibrarySkillAbout: (skillId: string, about: string) => Promise<SkillPack | null>;
   onViewTasks: () => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const reportActionError = useActionErrorReporter(copy);
   const { notify } = useFeedback();
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -8396,9 +8471,9 @@ export function SkillsView({
                             <Badge
                               key={`${application.targetType}-${application.hostAlias ?? "local"}`}
                               tone={application.hasSkillMd ? "green" : "yellow"}
-                              title={application.path}
+                              title={personalInfo.maskText(application.path)}
                             >
-                              {skillApplicationLabel(application, copy)}
+                              {personalInfo.maskText(skillApplicationLabel(application, copy))}
                             </Badge>
                           ))
                         ) : (
@@ -8428,7 +8503,7 @@ export function SkillsView({
             </table>
           </div>
         )}
-        {message ? <p className="skillMessage" data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
+        {message ? <p className="skillMessage" data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{personalInfo.maskText(message.text)}</p> : null}
       </section>
 
       <section className="panel spanWide">
@@ -8448,9 +8523,9 @@ export function SkillsView({
             <tbody>
               {installedSkillRows.map((row) => (
                 <tr key={row.key}>
-                  <td><strong>{row.alias}</strong></td>
+                  <td><strong>{personalInfo.maskText(row.alias)}</strong></td>
                   <td><Badge tone={row.sourceTone}>{row.source}</Badge></td>
-                  <td>{row.hostIp}</td>
+                  <td>{personalInfo.maskHostAddress(row.hostIp)}</td>
                   <td>
                     <div className="installedSkillTags">
                       {row.skills.length > 0 ? (
@@ -8459,7 +8534,7 @@ export function SkillsView({
                             className="installedSkillTag"
                             key={skill.key}
                             style={installedSkillTagStyle(skill.skillName, installedSkillNames)}
-                            title={skill.path}
+                            title={personalInfo.maskText(skill.path)}
                             type="button"
                             onClick={() => openInstalledPreview(row, skill)}
                           >
@@ -8546,7 +8621,7 @@ export function SkillsView({
           copy={copy}
           danger
           title={copy.skills.uninstallInstalledTitle}
-          body={copy.skills.uninstallInstalledBody(uninstallInstalledSkill.skillName, uninstallInstalledSkill.targetLabel)}
+          body={personalInfo.maskText(copy.skills.uninstallInstalledBody(uninstallInstalledSkill.skillName, uninstallInstalledSkill.targetLabel))}
           onClose={() => setUninstallInstalledSkill(null)}
           onConfirm={() => void submitInstalledUninstall().catch(reportActionError)}
         />
@@ -8912,6 +8987,7 @@ function SkillPreviewModal({
   onClose: () => void;
   onSaveAbout: (about: string) => Promise<void>;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const skillDescription = skill.description?.trim() ?? "";
   const about = skillDescription || skill.about?.trim() || copy.skills.aboutFallback;
   const [editing, setEditing] = useState(false);
@@ -8961,7 +9037,7 @@ function SkillPreviewModal({
           </div>
           <div>
             <span>{copy.skills.path}</span>
-            <strong>{skill.managedPath || skill.originalPath || "-"}</strong>
+            <strong>{personalInfo.maskText(skill.managedPath || skill.originalPath || "-")}</strong>
           </div>
         </div>
         <section className="skillPreviewDetails">
@@ -8977,7 +9053,7 @@ function SkillPreviewModal({
             <p>{about}</p>
           )}
         </section>
-        {error ? <p className="skillMessage">{error}</p> : null}
+        {error ? <p className="skillMessage">{personalInfo.maskText(error)}</p> : null}
         <ModalActions>
           {editing ? (
             <>
@@ -9020,6 +9096,7 @@ function InstalledSkillPreviewModal({
   onSaveAbout: (about: string) => Promise<void>;
   onUninstall: () => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const localSkill = skill.localSkill;
   const about = localSkill
     ? localSkill.description?.trim() || localSkill.about?.trim() || copy.skills.aboutFallback
@@ -9064,7 +9141,7 @@ function InstalledSkillPreviewModal({
         <div className="taskLogModalMeta skillPreviewMeta installedSkillPreviewMeta">
           <div>
             <span>{copy.skills.installedPreviewTarget}</span>
-            <strong>{skill.targetLabel}</strong>
+            <strong>{personalInfo.maskText(skill.targetLabel)}</strong>
           </div>
           <div>
             <span>{copy.skills.installedPreviewLocalLibrary}</span>
@@ -9072,7 +9149,7 @@ function InstalledSkillPreviewModal({
           </div>
           <div>
             <span>{copy.skills.path}</span>
-            <strong>{skill.path || "-"}</strong>
+            <strong>{personalInfo.maskText(skill.path || "-")}</strong>
           </div>
         </div>
         <section className="skillPreviewDetails">
@@ -9088,7 +9165,7 @@ function InstalledSkillPreviewModal({
             <p>{about}</p>
           )}
         </section>
-        {error ? <p className="skillMessage">{error}</p> : null}
+        {error ? <p className="skillMessage">{personalInfo.maskText(error)}</p> : null}
         <ModalActions className="skillPreviewActions">
           {editing ? (
             <>
@@ -9178,6 +9255,7 @@ function InstalledSkillOperationModal({
   onClose: () => void;
   onViewTasks: () => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const logRowsRef = useRef<HTMLDivElement | null>(null);
   const statusTone = operation.status === "success" ? "green" : operation.status === "failed" ? "red" : "blue";
   const title = operation.action === "download" ? copy.skills.downloadInstalledTitle : copy.skills.uninstallInstalledTitle;
@@ -9215,8 +9293,8 @@ function InstalledSkillOperationModal({
         />
         <div className="codexOperationSummary">
           <span>{copy.codexOperation.summary}</span>
-          <strong>{operation.message ?? operation.error ?? copy.skills.operationWaiting}</strong>
-          <small>{`${operation.skillName} · ${operation.targetLabel}`}</small>
+          <strong>{personalInfo.maskText(operation.message ?? operation.error ?? copy.skills.operationWaiting)}</strong>
+          <small>{personalInfo.maskText(`${operation.skillName} · ${operation.targetLabel}`)}</small>
         </div>
         <div className="codexOperationLog">
           <div className="codexOperationLogTitle">
@@ -9227,7 +9305,7 @@ function InstalledSkillOperationModal({
             {rows.map((log, index) => (
               <div className="codexOperationLogRow" data-level={log.level} key={`${log.message}-${index}`}>
                 <strong>{copy.status.log[log.level]}</strong>
-                <span>{log.message}</span>
+                <span>{personalInfo.maskText(log.message)}</span>
               </div>
             ))}
           </div>
@@ -9270,6 +9348,7 @@ function SkillTargetsModal({
   onSubmit: () => void;
   onToggle: (target: SkillTarget) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const actionLabel = mode === "install" ? copy.skills.install : copy.skills.uninstall;
   const hint = mode === "install" ? copy.skills.installHint : copy.skills.uninstallHint;
   const selectedCount = selectedKeys.length;
@@ -9304,9 +9383,9 @@ function SkillTargetsModal({
                     type="checkbox"
                   />
                   <div>
-                    <strong>{target.targetType === "local" ? copy.skills.localMachine : target.label}</strong>
-                    {detailText ? <span>{detailText}</span> : null}
-                    {secondaryText ? <small>{secondaryText}</small> : null}
+                    <strong>{target.targetType === "local" ? copy.skills.localMachine : personalInfo.maskText(target.label)}</strong>
+                    {detailText ? <span>{personalInfo.maskText(detailText)}</span> : null}
+                    {secondaryText ? <small>{personalInfo.maskText(secondaryText)}</small> : null}
                   </div>
                   <Badge tone={skillTargetTone(target)}>{skillTargetStatusLabel(target, copy)}</Badge>
                 </label>
@@ -9433,6 +9512,7 @@ export function TasksView({
   onRequestHandled: () => void;
   onTaskViewed: (taskId: string) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
   const [clearingHistory, setClearingHistory] = useState(false);
@@ -9503,10 +9583,10 @@ export function TasksView({
                 {tasks.map((task) => (
                   <tr key={task.id}>
                     <td><strong>{localizeTaskAction(task.action, copy)}</strong></td>
-                    <td>{task.hostName}</td>
+                    <td>{personalInfo.maskText(task.hostName)}</td>
                     <td><TaskStatusBadge copy={copy} status={task.status} /></td>
                     <td>{formatTaskTimestamp(task, copy, nowTick)}</td>
-                    <td>{localizeTaskSummary(task, copy)}</td>
+                    <td>{personalInfo.maskText(localizeTaskSummary(task, copy))}</td>
                     <td className="taskDetailsCol">
                       <button className="miniButton" type="button" onClick={() => {
                         setSelectedTaskId(task.id);
@@ -9564,6 +9644,7 @@ function TaskLogModal({
   onClose: () => void;
   footer?: ReactNode;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const statusTone = task.status === "success" ? "green" : task.status === "failed" ? "red" : task.status === "running" ? "yellow" : "gray";
   const operationHost = taskOperationHost(task, copy);
   return (
@@ -9580,8 +9661,8 @@ function TaskLogModal({
         />
         <div className="codexOperationSummary taskLogSummary">
           <span>{copy.codexOperation.summary}</span>
-          <strong>{localizeTaskSummary(task, copy)}</strong>
-          <small>{`${copy.tasks.host}: ${task.hostName} | ${copy.tasks.started}: ${formatTaskTimestamp(task, copy, now)}`}</small>
+          <strong>{personalInfo.maskText(localizeTaskSummary(task, copy))}</strong>
+          <small>{personalInfo.maskText(`${copy.tasks.host}: ${task.hostName} | ${copy.tasks.started}: ${formatTaskTimestamp(task, copy, now)}`)}</small>
         </div>
         <OperationProgressPanel
           copy={operationProgressCopy(copy)}
@@ -9609,6 +9690,7 @@ function SettingsView({
   onCopyPublicKey,
   onFontPresetChange,
   onHostOperationLogPopupsChange,
+  onPersonalInfoMaskingChange,
   onNetworkProxyModeChange,
   onNetworkProxyManualRequest,
   onPlatformAppearanceChange,
@@ -9632,6 +9714,7 @@ function SettingsView({
   onCopyPublicKey: (publicKey: string) => Promise<boolean>;
   onFontPresetChange: (fontPreset: FontPreset) => void;
   onHostOperationLogPopupsChange: (enabled: boolean) => void;
+  onPersonalInfoMaskingChange: (enabled: boolean) => void;
   onNetworkProxyModeChange: (mode: NetworkProxyMode) => void;
   onNetworkProxyManualRequest: () => void;
   onPlatformAppearanceChange: (platformAppearance: PlatformAppearance) => void;
@@ -9641,6 +9724,7 @@ function SettingsView({
   onThemeChange: (theme: ThemeChoice) => void;
   onWorkspaceTerminalPreferencesChange: (preferences: AppSettings["workspaceTerminalPreferences"]) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const publicKey = sshStatus?.ed25519.publicKey ?? "";
   const appUpdateBusy = appUpdateChecking || appUpdateInstalling;
   const canCheckStableUpdate = appUpdateStatus.channel === "stable" && !appUpdateBusy;
@@ -9681,7 +9765,7 @@ function SettingsView({
               <TitleWithIcon icon={settingsSaveError ? "warning" : "settings"} level={2}>
                 {settingsSaveError ? copy.settings.settingsSaveFailed : copy.settings.settingsSaving}
               </TitleWithIcon>
-              {settingsSaveError ? <p className="mutedText">{settingsSaveError}</p> : null}
+              {settingsSaveError ? <p className="mutedText">{personalInfo.maskText(settingsSaveError)}</p> : null}
             </div>
             {settingsSaveError ? (
               <button className="secondaryButton" disabled={settingsSaving} type="button" onClick={() => void onRetrySettings()}>
@@ -9758,6 +9842,22 @@ function SettingsView({
               disabled={settingsSaving}
               type="button"
               onClick={() => onHostOperationLogPopupsChange(!settings.hostOperationLogPopups)}
+            >
+              <span className="pillToggleThumb" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="settingControlRow">
+            <span>{copy.settings.personalInfoMasking}</span>
+            <button
+              className="pillToggle"
+              data-enabled={settings.personalInfoMasking}
+              role="switch"
+              aria-checked={settings.personalInfoMasking}
+              aria-label={copy.settings.personalInfoMasking}
+              disabled={settingsSaving}
+              type="button"
+              onClick={() => onPersonalInfoMaskingChange(!settings.personalInfoMasking)}
             >
               <span className="pillToggleThumb" aria-hidden="true" />
             </button>
@@ -9868,7 +9968,7 @@ function SettingsView({
                 </td>
                 <td>{appUpdateStatus.installedAt ?? copy.settings.unknown}</td>
                 <td>
-                  <Badge tone={appLatestVersionTone(appUpdateStatus)} title={appUpdateStatus.message}>
+                  <Badge tone={appLatestVersionTone(appUpdateStatus)} title={personalInfo.maskText(appUpdateStatus.message)}>
                     {appLatestVersionLabel}
                   </Badge>
                 </td>
@@ -10609,9 +10709,9 @@ function waitForNextFrame() {
   });
 }
 
-function formatEndpoint(host: Host) {
-  const user = host.username ? `${host.username}@` : "";
-  return `${user}${host.address}:${host.port}`;
+function formatEndpoint(host: Host, personalInfo: PersonalInfoMasker) {
+  const user = host.username ? `${personalInfo.maskUsername(host.username)}@` : "";
+  return `${user}${personalInfo.maskHostAddress(host.address)}:${host.port}`;
 }
 
 function formatBoolean(value: boolean, copy: UICopy) {

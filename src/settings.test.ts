@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import { defaultSettings, normalizeSettings, workspaceTerminalPreferences } from "./settings";
 
 test("Workspace terminal preferences are persisted safely and clamped", () => {
@@ -32,4 +32,15 @@ test("Workspace terminal preferences are persisted safely and clamped", () => {
 test("Workspace terminal preferences use safe defaults for an old settings payload", () => {
   const settings = normalizeSettings({ theme: "dark" });
   expect(settings.workspaceTerminalPreferences).toEqual(defaultSettings.workspaceTerminalPreferences);
+});
+
+describe("personal information masking settings", () => {
+  it("is enabled for new and legacy settings", () => {
+    expect(defaultSettings.personalInfoMasking).toBe(true);
+    expect(normalizeSettings({}).personalInfoMasking).toBe(true);
+  });
+
+  it("preserves an explicit opt-out", () => {
+    expect(normalizeSettings({ personalInfoMasking: false }).personalInfoMasking).toBe(false);
+  });
 });
