@@ -6868,6 +6868,10 @@ td code {
 /* Workspace: interactive PTY output is rendered by xterm; these rules only
    provide the surrounding desktop chrome and never mirror terminal content. */
 .workspacePage {
+  /* Shared Workspace chrome keeps Terminal, Files and Transfers visually aligned. */
+  --workspace-panel-bg: var(--surface-solid);
+  --workspace-commandbar-bg: color-mix(in srgb, var(--surface-solid) 92%, var(--surface-muted));
+  --workspace-statusbar-bg: color-mix(in srgb, var(--surface-muted) 68%, var(--surface-solid));
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -6993,8 +6997,8 @@ td code {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  border-radius: var(--radius-surface);
+  background: var(--workspace-panel-bg);
   box-shadow: var(--shadow-soft);
 }
 
@@ -7005,7 +7009,7 @@ td code {
   min-width: 0;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
+  background: var(--workspace-commandbar-bg);
 }
 
 .workspacePaneToolbar label {
@@ -7057,7 +7061,7 @@ td code {
   overflow: hidden;
   border: 1px solid transparent;
   border-bottom: 0;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--radius-control-sm) var(--radius-control-sm) 0 0;
 }
 
 .workspaceTerminalTab[data-active="true"] {
@@ -7101,7 +7105,7 @@ td code {
   align-self: center;
   min-height: 25px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0 8px;
   color: var(--text-muted);
   background: transparent;
@@ -7116,7 +7120,7 @@ td code {
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--gray);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--gray) 15%, transparent);
 }
@@ -7177,15 +7181,15 @@ td code {
   max-width: calc(100% - 24px);
   padding: 6px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-dialog);
   background: var(--surface-solid);
   box-shadow: var(--shadow);
 }
 
 .workspaceTerminalSearch input { width: min(250px, 50vw); }
-.workspaceTerminalSearch button { min-width: 28px; border: 0; border-radius: var(--radius-sm); padding: 4px; color: var(--text); background: transparent; }
+.workspaceTerminalSearch button { min-width: 28px; border: 0; border-radius: var(--radius-control-sm); padding: 4px; color: var(--text); background: transparent; }
 .workspaceTerminalSearch button:hover { background: var(--surface-muted); }
-.workspaceRendererRetry { position: absolute; z-index: 4; right: 12px; bottom: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 9px; color: var(--text); background: var(--surface-solid); box-shadow: var(--shadow-soft); }
+.workspaceRendererRetry { position: absolute; z-index: 4; right: 12px; bottom: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control-sm); padding: 6px 9px; color: var(--text); background: var(--surface-solid); box-shadow: var(--shadow-soft); }
 
 .workspaceStatusChip {
   display: inline-flex;
@@ -7193,7 +7197,7 @@ td code {
   gap: 6px;
   max-width: 100%;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 3px 8px;
   color: var(--text-muted);
   font-size: 0.72rem;
@@ -7358,12 +7362,12 @@ td code {
   max-width: min(280px, calc(100vw - 20px));
   padding: 5px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-dialog);
   background: var(--surface-solid);
   box-shadow: var(--shadow);
 }
 
-.workspaceContextMenu button { border: 0; border-radius: var(--radius-sm); text-align: left; }
+.workspaceContextMenu button { border: 0; border-radius: var(--radius-control-sm); text-align: left; }
 .workspaceContextMenu button:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .workspaceTransfersPanel { gap: 0; overflow: hidden; padding: 0; }
@@ -7378,7 +7382,7 @@ td code {
 .workspaceTransfersTable td:nth-child(4) { width: 175px; }
 .workspaceTransfersTable td:nth-child(9) { width: 185px; }
 .workspaceTransfersTable small { display: block; margin-top: 2px; color: var(--text-faint); font-family: var(--font-mono); font-size: 0.66rem; }
-.workspaceTransferDirection { display: inline-grid; width: 22px; height: 22px; place-items: center; margin-right: 5px; border-radius: 999px; color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.workspaceTransferDirection { display: inline-grid; width: 22px; height: 22px; place-items: center; margin-right: 5px; border-radius: var(--radius-pill); color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
 .workspaceTransferDirection[data-direction="download"] { color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
 .workspaceProgressLabel { display: flex; justify-content: space-between; gap: 8px; color: var(--text-muted); font-size: 0.7rem; }
 .workspaceTransfersTable progress { width: 100%; height: 5px; accent-color: var(--blue); }
@@ -7403,7 +7407,7 @@ td code {
 .workspaceRecoveries h2 { color: var(--text); font-size: 0.95rem; }
 .workspaceRecoveries > p { color: var(--text-muted); font-size: 0.84rem; }
 .workspaceRecoveryList { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
-.workspaceRecoveryCard { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-solid); }
+.workspaceRecoveryCard { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--surface-solid); }
 .workspaceRecoveryCard header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .workspaceRecoveryCard strong { color: var(--text); font-size: 0.84rem; text-transform: capitalize; }
 
@@ -7429,7 +7433,7 @@ td code {
   overflow: auto;
   padding: 19px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-dialog);
   color: var(--text);
   background: var(--surface-solid);
   box-shadow: var(--shadow);
@@ -7441,13 +7445,13 @@ td code {
 .workspaceDialogActions > :first-child { margin-right: auto; }
 .workspacePreviewDialog { width: min(780px, 100%); }
 .workspacePreviewDialog header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.workspacePreviewDialog header button { border: 0; border-radius: 999px; width: 30px; height: 30px; color: var(--text-muted); background: var(--surface-muted); }
-.workspacePreviewBody { min-height: 80px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-strong); }
+.workspacePreviewDialog header button { border: 0; border-radius: var(--radius-pill); width: 30px; height: 30px; color: var(--text-muted); background: var(--surface-muted); }
+.workspacePreviewBody { min-height: 80px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--bg-strong); }
 .workspacePreviewBody pre { margin: 0; padding: 12px; color: var(--text); font-size: 0.78rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .workspacePreviewBody img { display: block; width: auto; max-width: 100%; max-height: 60vh; margin: 0 auto; object-fit: contain; }
 .workspacePreviewDialog footer { color: var(--text-faint); font-family: var(--font-mono); font-size: 0.72rem; }
 .workspaceOperationDialog label { display: grid; gap: 6px; color: var(--text-muted); font-size: 0.82rem; }
-.workspaceOperationPreview { padding: 10px; border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--yellow) 7%, var(--surface-solid)); }
+.workspaceOperationPreview { padding: 10px; border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border)); border-radius: var(--radius-surface); background: color-mix(in srgb, var(--yellow) 7%, var(--surface-solid)); }
 .workspaceWarningText { color: var(--yellow) !important; font-size: 0.8rem; }
 .workspaceConflictChoices { display: grid; gap: 7px; margin: 0; border: 0; padding: 0; }
 .workspaceConflictChoices label,
@@ -7472,7 +7476,7 @@ td code {
 .workspaceVisuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 
 .workspaceSplitHandle { position: relative; z-index: 2; cursor: col-resize; outline: none; background: transparent; }
-.workspaceSplitHandle::after { content: ""; position: absolute; top: 18px; bottom: 18px; left: 3px; width: 3px; border-radius: 999px; background: var(--border-strong); }
+.workspaceSplitHandle::after { content: ""; position: absolute; top: 18px; bottom: 18px; left: 3px; width: 3px; border-radius: var(--radius-pill); background: var(--border-strong); }
 .workspaceSplitHandle:hover::after,
 .workspaceSplitHandle:focus-visible::after { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent); }
 
@@ -7488,9 +7492,6 @@ td code {
 :root[data-platform="macos"] .workspaceFilesPanel,
 :root[data-platform="macos"] .workspaceTransfersPanel,
 :root[data-platform="macos"] .workspaceInlineDialog { backdrop-filter: blur(24px) saturate(1.12); }
-
-:root[data-platform="macos"] .workspaceTerminalTab,
-:root[data-platform="macos"] .workspaceTerminalTab > button:first-child { border-radius: 9px; }
 
 @media (max-width: 900px) {
   .workspacePage { min-height: 0; }

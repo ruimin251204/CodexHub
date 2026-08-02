@@ -17,8 +17,8 @@
   container: ch-terminal / inline-size;
   min-height: min(720px, calc(100vh - 158px));
   overflow: hidden;
-  border-radius: 14px;
-  background: var(--surface-solid);
+  border-radius: var(--radius-surface);
+  background: var(--workspace-panel-bg, var(--surface-solid));
   box-shadow: 0 18px 46px color-mix(in srgb, #17233e 10%, transparent), var(--shadow-soft);
 }
 
@@ -79,7 +79,7 @@
   min-height: 50px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-solid) 94%, var(--surface-muted));
+  background: var(--workspace-commandbar-bg, color-mix(in srgb, var(--surface-solid) 94%, var(--surface-muted)));
 }
 
 .chTerminalToolbar button,
@@ -91,7 +91,7 @@
   gap: 7px;
   min-height: 34px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   color: var(--text);
   font: inherit;
@@ -176,7 +176,7 @@
   min-width: 190px;
   padding: 5px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-dialog);
   background: var(--surface-solid);
   box-shadow: 0 16px 42px rgba(12, 23, 45, 0.18);
 }
@@ -218,7 +218,7 @@
   height: 34px;
   min-width: 0;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   background: transparent;
 }
 
@@ -439,7 +439,7 @@
   flex: 0 0 auto;
   width: 7px;
   height: 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #7e8793;
   box-shadow: 0 0 0 3px rgba(126, 135, 147, 0.11);
 }
@@ -499,7 +499,7 @@
   max-height: min(500px, calc(100% - 40px));
   overflow: auto;
   border: 1px solid var(--border-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-dialog);
   color: var(--text);
   background: var(--surface-solid);
   box-shadow: 0 24px 64px rgba(12, 23, 45, 0.28);
@@ -538,7 +538,7 @@
   height: 30px;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 0;
   color: var(--text-muted);
   background: var(--surface-solid);
@@ -562,7 +562,7 @@
   min-height: 42px;
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   padding: 9px 10px;
   color: var(--text);
   font: inherit;
