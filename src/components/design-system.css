@@ -16,13 +16,29 @@
   --ch-border-strong: var(--border-strong, rgba(15, 23, 42, 0.18));
   --ch-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
   --ch-shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --ch-radius-sm: 8px;
-  --ch-radius-md: 10px;
-  --ch-radius-lg: 12px;
-  --ch-sidebar-width: 240px;
+  /* 平台外观只在这里定义圆角，页面和组件均消费语义 token。 */
+  --radius-control-sm: 4px;
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --radius-dialog: 8px;
+  --radius-main-corner: 8px;
+  --radius-pill: 999px;
+  --ch-radius-sm: var(--radius-control-sm);
+  --ch-radius-md: var(--radius-control);
+  --ch-radius-lg: var(--radius-surface);
+  --ch-sidebar-width: 220px;
   --ch-sidebar-collapsed-width: 76px;
   --ch-header-height: 68px;
   --ch-font-ui: var(--font-ui, "Segoe UI Variable", "Segoe UI", "PingFang SC", system-ui, sans-serif);
+}
+
+:root[data-platform="macos"] {
+  --radius-control-sm: 6px;
+  --radius-control: 8px;
+  --radius-surface: 12px;
+  --radius-dialog: 14px;
+  --radius-main-corner: 12px;
+  --radius-pill: 999px;
 }
 
 :root[data-theme="dark"] {
@@ -180,6 +196,20 @@
 .ch-header__identity {
   min-width: 0;
 }
+
+.ch-top-bar {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: var(--ch-header-height);
+  color: var(--ch-text);
+}
+
+.ch-top-bar__leading,
+.ch-top-bar__search,
+.ch-top-bar__trailing,
+.ch-top-bar__window-controls { min-width: 0; }
 
 .ch-sidebar {
   display: flex;
@@ -596,6 +626,74 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.ch-status-dot {
+  --ch-status-dot-color: var(--ch-text-faint);
+  display: inline-block;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ch-status-dot-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ch-status-dot-color) 12%, transparent);
+}
+.ch-status-dot[data-tone="info"] { --ch-status-dot-color: var(--ch-info); }
+.ch-status-dot[data-tone="success"] { --ch-status-dot-color: var(--ch-success); }
+.ch-status-dot[data-tone="warning"] { --ch-status-dot-color: var(--ch-warning); }
+.ch-status-dot[data-tone="danger"] { --ch-status-dot-color: var(--ch-danger); }
+
+.ch-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--ch-border);
+  border-radius: var(--radius-pill);
+  padding: 3px 9px;
+  color: var(--ch-text-muted);
+  font-size: 0.74rem;
+  font-weight: 650;
+  background: var(--ch-surface-soft);
+}
+
+.ch-toggle {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 2px;
+  background: color-mix(in srgb, var(--ch-text) 18%, transparent);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.ch-toggle[aria-checked="true"] { background: var(--ch-accent); }
+.ch-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.ch-toggle__thumb { width: 18px; height: 18px; border-radius: var(--radius-pill); background: #fff; box-shadow: var(--ch-shadow-sm); transition: transform 140ms ease; }
+.ch-toggle[aria-checked="true"] .ch-toggle__thumb { transform: translateX(16px); }
+
+.ch-metric-card {
+  --ch-metric-color: var(--ch-info);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 128px;
+  border: 1px solid var(--ch-border);
+  border-radius: var(--radius-surface);
+  padding: 18px;
+  background: var(--ch-surface);
+  box-shadow: var(--ch-shadow-sm);
+}
+.ch-metric-card[data-tone="success"] { --ch-metric-color: var(--ch-success); }
+.ch-metric-card[data-tone="warning"] { --ch-metric-color: var(--ch-warning); }
+.ch-metric-card[data-tone="danger"] { --ch-metric-color: var(--ch-danger); }
+.ch-metric-card__copy { display: grid; gap: 3px; min-width: 0; }
+.ch-metric-card__copy > span { color: var(--ch-text-muted); font-size: 0.82rem; font-weight: 650; }
+.ch-metric-card__copy > strong { color: var(--ch-text); font-size: 2rem; line-height: 1.1; }
+.ch-metric-card__copy > small { color: var(--ch-text-muted); font-size: 0.74rem; }
+.ch-metric-card__icon { display: grid; width: 48px; height: 48px; border-radius: var(--radius-surface); place-items: center; color: var(--ch-metric-color); background: color-mix(in srgb, var(--ch-metric-color) 10%, var(--ch-surface)); }
 
 .ch-host-selector {
   position: relative;

@@ -1393,7 +1393,9 @@ for (const token of ['new URL("../src-tauri/icons/128x128.png", import.meta.url)
   if (!app.includes(token)) fail(`missing app logo UI token: ${token}`);
 }
 for (const token of [
-  '<AppTitleBar copy={copy} search={globalSearchControl}',
+  '<AppTitleBar',
+  'search={globalSearchControl}',
+  'notificationCount={unacknowledgedTaskIds.size}',
   'items: (["dashboard", "terminal", "files", "transfers"] as SectionId[])',
   'items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[])',
   'className="codexHubSidebarFooterActions"',
@@ -2344,7 +2346,7 @@ for (const token of [
 ]) {
   if (!designSystemStyles.includes(token)) fail(`Windows sidebar selection must be shared by expanded and collapsed states: ${token}`);
 }
-for (const token of [".codexHubAppShell", ".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-lg)"]) {
+for (const token of [".codexHubAppShell", ".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-main-corner)"]) {
   if (!appShellStyles.includes(token)) fail(`missing rounded content-shell token: ${token}`);
 }
 const codexHubAppShellStyle = appShellStyles.match(/(?:^|\n)\.codexHubAppShell\s*\{[^}]*\}/)?.[0] ?? "";
@@ -2353,7 +2355,7 @@ const codexHubContentStyle = appShellStyles.match(/\.codexHubContent\s*\{[^}]*\}
 for (const token of ["background: var(--chrome-glass)", "backdrop-filter: blur(28px) saturate(1.18)"]) {
   if (!codexHubAppShellStyle.includes(token)) fail(`app shell must provide the shared chrome behind the rounded detail corner: ${token}`);
 }
-for (const token of ["overflow: hidden", "border-top-left-radius: var(--radius-lg)", "background: var(--surface-solid)"]) {
+for (const token of ["overflow: hidden", "border-top-left-radius: var(--radius-main-corner)", "background: var(--surface-solid)"]) {
   if (!codexHubMainStyle.includes(token)) fail(`main detail surface should own its rounded background: ${token}`);
 }
 for (const token of ["min-height: 0", "border-top-left-radius: inherit", "background: transparent"]) {

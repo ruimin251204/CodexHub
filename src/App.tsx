@@ -81,7 +81,7 @@ import { useFeedback } from "./ui/feedback";
 import type { FeedbackPlacement, FeedbackTone } from "./ui/feedback";
 import { ModalFrame } from "./ui/ModalFrame";
 import { PersonalInfoMaskingProvider, usePersonalInfoMasking } from "./ui/PersonalInfoMasking";
-import { AppShell, Sidebar } from "./components/Layout";
+import { AppLayout, PageHeader, Sidebar, TopBar } from "./components/Layout";
 import type { SidebarGroup } from "./components/Layout";
 import { SearchBox } from "./components/UI";
 import type { StatusTone } from "./components/UI";
@@ -2268,10 +2268,16 @@ function usePlatformAppearance() {
 function AppTitleBar({
   copy,
   search,
+  notificationCount,
+  onOpenTasks,
+  showWindowControls,
   onCloseRequest
 }: {
   copy: UICopy;
   search: ReactNode;
+  notificationCount: number;
+  onOpenTasks: () => void;
+  showWindowControls: boolean;
   onCloseRequest: () => Promise<void> | void;
 }) {
   const [title, setTitle] = useState("CodexHub");
@@ -2315,32 +2321,40 @@ function AppTitleBar({
     }
   };
 
+  const windowControls = showWindowControls ? (
+    <div className="captionControls" role="group" aria-label={title}>
+      <button className="captionButton" data-action="minimize" type="button" aria-label={copy.windowControls.minimize} onClick={() => void runAction("minimize")}><span className="captionGlyph" aria-hidden="true" /></button>
+      <button className="captionButton" data-action="maximize" type="button" aria-label={copy.windowControls.maximize} onClick={() => void runAction("maximize")}><span className="captionGlyph" aria-hidden="true" /></button>
+      <button className="captionButton closeCaptionButton" data-action="close" type="button" aria-label={copy.windowControls.close} onClick={() => void runAction("close")}><span className="captionGlyph" aria-hidden="true" /></button>
+    </div>
+  ) : null;
+
   return (
-    <header className="appTitleBar">
-      <div className="titleBarLeadingDragRegion" data-tauri-drag-region onMouseDown={handleDragMouseDown}>
+    <TopBar
+      className="appTitleBar"
+      ariaLabel={copy.common.topHeader}
+      leading={<div className="titleBarLeadingDragRegion" data-tauri-drag-region={showWindowControls || undefined} onMouseDown={showWindowControls ? handleDragMouseDown : undefined}>
         <div className="appTitle" data-tauri-drag-region>
           <img className="titleBarIcon" src={appLogoUrl} alt="" aria-hidden="true" />
           <span data-tauri-drag-region>{title}</span>
         </div>
-      </div>
-      <div className="titleBarSearchRegion">
-        <div className="titleBarSearch">
-          {search}
-        </div>
-      </div>
-      <div className="titleBarTrailingDragRegion" data-tauri-drag-region onMouseDown={handleDragMouseDown} />
-      <div className="captionControls" role="group" aria-label={title}>
-        <button className="captionButton" data-action="minimize" type="button" aria-label={copy.windowControls.minimize} onClick={() => void runAction("minimize")}>
-          <span className="captionGlyph" aria-hidden="true" />
+      </div>}
+      search={<div className="titleBarSearch">{search}</div>}
+      trailing={<>
+        <button
+          className="titleBarNotification"
+          type="button"
+          aria-label={`${copy.common.notifications}: ${notificationCount}`}
+          title={copy.common.notifications}
+          onClick={onOpenTasks}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 8a4.5 4.5 0 0 1 9 0c0 5 2 5 2 6H3.5c0-1 2-1 2-6Z" /><path d="M8 16a2 2 0 0 0 4 0" /></svg>
+          {notificationCount > 0 ? <span>{notificationCount > 99 ? "99+" : notificationCount}</span> : null}
         </button>
-        <button className="captionButton" data-action="maximize" type="button" aria-label={copy.windowControls.maximize} onClick={() => void runAction("maximize")}>
-          <span className="captionGlyph" aria-hidden="true" />
-        </button>
-        <button className="captionButton closeCaptionButton" data-action="close" type="button" aria-label={copy.windowControls.close} onClick={() => void runAction("close")}>
-          <span className="captionGlyph" aria-hidden="true" />
-        </button>
-      </div>
-    </header>
+        <div className="titleBarTrailingDragRegion" data-tauri-drag-region={showWindowControls || undefined} onMouseDown={showWindowControls ? handleDragMouseDown : undefined} />
+      </>}
+      windowControls={windowControls}
+    />
   );
 }
 
@@ -4908,10 +4922,15 @@ function App() {
         data-custom-titlebar={usesCustomTitleBar}
         data-sidebar-collapsed={sidebarCollapsed || undefined}
       >
-        {usesCustomTitleBar ? (
-          <AppTitleBar copy={copy} search={globalSearchControl} onCloseRequest={handleTitleBarCloseRequest} />
-        ) : null}
-        <AppShell
+        <AppTitleBar
+          copy={copy}
+          search={globalSearchControl}
+          notificationCount={unacknowledgedTaskIds.size}
+          onOpenTasks={() => selectSection("tasks")}
+          showWindowControls={usesCustomTitleBar}
+          onCloseRequest={handleTitleBarCloseRequest}
+        />
+        <AppLayout
           className="codexHubAppShell"
           mainClassName="codexHubMain"
           mainLabel={selectedCopy.title}
@@ -4975,14 +4994,13 @@ function App() {
       >
         <StorageHealthCenter copy={copy} health={storageHealth} onChanged={refreshStorageHealth} />
         {activeSection !== "monitor" ? (
-          <header className="topBar">
-            <div>
-              <TitleWithIcon icon={activeSection} level={1}>{selectedCopy.title}</TitleWithIcon>
-            </div>
-            {pageActions.length > 0 ? (
-              <CommandBarActions ariaLabel={selectedCopy.title} className="topActions" actions={pageActions} />
-            ) : null}
-          </header>
+          <PageHeader
+            className="topBar codexHubPageHeader"
+            title={selectedCopy.title}
+            description={selectedCopy.body}
+            icon={<NavIcon id={activeSection} />}
+            actions={pageActions.length > 0 ? <CommandBarActions ariaLabel={selectedCopy.title} className="topActions" actions={pageActions} /> : null}
+          />
         ) : null}
 
         {bootstrapError ? (
@@ -4993,7 +5011,7 @@ function App() {
           </section>
         ) : renderContent()}
       </div>
-      </AppShell>
+      </AppLayout>
       {batchCodexUpdateConfirm ? (
         <BatchCodexProcessConfirmModal
           copy={copy}

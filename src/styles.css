@@ -36,9 +36,9 @@
   --chrome-backdrop: #efede8;
   --chrome-glow-primary: rgba(255, 255, 255, 0.92);
   --chrome-glow-secondary: rgba(227, 234, 242, 0.76);
-  --radius-lg: 8px;
-  --radius-md: 6px;
-  --radius-sm: 4px;
+  --radius-lg: var(--radius-surface);
+  --radius-md: var(--radius-control);
+  --radius-sm: var(--radius-control-sm);
   color: var(--text);
   background: var(--bg);
 }
@@ -77,9 +77,6 @@
   --sidebar: rgba(246, 247, 250, 0.86);
   --surface: rgba(255, 255, 255, 0.82);
   --surface-muted: rgba(247, 248, 250, 0.76);
-  --radius-lg: 18px;
-  --radius-md: 14px;
-  --radius-sm: 10px;
 }
 
 :root[data-platform="macos"][data-theme="dark"] {
@@ -94,7 +91,7 @@
 }
 
 :root[data-platform="macos"] .navItem {
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding-left: 10px;
 }
 
@@ -119,7 +116,7 @@
 
 :root[data-platform="macos"] .badge,
 :root[data-platform="macos"] .installedSkillTag {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
@@ -143,21 +140,21 @@
 :root[data-platform="macos"] .secondaryButton,
 :root[data-platform="macos"] .miniButton,
 :root[data-platform="macos"] .segmentedControl button {
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 :root[data-platform="macos"] .commandGroup {
   gap: 2px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 :root[data-platform="macos"] .commandGroup .miniButton {
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
 }
 
 :root[data-platform="macos"] .monitorPage {
-  --monitor-control-radius: 10px;
+  --monitor-control-radius: var(--radius-control);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -244,6 +241,8 @@ dd {
 }
 
 .desktopFrame {
+  display: grid;
+  grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   min-height: 0;
@@ -255,8 +254,6 @@ dd {
 }
 
 .desktopFrame[data-custom-titlebar="true"] {
-  display: grid;
-  grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
@@ -276,6 +273,30 @@ dd {
   backdrop-filter: blur(28px) saturate(1.18);
   user-select: none;
 }
+
+.appTitleBar .ch-top-bar__leading { grid-area: leading; min-width: 0; }
+.appTitleBar .ch-top-bar__search { grid-area: search; min-width: 0; padding: 5px 0; }
+.appTitleBar .ch-top-bar__trailing { grid-area: trailing; display: flex; align-items: center; justify-content: flex-end; min-width: 0; padding-right: 12px; }
+.appTitleBar .ch-top-bar__window-controls { position: absolute; inset: 0 0 0 auto; }
+
+.titleBarNotification {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius-control);
+  place-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+.titleBarNotification:hover { color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); }
+.titleBarNotification svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+.titleBarNotification span { position: absolute; top: 2px; right: 1px; display: grid; min-width: 15px; height: 15px; border: 2px solid var(--chrome-backdrop); border-radius: var(--radius-pill); padding: 0 3px; place-items: center; color: #fff; font-size: 8px; font-weight: 800; background: var(--blue); }
+
+.desktopFrame[data-custom-titlebar="true"] .appTitleBar .ch-top-bar__trailing { padding-right: calc(var(--caption-controls-width) + 8px); }
 
 /* Keep chrome continuous over the sidebar while preserving a quiet main-pane edge. */
 .appTitleBar::after {
@@ -314,6 +335,8 @@ dd {
 
 .titleBarLeadingDragRegion { grid-area: leading; }
 .titleBarTrailingDragRegion { grid-area: trailing; }
+.appTitleBar .titleBarLeadingDragRegion { width: 100%; }
+.appTitleBar .titleBarTrailingDragRegion { flex: 1 1 auto; width: 100%; }
 
 .titleBarSearchRegion {
   grid-area: search;
@@ -327,6 +350,13 @@ dd {
   min-width: 0;
   -webkit-app-region: no-drag;
 }
+
+.codexHubPageHeader.topBar {
+  min-height: 70px;
+  height: auto;
+}
+
+.codexHubPageHeader .ch-page__heading-copy p { margin: 3px 0 0; }
 
 .titleBarSearch .ch-search-box {
   height: 34px;
@@ -459,6 +489,8 @@ dd {
 
 }
 
+.desktopFrame > .appShell,
+.desktopFrame > .codexHubAppShell,
 .desktopFrame[data-custom-titlebar="true"] .appShell {
   height: 100%;
   min-height: 0;
@@ -3431,7 +3463,7 @@ tr:last-child td {
   display: block;
   width: 78%;
   height: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--terminal-preview-line);
   opacity: 0.78;
 }
