@@ -4581,6 +4581,156 @@ tr:last-child td {
   min-width: 0;
 }
 
+/* Dashboard / Hosts 使用公共组件和平台语义圆角，保持业务数据密度可读。 */
+.dashboardPage,
+.hostsGrid {
+  gap: 18px;
+}
+
+.dashboardMetrics {
+  gap: 16px;
+}
+
+.dashboardMetrics .ch-metric-card {
+  min-height: 132px;
+}
+
+.dashboardMetrics .ch-metric-card__icon .navGlyph {
+  width: 24px;
+  height: 24px;
+}
+
+.dashboardPage > .panel,
+.hostsGrid > .panel {
+  border-radius: var(--radius-surface);
+  background: var(--surface-solid);
+  box-shadow: var(--ch-shadow-sm);
+}
+
+.dashboardPage .matrixGrid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.dashboardPage .hostCard {
+  min-height: 216px;
+  border-color: var(--ch-border);
+  border-radius: var(--radius-surface);
+  padding: 17px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.dashboardPage .hostCard:hover {
+  border-color: color-mix(in srgb, var(--ch-accent) 24%, var(--ch-border));
+  box-shadow: var(--ch-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.dashboardPage .hostMeta {
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--ch-border) 76%, transparent);
+}
+
+.hostsDataTable {
+  border-radius: var(--radius-surface);
+  box-shadow: none;
+}
+
+.hostsDataTable table {
+  min-width: 1080px;
+}
+
+.hostsDataTable .hostsTableAlias strong {
+  color: var(--ch-text);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.hostsDataTable tbody tr.hostsDataTableRowSelected {
+  background: color-mix(in srgb, var(--ch-accent) 8%, var(--ch-surface));
+  box-shadow: inset 3px 0 0 var(--ch-accent);
+}
+
+.hostsTableActions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.hostRowActions,
+.hostRowPrimaryActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hostRowActions .ch-action-button {
+  min-height: 30px;
+  padding: 6px 8px;
+  box-shadow: none;
+}
+
+.hostRowMore {
+  position: relative;
+}
+
+.hostRowMore > summary {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-control);
+  place-items: center;
+  color: var(--ch-text-muted);
+  font-weight: 750;
+  letter-spacing: 1px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hostRowMore > summary::-webkit-details-marker {
+  display: none;
+}
+
+.hostRowMore > summary:hover,
+.hostRowMore[open] > summary {
+  color: var(--ch-text);
+  background: var(--ch-surface-soft);
+}
+
+.hostRowMoreMenu {
+  display: grid;
+  gap: 4px;
+  min-width: 128px;
+  margin-top: 6px;
+  border: 1px solid var(--ch-border);
+  border-radius: var(--radius-dialog);
+  padding: 6px;
+  background: var(--ch-surface);
+  box-shadow: var(--ch-shadow-md);
+}
+
+.hostRowMoreMenu .ch-action-button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.hostsGrid .detailGrid {
+  gap: 10px;
+}
+
+.hostsGrid .detailGrid > div {
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--ch-surface-soft) 84%, var(--ch-surface));
+}
+
+@media (max-width: 820px) {
+  /* Hosts 宁可横向滚动，也不隐藏 IP、用户、端口或版本字段。 */
+  .hostsDataTable th[data-priority],
+  .hostsDataTable td[data-priority] {
+    display: table-cell;
+  }
+}
+
 .batchProcessHostHeading {
   display: flex;
   flex-wrap: wrap;

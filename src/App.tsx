@@ -83,8 +83,8 @@ import { ModalFrame } from "./ui/ModalFrame";
 import { PersonalInfoMaskingProvider, usePersonalInfoMasking } from "./ui/PersonalInfoMasking";
 import { AppLayout, PageHeader, Sidebar, TopBar } from "./components/Layout";
 import type { SidebarGroup } from "./components/Layout";
-import { SearchBox } from "./components/UI";
-import type { StatusTone } from "./components/UI";
+import { ActionButton, DataTable, MetricCard as SharedMetricCard, SearchBox } from "./components/UI";
+import type { DataTableColumn, StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
 import { searchGlobalEntries } from "./search/globalSearch";
 import { createGlobalSearchCatalog } from "./search/globalSearchCatalog";
@@ -736,6 +736,7 @@ export const uiCopy = {
       skills: "Skills",
       lastSeen: "Last seen",
       actions: "Actions",
+      moreActions: "More actions",
       edit: "Edit",
       delete: "Delete",
       test: "Test",
@@ -1624,6 +1625,7 @@ export const uiCopy = {
       skills: "技能",
       lastSeen: "上次在线",
       actions: "操作",
+      moreActions: "更多操作",
       edit: "编辑",
       delete: "删除",
       test: "测试",
@@ -5605,12 +5607,12 @@ function DashboardView({
 }) {
   const labelFor = (id: SectionId) => copy.navItems.find((item) => item.id === id)?.label ?? id;
   return (
-    <div className="pageGrid">
-      <section className="summaryStrip" aria-label={copy.dashboard.summaryLabel}>
-        <MetricCard label={labelFor("hosts")} value={String(hosts.length)} detailLabel={copy.dashboard.online} detailValue={String(onlineCount)} />
-        <MetricCard label={labelFor("profiles")} value={String(profiles.length)} detailLabel={copy.dashboard.applied} detailValue={String(appliedProfileCount)} />
-        <MetricCard label={labelFor("skills")} value={String(skillPacks.length)} detailLabel={copy.dashboard.enabled} detailValue={String(skillPacks.filter((pack) => pack.enabled).length)} />
-        <MetricCard label={labelFor("tasks")} value={String(tasks.length)} detailLabel={copy.dashboard.success} detailValue={String(successfulTaskCount)} />
+    <div className="pageGrid dashboardPage">
+      <section className="summaryStrip dashboardMetrics" aria-label={copy.dashboard.summaryLabel}>
+        <SharedMetricCard icon={<NavIcon id="hosts" />} label={labelFor("hosts")} value={String(hosts.length)} description={`${copy.dashboard.online} ${onlineCount}`} tone="info" />
+        <SharedMetricCard icon={<NavIcon id="profiles" />} label={labelFor("profiles")} value={String(profiles.length)} description={`${copy.dashboard.applied} ${appliedProfileCount}`} tone="success" />
+        <SharedMetricCard icon={<NavIcon id="skills" />} label={labelFor("skills")} value={String(skillPacks.length)} description={`${copy.dashboard.enabled} ${skillPacks.filter((pack) => pack.enabled).length}`} tone="warning" />
+        <SharedMetricCard icon={<NavIcon id="tasks" />} label={labelFor("tasks")} value={String(tasks.length)} description={`${copy.dashboard.success} ${successfulTaskCount}`} tone="info" />
       </section>
 
       <ServerMatrix
@@ -5625,31 +5627,6 @@ function DashboardView({
         onTestAllSshHosts={onTestAllSshHosts}
       />
     </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  detailLabel,
-  detailValue
-}: {
-  label: string;
-  value: string;
-  detailLabel: string;
-  detailValue: string;
-}) {
-  return (
-    <article className="metricCard">
-      <div className="metricPrimary">
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </div>
-      <div className="metricSecondary">
-        <span>{detailLabel}</span>
-        <b>{detailValue}</b>
-      </div>
-    </article>
   );
 }
 
@@ -6481,7 +6458,6 @@ function ServerMatrix({
         <div className="matrixGrid">
           {hosts.map((host) => {
             const codexStatus = hostCodexStatus(copy, host, undefined, hosts, latestCodexVersion);
-            const systemLabel = hostSystemLabel(host, copy);
             const inventory = hostInventoryByAlias.get(host.hostAlias.toLowerCase());
             const skillCount = dashboardHostSkillCount(host, inventory);
             const skillCountLabel = typeof skillCount === "number" ? String(skillCount) : copy.hosts.unknown;
@@ -6503,7 +6479,11 @@ function ServerMatrix({
                 </div>
                 <div>
                   <dt>{copy.dashboard.system}</dt>
-                  <dd><Badge tone={knownValueTone(host.os, copy)}>{systemLabel}</Badge></dd>
+                  <dd><Badge tone={knownValueTone(host.os, copy)}>{knownHostValue(host.os, copy)}</Badge></dd>
+                </div>
+                <div>
+                  <dt>{copy.hosts.arch}</dt>
+                  <dd><Badge tone={archTone(host.arch, copy)}>{knownHostValue(host.arch, copy)}</Badge></dd>
                 </div>
                 <div>
                   <dt>{copy.hosts.codex}</dt>
@@ -6641,6 +6621,107 @@ function HostsView({
     }
   };
 
+  // 表格只组合已有主机数据和业务回调，不改变操作门禁。
+  const hostColumns: DataTableColumn<SshConfigHost>[] = [
+    {
+      id: "alias",
+      header: copy.hosts.alias,
+      priority: "essential",
+      cellClassName: "hostsTableAlias",
+      render: (sshHost) => <strong>{personalInfo.maskText(sshHost.alias)}</strong>
+    },
+    {
+      id: "status",
+      header: copy.hosts.status,
+      priority: "essential",
+      render: (sshHost) => {
+        const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
+        return <HostStatusIndicator copy={copy} status={host?.status ?? (hostBusy[sshHost.alias] === "test" ? "testing" : "unknown")} />;
+      }
+    },
+    {
+      id: "source",
+      header: copy.hosts.source,
+      priority: "normal",
+      render: (sshHost) => <Badge tone={sshHost.managed ? "blue" : "gray"}>{sshHostSourceLabel(copy, sshHost)}</Badge>
+    },
+    {
+      id: "address",
+      header: copy.hosts.hostName,
+      priority: "normal",
+      render: (sshHost) => personalInfo.maskHostAddress(sshHost.hostName)
+    },
+    { id: "port", header: copy.hosts.port, priority: "optional", render: (sshHost) => sshHost.port },
+    {
+      id: "user",
+      header: copy.hosts.user,
+      priority: "optional",
+      render: (sshHost) => personalInfo.maskUsername(sshHost.user)
+    },
+    {
+      id: "codex-version",
+      header: copy.hosts.codexVersion,
+      priority: "normal",
+      render: (sshHost) => {
+        const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
+        const status = hostCodexStatus(copy, host, hostBusy[sshHost.alias], hosts, latestCodexVersion);
+        return <Badge tone={status.tone}>{status.label}</Badge>;
+      }
+    },
+    {
+      id: "latest-version",
+      header: copy.hosts.latestCodexVersion,
+      priority: "optional",
+      render: () => {
+        const status = latestCodexStatus(copy, latestCodexVersion);
+        return <Badge tone={status.tone} title={status.title}>{status.label}</Badge>;
+      }
+    },
+    {
+      id: "actions",
+      header: copy.hosts.actions,
+      priority: "essential",
+      cellClassName: "hostsTableActions",
+      render: (sshHost) => {
+        const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
+        const busy = hostBusy[sshHost.alias];
+        const codexTested = isHostCodexTested(host);
+        const installDisabled = Boolean(busy) || !codexTested || Boolean(host?.codexInstalled);
+        const updateDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled || !isCodexVersionBehind(host.codexVersion, latestCodexVersion?.version);
+        const uninstallDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled;
+        return (
+          <div className="hostRowActions" onClick={(event) => event.stopPropagation()}>
+            <div className="hostRowPrimaryActions">
+              <ActionButton size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => onTestHost(sshHost.alias)}>
+                {busy === "test" ? copy.hosts.testing : copy.hosts.test}
+              </ActionButton>
+              <ActionButton size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => handleEdit(sshHost)}>
+                {copy.hosts.edit}
+              </ActionButton>
+            </div>
+            <details className="hostRowMore">
+              <summary aria-label={`${copy.hosts.moreActions}: ${personalInfo.maskText(sshHost.alias)}`} title={copy.hosts.moreActions}>•••</summary>
+              <div className="hostRowMoreMenu">
+                <ActionButton size="sm" variant="ghost" disabled={installDisabled} onClick={() => onManageCodex(sshHost.alias, "install")}>
+                  {remoteCodexButtonLabel(copy, busy, "install")}
+                </ActionButton>
+                <ActionButton size="sm" variant="ghost" disabled={updateDisabled} onClick={() => onManageCodex(sshHost.alias, "update")}>
+                  {remoteCodexButtonLabel(copy, busy, "update")}
+                </ActionButton>
+                <ActionButton size="sm" variant="danger" disabled={uninstallDisabled} onClick={() => onManageCodex(sshHost.alias, "uninstall")}>
+                  {remoteCodexButtonLabel(copy, busy, "uninstall")}
+                </ActionButton>
+                <ActionButton size="sm" variant="danger" disabled={Boolean(busy)} onClick={() => setDeleteHostAlias(sshHost.alias)}>
+                  {copy.hosts.delete}
+                </ActionButton>
+              </div>
+            </details>
+          </div>
+        );
+      }
+    }
+  ];
+
   return (
     <div className="hostsGrid">
       <SshHostModal
@@ -6681,72 +6762,15 @@ function HostsView({
             variant="hosts"
           />
         ) : (
-          <div className="tableWrap">
-            <table className="sshHostsTable">
-              <thead>
-                <tr>
-                  <th className="sshHostsAliasCol">{copy.hosts.alias}</th>
-                  <th className="sshHostsOnlineCol">{copy.status.host.online}</th>
-                  <th className="sshHostsSourceCol">{copy.hosts.source}</th>
-                  <th className="sshHostsAddressCol">{copy.hosts.hostName}</th>
-                  <th className="sshHostsPortCol">{copy.hosts.port}</th>
-                  <th className="sshHostsUserCol">{copy.hosts.user}</th>
-                  <th className="sshHostsVersionCol">{copy.hosts.codexVersion}</th>
-                  <th className="sshHostsLatestVersionCol">{copy.hosts.latestCodexVersion}</th>
-                  <th className="sshHostsActionsCol">{copy.hosts.actions}</th>
-                  <th className="sshHostsCodexCol">{copy.hosts.codex}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sshConfigHosts.map((sshHost) => {
-                  const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
-                  const busy = hostBusy[sshHost.alias];
-                  const hostStatus = host?.status ?? (busy === "test" ? "testing" : "unknown");
-                  const codexStatus = hostCodexStatus(copy, host, busy, hosts, latestCodexVersion);
-                  const latestStatus = latestCodexStatus(copy, latestCodexVersion);
-                  const codexTested = isHostCodexTested(host);
-                  const installDisabled = Boolean(busy) || !codexTested || Boolean(host?.codexInstalled);
-                  const updateDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled || !isCodexVersionBehind(host.codexVersion, latestCodexVersion?.version);
-                  const uninstallDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled;
-
-                  return (
-                    <tr className="selectableRow" data-selected={selectedHostAlias === sshHost.alias} key={sshHost.alias} onClick={() => setSelectedHostAlias(sshHost.alias)}>
-                      <td className="sshHostsAliasCol"><strong>{personalInfo.maskText(sshHost.alias)}</strong></td>
-                      <td className="sshHostsOnlineCol"><HostStatusIndicator copy={copy} status={hostStatus} /></td>
-                      <td className="sshHostsSourceCol"><Badge tone={sshHost.managed ? "blue" : "gray"}>{sshHostSourceLabel(copy, sshHost)}</Badge></td>
-                      <td className="sshHostsAddressCol">{personalInfo.maskHostAddress(sshHost.hostName)}</td>
-                      <td className="sshHostsPortCol">{sshHost.port}</td>
-                      <td className="sshHostsUserCol">{personalInfo.maskUsername(sshHost.user)}</td>
-                      <td className="sshHostsVersionCol"><Badge tone={codexStatus.tone}>{codexStatus.label}</Badge></td>
-                      <td className="sshHostsLatestVersionCol"><Badge tone={latestStatus.tone} title={latestStatus.title}>{latestStatus.label}</Badge></td>
-                      <td className="sshHostsActionsCol">
-                        <CommandGroup className="tableActions sshHostsActionGroup">
-                          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={(event) => { event.stopPropagation(); onTestHost(sshHost.alias); }}>
-                            {busy === "test" ? copy.hosts.testing : copy.hosts.test}
-                          </button>
-                          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={(event) => { event.stopPropagation(); handleEdit(sshHost); }}>{copy.hosts.edit}</button>
-                          <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={(event) => { event.stopPropagation(); setDeleteHostAlias(sshHost.alias); }}>{copy.hosts.delete}</button>
-                        </CommandGroup>
-                      </td>
-                      <td className="sshHostsCodexCol">
-                        <CommandGroup className="tableActions sshHostsActionGroup">
-                          <button className="miniButton" disabled={installDisabled} type="button" onClick={(event) => { event.stopPropagation(); onManageCodex(sshHost.alias, "install"); }}>
-                            {remoteCodexButtonLabel(copy, busy, "install")}
-                          </button>
-                          <button className="miniButton" disabled={updateDisabled} type="button" onClick={(event) => { event.stopPropagation(); onManageCodex(sshHost.alias, "update"); }}>
-                            {remoteCodexButtonLabel(copy, busy, "update")}
-                          </button>
-                          <button className="miniButton danger" disabled={uninstallDisabled} type="button" onClick={(event) => { event.stopPropagation(); onManageCodex(sshHost.alias, "uninstall"); }}>
-                            {remoteCodexButtonLabel(copy, busy, "uninstall")}
-                          </button>
-                        </CommandGroup>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            ariaLabel={copy.hosts.detectedSshHosts}
+            className="hostsDataTable"
+            columns={hostColumns}
+            rows={sshConfigHosts}
+            getRowKey={(sshHost) => sshHost.alias}
+            getRowClassName={(sshHost) => selectedHostAlias === sshHost.alias ? "hostsDataTableRowSelected" : undefined}
+            onRowActivate={(sshHost) => setSelectedHostAlias(sshHost.alias)}
+          />
         )}
       </section>
 
@@ -10787,14 +10811,6 @@ function sshHostSourceLabel(copy: UICopy, host: SshConfigHost) {
 function knownHostValue(value: string | null | undefined, copy: UICopy) {
   const normalized = value?.trim();
   return normalized && normalized.toLowerCase() !== "unknown" ? normalized : copy.hosts.unknown;
-}
-
-function hostSystemLabel(host: Host, copy: UICopy) {
-  const os = knownHostValue(host.os, copy);
-  const arch = knownHostValue(host.arch, copy);
-  if (arch === copy.hosts.unknown) return os;
-  if (os === copy.hosts.unknown) return arch;
-  return `${os} / ${arch}`;
 }
 
 function knownValueTone(value: string | null | undefined, copy: UICopy): BadgeTone {
