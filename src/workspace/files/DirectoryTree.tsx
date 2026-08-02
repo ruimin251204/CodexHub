@@ -150,14 +150,15 @@ export function DirectoryTree({
             />
           </ul>
         ) : null}
-        {session ? (
-          <section className="workspaceFilesQuickAccess">
-            <h3>{copy.quickAccess}</h3>
-            <button type="button" onClick={() => onNavigate(session.homePath)}><FilesIcon name="home" />{copy.homeDirectory}</button>
-            {currentPath ? <button type="button" onClick={() => onNavigate(currentPath)}><FilesIcon name="current" />{copy.currentDirectory}</button> : null}
-          </section>
-        ) : null}
       </div>
+      {/* Tree nodes scroll independently so quick access stays anchored to the card footer. */}
+      {session ? (
+        <section className="workspaceFilesQuickAccess">
+          <h3>{copy.quickAccess}</h3>
+          <button type="button" onClick={() => onNavigate(session.homePath)}><FilesIcon name="home" />{copy.homeDirectory}</button>
+          {currentPath ? <button type="button" onClick={() => onNavigate(currentPath)}><FilesIcon name="current" />{copy.currentDirectory}</button> : null}
+        </section>
+      ) : null}
     </aside>
   );
 }

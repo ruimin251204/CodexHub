@@ -152,6 +152,18 @@ test("matching host names and aliases render only once", () => {
   expect(workspaceHostLabel(host)).toBe("Demo host · demo");
 });
 
+test("quick access stays outside the scrollable directory tree at the card bottom", async () => {
+  renderPanel();
+
+  const tree = await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree });
+  const treeScroll = tree.closest<HTMLElement>(".workspaceFilesTreeScroll");
+  const quickAccess = screen.getByRole("heading", { name: filesUiCopy.en.quickAccess }).closest<HTMLElement>(".workspaceFilesQuickAccess");
+
+  expect(treeScroll).not.toContainElement(quickAccess);
+  expect(quickAccess?.parentElement).toHaveClass("workspaceFilesTree");
+  expect(quickAccess?.previousElementSibling).toBe(treeScroll);
+});
+
 test("the local Files landing does not open an SSH file session", async () => {
   const stop = () => undefined;
   const api = {

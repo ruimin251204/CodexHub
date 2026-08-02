@@ -344,9 +344,11 @@
 }
 
 .workspaceFilesQuickAccess {
-  margin-top: 13px;
-  padding-top: 12px;
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 12px 8px 8px;
   border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface));
 }
 
 .workspaceFilesQuickAccess h3 {
