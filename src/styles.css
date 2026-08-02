@@ -976,9 +976,12 @@ dd {
 
 .metricPrimary {
   display: grid;
+  grid-template-columns: minmax(0, max-content) max-content;
   align-content: center;
+  align-items: baseline;
   min-width: 0;
-  gap: 5px;
+  column-gap: 10px;
+  row-gap: 6px;
 }
 
 .metricPrimary > span,
@@ -995,13 +998,14 @@ dd {
 
 .metricPrimary strong {
   color: var(--text);
-  font-size: clamp(2.45rem, 3vw, 3rem);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.025em;
 }
 
 .metricSecondary {
   display: flex;
+  grid-column: 1 / -1;
   align-items: baseline;
   gap: 5px;
   min-width: 0;

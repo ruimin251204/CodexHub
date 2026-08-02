@@ -23,6 +23,9 @@ describe("dashboard metric cards", () => {
 
   test("matches the spacious reference layout and remains responsive", () => {
     expect(styles).toMatch(/\.metricCard\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*min-height:\s*148px;/su);
+    expect(styles).toMatch(/\.metricPrimary\s*\{[^}]*grid-template-columns:\s*minmax\(0, max-content\) max-content;[^}]*align-items:\s*baseline;/su);
+    expect(styles).toMatch(/\.metricPrimary strong\s*\{[^}]*font-size:\s*2rem;/su);
+    expect(styles).toMatch(/\.metricSecondary\s*\{[^}]*grid-column:\s*1 \/ -1;/su);
     expect(styles).toMatch(/\.metricIcon\s*\{[^}]*width:\s*72px;[^}]*height:\s*72px;/su);
     expect(styles).toMatch(/@media \(max-width:\s*1120px\)[\s\S]*?\.summaryStrip\s*\{\s*grid-template-columns:\s*repeat\(2,/u);
   });
