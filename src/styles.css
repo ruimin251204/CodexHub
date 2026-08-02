@@ -958,8 +958,8 @@ dd {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px;
-  min-height: 148px;
-  padding: 24px 26px;
+  min-height: 116px;
+  padding: 16px 24px;
   --metric-accent: #2f80ed;
   --metric-icon-bg: rgba(47, 128, 237, 0.1);
 }
@@ -4245,8 +4245,8 @@ tr:last-child td {
   }
 
   .metricCard {
-    min-height: 132px;
-    padding: 20px;
+    min-height: 104px;
+    padding: 14px 18px;
   }
 
   .metricIcon {

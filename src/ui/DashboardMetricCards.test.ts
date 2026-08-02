@@ -22,7 +22,7 @@ describe("dashboard metric cards", () => {
   });
 
   test("matches the spacious reference layout and remains responsive", () => {
-    expect(styles).toMatch(/\.metricCard\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*min-height:\s*148px;/su);
+    expect(styles).toMatch(/\.metricCard\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*min-height:\s*116px;[^}]*padding:\s*16px 24px;/su);
     expect(styles).toMatch(/\.metricPrimary\s*\{[^}]*grid-template-columns:\s*minmax\(0, max-content\) max-content;[^}]*align-items:\s*baseline;/su);
     expect(styles).toMatch(/\.metricPrimary strong\s*\{[^}]*font-size:\s*2rem;/su);
     expect(styles).toMatch(/\.metricSecondary\s*\{[^}]*grid-column:\s*1 \/ -1;/su);
