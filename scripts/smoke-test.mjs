@@ -1433,7 +1433,8 @@ for (const token of [
   'sourceTone: "green"',
   "unknownSkillCount",
   "installedSkillTagStyle",
-  "installedSkillsTable",
+  "installedSkillHostGrid",
+  "installedSkillHostCard",
   "installedSkillTag",
   "InstalledSkillPreviewModal",
   "InstalledSkillOperationModal",
@@ -1867,7 +1868,7 @@ for (const [action, token] of [
 ]) {
   if (!app.includes(token)) fail(`missing profile apply ${action} action token: ${token}`);
 }
-if (!app.includes('className="profilesStack"') || !app.includes("profileLibraryActions") || !app.includes("profileTable") || !app.includes("profileRowActions") || !app.includes("profileApplyPanel") || !app.includes("profileApplyTable") || !app.includes("profileApplyOperationModal")) {
+if (!app.includes('className="profilesStack"') || !app.includes("profileLibraryActions") || !app.includes("profilesDataTable") || !app.includes("profileRowActions") || !app.includes("profileApplyPanel") || !app.includes("profileApplyTable") || !app.includes("profileApplyOperationModal")) {
   fail("Profiles page should use compact stack, library actions, row actions, table, apply panel, and operation-log tokens");
 }
 const profileApplyTableStart = app.indexOf('className="sshHostsTable profileApplyTable"');
@@ -2437,7 +2438,7 @@ for (const token of ["modalBackdrop", "bootstrapLogCard", "stepIcon.success", "s
 for (const token of ["hostsDataTable", "min-width: 1080px", ".hostRowPrimaryActions", ".hostRowMoreMenu"]) {
   if (!styles.includes(token)) fail(`missing SSH Hosts responsive table style token: ${token}`);
 }
-for (const token of ["profilesStack", "profileLibraryActions", "ccSwitchActionButton", "profileCcSwitchStatus", "profileTable", "profileRowActions", "profileApplyPanel", "profileApplyTable", "profileApplyOperationModal", "profileHostSelectModal", "profileHostSelectList", "profileHostSelectStatus", "profileModelCombobox", "profileModelOptions", "profileModelOption", "profileFastModeSegment", "profileFastModeOption"]) {
+for (const token of ["profilesStack", "profileSectionCard", "profileLibraryActions", "ccSwitchActionButton", "profileCcSwitchStatus", "profilesDataTable", "profileRowActions", "profileApplyPanel", "profileApplyTable", "profileApplyOperationModal", "profileHostSelectModal", "profileHostSelectList", "profileHostSelectStatus", "profileModelCombobox", "profileModelOptions", "profileModelOption", "profileFastModeSegment", "profileFastModeOption"]) {
   if (!styles.includes(token)) fail(`missing compact Profiles style token: ${token}`);
 }
 for (const token of ["simpleDeleteModal", ".sshHostModal.ProfileEditModal .fieldGroup", ".sshHostModal:not(.ProfileEditModal) .fieldGroup input", "::-ms-reveal", ".passwordInputWrap"]) {
@@ -2446,12 +2447,12 @@ for (const token of ["simpleDeleteModal", ".sshHostModal.ProfileEditModal .field
 for (const token of ["credentialVisibilityButton", "credentialEyeIcon"]) {
   if (!styles.includes(token)) fail(`secret visibility style is missing: ${token}`);
 }
-for (const token of ["min-width: 0", ".skillsTable td:nth-child(5)", ".skillRowActions", "flex-wrap: wrap"]) {
+for (const token of ["min-width: 0", ".skillsDataTable table", ".skillRowActions", "flex-wrap: wrap"]) {
   if (!styles.includes(token)) fail(`missing responsive Skills table style token: ${token}`);
 }
 for (const token of [
   "skillsStack",
-  "skillsTable",
+  "skillsDataTable",
   "skillLibraryActions",
   "skillApplicationTags",
   "skillRowActions",
@@ -2463,7 +2464,8 @@ for (const token of [
   "skillTargetRow",
   "skillDeleteActions",
   "skillMessage",
-  "installedSkillsTable",
+  "installedSkillHostGrid",
+  "installedSkillHostCard",
   "installedSkillTags",
   "installedSkillTag",
   "--skill-color"

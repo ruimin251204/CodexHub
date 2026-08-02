@@ -1586,10 +1586,17 @@ tr:last-child td {
   gap: 10px;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 9px 12px 12px;
+  border-radius: var(--radius-surface);
+  padding: 8px 14px 14px;
   background: var(--surface-solid);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--ch-shadow-sm);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.monitorHostCard:hover {
+  border-color: color-mix(in srgb, var(--blue) 22%, var(--border));
+  box-shadow: var(--ch-shadow-md);
+  transform: translateY(-1px);
 }
 
 .monitorHostCard[data-dragging="true"] {
@@ -1765,6 +1772,29 @@ tr:last-child td {
   display: grid;
   min-width: 0;
 }
+
+.monitorGpuStack[hidden] { display: none; }
+
+.monitorGpuDisclosure {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  padding: 10px 0 0;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.monitorGpuDisclosure > span:first-child { font-size: 0.76rem; font-weight: 750; }
+.monitorGpuDisclosure small { color: var(--text-faint); font-size: 0.72rem; }
+.monitorGpuDisclosureIcon { width: 16px; height: 16px; fill: none; stroke: var(--text-faint); stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; transition: transform 140ms ease; }
+.monitorGpuDisclosure[aria-expanded="true"] .monitorGpuDisclosureIcon { transform: rotate(180deg); }
 
 .monitorGpuBlock {
   display: grid;
@@ -2057,6 +2087,30 @@ tr:last-child td {
   table-layout: auto;
 }
 
+.profileSectionCard,
+.skillsSectionCard {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.profileSectionCard > .panelHeader,
+.skillsSectionCard > .panelHeader {
+  margin: 0;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.profileSectionCard > .ch-data-table,
+.skillsSectionCard > .ch-data-table {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.profilesDataTable table { min-width: 820px; }
+.profilesDataTable tr.is-selected { background: color-mix(in srgb, var(--blue) 8%, var(--surface)); }
+.profileSectionCard .profileCcSwitchStatus { margin-inline: 20px; }
+
 .profilesTable th,
 .profilesTable td,
 .profileTable th,
@@ -2191,6 +2245,57 @@ tr:last-child td {
 .skillsStack .spanWide {
   grid-column: 1 / -1;
 }
+
+.skillsDataTable table { min-width: 860px; }
+
+.installedSkillHostGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+  gap: 12px;
+  padding: 18px 20px 20px;
+}
+
+.installedSkillHostCard {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 118px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  padding: 14px;
+  background: var(--surface-muted);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.installedSkillHostCard:hover {
+  border-color: color-mix(in srgb, var(--blue) 22%, var(--border));
+  box-shadow: var(--ch-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.installedSkillHostCard > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.installedSkillHostCard > header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.installedSkillHostCard > header strong,
+.installedSkillHostCard > header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.installedSkillHostCard > header strong { color: var(--text); font-size: 0.9rem; }
+.installedSkillHostCard > header span { color: var(--text-faint); font-size: 0.74rem; }
 
 .skillsTable {
   width: 100%;
@@ -6782,7 +6887,7 @@ td code {
 .workspaceLoadMore {
   min-height: 30px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   padding: 5px 9px;
   color: var(--text);
   line-height: 1.2;
@@ -6919,7 +7024,7 @@ td code {
 .workspaceTerminalSearch input {
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 6px 8px;
   color: var(--text);
   outline: none;
@@ -7183,7 +7288,7 @@ td code {
 .workspaceRecoveryNotice button {
   min-height: 26px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 3px 7px;
   color: var(--green);
   font-size: 0.78rem;

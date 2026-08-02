@@ -83,7 +83,7 @@ import { ModalFrame } from "./ui/ModalFrame";
 import { PersonalInfoMaskingProvider, usePersonalInfoMasking } from "./ui/PersonalInfoMasking";
 import { AppLayout, PageHeader, Sidebar, TopBar } from "./components/Layout";
 import type { SidebarGroup } from "./components/Layout";
-import { ActionButton, DataTable, MetricCard as SharedMetricCard, SearchBox } from "./components/UI";
+import { ActionButton, Card, DataTable, MetricCard as SharedMetricCard, SearchBox } from "./components/UI";
 import type { DataTableColumn, StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
 import { searchGlobalEntries } from "./search/globalSearch";
@@ -568,6 +568,8 @@ export const uiCopy = {
       driver: "Driver",
       utilization: "Util",
       gpuProcesses: "GPU processes",
+      showGpuList: "Show GPU list",
+      hideGpuList: "Hide GPU list",
       noGpuProcesses: "No GPU processes",
       processCount: "Processes",
       processCountShort: (count: number) => `${count} proc`,
@@ -1457,6 +1459,8 @@ export const uiCopy = {
       driver: "驱动",
       utilization: "占用率",
       gpuProcesses: "GPU 进程",
+      showGpuList: "展开 GPU 列表",
+      hideGpuList: "收起 GPU 列表",
       noGpuProcesses: "无 GPU 进程",
       processCount: "进程数",
       processCountShort: (count: number) => `${count} 进程`,
@@ -6031,6 +6035,7 @@ function MonitorHostCard({
   const personalInfo = usePersonalInfoMasking();
   const cardRef = useRef<HTMLElement | null>(null);
   const [rowSpan, setRowSpan] = useState(44);
+  const [gpuExpanded, setGpuExpanded] = useState(true);
   const cpuPercent = monitorCpuPercent(snapshot?.cpu);
   const memoryPercent = snapshot?.memory?.usedPercent ?? null;
   const hostMemoryTotalBytes = snapshot?.memory?.totalBytes ?? null;
@@ -6118,7 +6123,21 @@ function MonitorHostCard({
         />
       </div>
 
-      <section className="monitorGpuStack" aria-label={copy.monitor.gpu}>
+      {gpus.length > 0 ? (
+        <button
+          aria-expanded={gpuExpanded}
+          className="monitorGpuDisclosure"
+          type="button"
+          onClick={() => setGpuExpanded((current) => !current)}
+        >
+          <span>{copy.monitor.gpu}</span>
+          <small>{gpuExpanded ? copy.monitor.hideGpuList : copy.monitor.showGpuList}</small>
+          <svg className="monitorGpuDisclosureIcon" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="m4 6 4 4 4-4" />
+          </svg>
+        </button>
+      ) : null}
+      <section className="monitorGpuStack" aria-label={copy.monitor.gpu} hidden={!gpuExpanded}>
         {gpus.length > 0 ? (
           gpus.map((gpu, index) => (
             <MonitorGpuBlock
@@ -7504,10 +7523,41 @@ export function ProfilesView({
         : copy.profiles.ccSwitchNone
       : "");
   const canImportCcSwitchDetection = Boolean(ccDetection?.detected);
+  const profileColumns: DataTableColumn<Profile>[] = [
+    { id: "name", header: copy.profiles.name, priority: "essential", render: (profile) => <strong>{profile.name}</strong> },
+    { id: "model", header: copy.profiles.model, priority: "essential", render: (profile) => profile.model },
+    { id: "provider", header: copy.profiles.provider, render: (profile) => profile.provider },
+    { id: "apiKey", header: copy.profiles.apiKey, render: (profile) => <ProfileStorageBadge copy={copy} profile={profile} /> },
+    { id: "hosts", header: copy.profiles.hosts, align: "center", priority: "optional", render: (profile) => appliedHostCountByProfileId.get(profile.id) ?? 0 },
+    {
+      id: "actions",
+      header: copy.profiles.actions,
+      priority: "essential",
+      render: (profile) => (
+        <CommandGroup className="profileRowActions" onClick={(event) => event.stopPropagation()}>
+          <button className="miniButton" type="button" onClick={() => { setEditingProfileId(profile.id); setProfileEditorOpen(true); }}>{copy.profiles.edit}</button>
+          <button className="miniButton" disabled={busy === "duplicate"} type="button" onClick={() => void handleDuplicate(profile)}>{copy.profiles.duplicate}</button>
+          <button className="miniButton danger" disabled={busy === "delete"} type="button" onClick={() => setDeleteProfileId(profile.id)}>{copy.profiles.delete}</button>
+        </CommandGroup>
+      )
+    },
+    {
+      id: "apply",
+      header: copy.profiles.applyColumn,
+      priority: "essential",
+      render: (profile) => (
+        <button className="miniButton" disabled={hosts.length === 0} type="button" onClick={(event) => {
+          event.stopPropagation();
+          setSelectedProfileId(profile.id);
+          setHostPickerProfileId(profile.id);
+        }}>{copy.profiles.selectHosts}</button>
+      )
+    }
+  ];
 
   return (
     <div className="profilesStack">
-      <section className="panel spanWide">
+      <Card className="profileSectionCard spanWide" padding="none">
         <div className="panelHeader">
           <div>
             <TitleWithIcon icon="profiles" level={2}>{copy.profiles.library}</TitleWithIcon>
@@ -7545,65 +7595,19 @@ export function ProfilesView({
         {profiles.length === 0 ? (
           <EmptyListState copy={copy} message={copy.emptyLists.profiles} variant="profiles" />
         ) : (
-          <div className="tableWrap">
-            <table className="profilesTable profileTable">
-              <thead>
-                <tr>
-                  <th>{copy.profiles.name}</th>
-                  <th>{copy.profiles.model}</th>
-                  <th>{copy.profiles.provider}</th>
-                  <th>{copy.profiles.apiKey}</th>
-                  <th>{copy.profiles.hosts}</th>
-                  <th>{copy.profiles.actions}</th>
-                  <th>{copy.profiles.applyColumn}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profiles.map((profile) => (
-                  <tr
-                    className="selectableRow"
-                    data-selected={selectedProfile?.id === profile.id}
-                    key={profile.id}
-                    onClick={() => setSelectedProfileId(profile.id)}
-                  >
-                    <td><strong>{profile.name}</strong></td>
-                    <td>{profile.model}</td>
-                    <td>{profile.provider}</td>
-                    <td><ProfileStorageBadge copy={copy} profile={profile} /></td>
-                    <td>{appliedHostCountByProfileId.get(profile.id) ?? 0}</td>
-                    <td>
-                      <CommandGroup className="profileRowActions" onClick={(event) => event.stopPropagation()}>
-                        <button className="miniButton" type="button" onClick={() => {
-                          setEditingProfileId(profile.id);
-                          setProfileEditorOpen(true);
-                        }}>{copy.profiles.edit}</button>
-                        <button className="miniButton" disabled={busy === "duplicate"} type="button" onClick={() => void handleDuplicate(profile)}>{copy.profiles.duplicate}</button>
-                        <button className="miniButton danger" disabled={busy === "delete"} type="button" onClick={() => setDeleteProfileId(profile.id)}>{copy.profiles.delete}</button>
-                      </CommandGroup>
-                    </td>
-                    <td>
-                      <button
-                        className="miniButton"
-                        disabled={hosts.length === 0}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedProfileId(profile.id);
-                          setHostPickerProfileId(profile.id);
-                        }}
-                      >
-                        {copy.profiles.selectHosts}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            ariaLabel={copy.profiles.library}
+            className="profilesDataTable"
+            columns={profileColumns}
+            rows={profiles}
+            getRowKey={(profile) => profile.id}
+            getRowClassName={(profile) => selectedProfile?.id === profile.id ? "is-selected" : undefined}
+            onRowActivate={(profile) => setSelectedProfileId(profile.id)}
+          />
         )}
-      </section>
+      </Card>
 
-      <section className="panel spanWide profileApplyPanel">
+      <Card className="profileSectionCard spanWide profileApplyPanel" padding="none">
         <div className="panelHeader compact">
           <div>
             <TitleWithIcon icon="profiles" level={2}>{copy.profiles.applyConfig}</TitleWithIcon>
@@ -7656,7 +7660,7 @@ export function ProfilesView({
             </table>
           </div>
         )}
-      </section>
+      </Card>
 
       <ProfileEditModal
         busy={busy}
@@ -8752,10 +8756,49 @@ export function SkillsView({
       current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
     );
   };
+  const skillColumns: DataTableColumn<SkillPack>[] = [
+    { id: "skill", header: copy.skills.skill, priority: "essential", render: (skill) => <strong>{skill.name}</strong> },
+    {
+      id: "source",
+      header: copy.skills.source,
+      render: (skill) => <Badge tone={skill.sourceType === "github" ? "blue" : "gray"}>{skill.sourceType === "github" ? copy.skills.sourceGithub : copy.skills.sourceLocal}</Badge>
+    },
+    { id: "date", header: copy.skills.addedAt, priority: "optional", render: (skill) => skill.addedAt || "-" },
+    {
+      id: "applications",
+      header: copy.skills.applications,
+      render: (skill) => (
+        <div className="skillApplicationTags">
+          {skill.applications.length > 0 ? skill.applications.map((application) => (
+            <Badge
+              key={`${application.targetType}-${application.hostAlias ?? "local"}`}
+              tone={application.hasSkillMd ? "green" : "yellow"}
+              title={personalInfo.maskText(application.path)}
+            >
+              {personalInfo.maskText(skillApplicationLabel(application, copy))}
+            </Badge>
+          )) : <Badge tone="gray">{copy.skills.unapplied}</Badge>}
+        </div>
+      )
+    },
+    {
+      id: "actions",
+      header: copy.skills.actions,
+      priority: "essential",
+      render: (skill) => (
+        <CommandGroup className="skillRowActions">
+          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => setPreviewSkill(skill)}>{copy.skills.preview}</button>
+          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => void openTargets(skill, "install")}>{copy.skills.install}</button>
+          <button className="miniButton" disabled={Boolean(busy) || skill.applications.length === 0} type="button" onClick={() => void openTargets(skill, "uninstall")}>{copy.skills.uninstall}</button>
+          <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={() => setDeleteSkill(skill)}>{copy.skills.delete}</button>
+        </CommandGroup>
+      )
+    }
+  ];
 
   return (
     <div className="skillsStack">
-      <section className="panel spanWide">
+      <Card className="skillsSectionCard spanWide" padding="none">
         <div className="panelHeader compact">
           <TitleWithIcon icon="skills" level={2}>{copy.skills.library}</TitleWithIcon>
           <CommandBar ariaLabel={copy.skills.library} className="skillLibraryActions">
@@ -8777,119 +8820,53 @@ export function SkillsView({
         {skillPacks.length === 0 ? (
           <EmptyListState copy={copy} message={copy.emptyLists.skills} variant="skills" />
         ) : (
-          <div className="tableWrap">
-            <table className="skillsTable">
-              <thead>
-                <tr>
-                  <th>{copy.skills.skill}</th>
-                  <th>{copy.skills.source}</th>
-                  <th>{copy.skills.addedAt}</th>
-                  <th>{copy.skills.applications}</th>
-                  <th>{copy.skills.actions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {skillPacks.map((skill) => (
-                  <tr key={skill.id}>
-                    <td>
-                      <strong>{skill.name}</strong>
-                    </td>
-                    <td>
-                      <Badge tone={skill.sourceType === "github" ? "blue" : "gray"}>
-                        {skill.sourceType === "github" ? copy.skills.sourceGithub : copy.skills.sourceLocal}
-                      </Badge>
-                    </td>
-                    <td>{skill.addedAt || "-"}</td>
-                    <td>
-                      <div className="skillApplicationTags">
-                        {skill.applications.length > 0 ? (
-                          skill.applications.map((application) => (
-                            <Badge
-                              key={`${application.targetType}-${application.hostAlias ?? "local"}`}
-                              tone={application.hasSkillMd ? "green" : "yellow"}
-                              title={personalInfo.maskText(application.path)}
-                            >
-                              {personalInfo.maskText(skillApplicationLabel(application, copy))}
-                            </Badge>
-                          ))
-                        ) : (
-                          <Badge tone="gray">{copy.skills.unapplied}</Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <CommandGroup className="skillRowActions">
-                        <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => setPreviewSkill(skill)}>
-                          {copy.skills.preview}
-                        </button>
-                        <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => void openTargets(skill, "install")}>
-                          {copy.skills.install}
-                        </button>
-                        <button className="miniButton" disabled={Boolean(busy) || skill.applications.length === 0} type="button" onClick={() => void openTargets(skill, "uninstall")}>
-                          {copy.skills.uninstall}
-                        </button>
-                        <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={() => setDeleteSkill(skill)}>
-                          {copy.skills.delete}
-                        </button>
-                      </CommandGroup>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            ariaLabel={copy.skills.library}
+            className="skillsDataTable"
+            columns={skillColumns}
+            rows={skillPacks}
+            getRowKey={(skill) => skill.id}
+          />
         )}
         {message ? <p className="skillMessage" data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{personalInfo.maskText(message.text)}</p> : null}
-      </section>
+      </Card>
 
-      <section className="panel spanWide">
+      <Card className="skillsSectionCard spanWide" padding="none">
         <div className="panelHeader compact">
           <TitleWithIcon icon="install" level={2}>{copy.skills.installedLibrary}</TitleWithIcon>
         </div>
-        <div className="tableWrap">
-          <table className="installedSkillsTable">
-            <thead>
-              <tr>
-                <th>{copy.hosts.alias}</th>
-                <th>{copy.hosts.source}</th>
-                <th>{copy.skills.hostIp}</th>
-                <th>{copy.skills.installedSkills}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {installedSkillRows.map((row) => (
-                <tr key={row.key}>
-                  <td><strong>{personalInfo.maskText(row.alias)}</strong></td>
-                  <td><Badge tone={row.sourceTone}>{row.source}</Badge></td>
-                  <td>{personalInfo.maskHostAddress(row.hostIp)}</td>
-                  <td>
-                    <div className="installedSkillTags">
-                      {row.skills.length > 0 ? (
-                        row.skills.map((skill) => (
-                          <button
-                            className="installedSkillTag"
-                            key={skill.key}
-                            style={installedSkillTagStyle(skill.skillName, installedSkillNames)}
-                            title={personalInfo.maskText(skill.path)}
-                            type="button"
-                            onClick={() => openInstalledPreview(row, skill)}
-                          >
-                            {skill.skillName}
-                          </button>
-                        ))
-                      ) : row.unknownSkillCount ? (
-                        <Badge tone="blue">{`${copy.hosts.skillsCount}: ${row.unknownSkillCount}`}</Badge>
-                      ) : (
-                        <Badge tone="gray">{copy.skills.noInstalledSkills}</Badge>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="installedSkillHostGrid">
+          {installedSkillRows.map((row) => (
+            <article className="installedSkillHostCard" key={row.key}>
+              <header>
+                <div>
+                  <strong>{personalInfo.maskText(row.alias)}</strong>
+                  <span>{personalInfo.maskHostAddress(row.hostIp)}</span>
+                </div>
+                <Badge tone={row.sourceTone}>{row.source}</Badge>
+              </header>
+              <div className="installedSkillTags">
+                {row.skills.length > 0 ? row.skills.map((skill) => (
+                  <button
+                    className="installedSkillTag"
+                    key={skill.key}
+                    style={installedSkillTagStyle(skill.skillName, installedSkillNames)}
+                    title={personalInfo.maskText(skill.path)}
+                    type="button"
+                    onClick={() => openInstalledPreview(row, skill)}
+                  >
+                    {skill.skillName}
+                  </button>
+                )) : row.unknownSkillCount ? (
+                  <Badge tone="blue">{`${copy.hosts.skillsCount}: ${row.unknownSkillCount}`}</Badge>
+                ) : (
+                  <Badge tone="gray">{copy.skills.noInstalledSkills}</Badge>
+                )}
+              </div>
+            </article>
+          ))}
         </div>
-      </section>
+      </Card>
 
       {firstScanOpen ? (
         <SkillFirstScanModal
