@@ -34,6 +34,13 @@ test("Workspace terminal preferences use safe defaults for an old settings paylo
   expect(settings.workspaceTerminalPreferences).toEqual(defaultSettings.workspaceTerminalPreferences);
 });
 
+test("legacy follow-app terminal color settings migrate to the independent dark default", () => {
+  const settings = normalizeSettings({
+    workspaceTerminalPreferences: { ...defaultSettings.workspaceTerminalPreferences, colorScheme: "follow-app" }
+  });
+  expect(settings.workspaceTerminalPreferences.colorScheme).toBe("dark");
+});
+
 describe("personal information masking settings", () => {
   it("is enabled for new and legacy settings", () => {
     expect(defaultSettings.personalInfoMasking).toBe(true);
@@ -42,5 +49,16 @@ describe("personal information masking settings", () => {
 
   it("preserves an explicit opt-out", () => {
     expect(normalizeSettings({ personalInfoMasking: false }).personalInfoMasking).toBe(false);
+  });
+});
+
+describe("launch at login settings", () => {
+  it("defaults to disabled for new and legacy settings", () => {
+    expect(defaultSettings.launchAtLogin).toBe(false);
+    expect(normalizeSettings({ theme: "dark" }).launchAtLogin).toBe(false);
+  });
+
+  it("preserves an explicit opt-in after the desktop backend confirms it", () => {
+    expect(normalizeSettings({ launchAtLogin: true }).launchAtLogin).toBe(true);
   });
 });

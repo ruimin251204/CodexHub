@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import appSource from "../App.tsx?raw";
 import filesPanelSource from "./FilesPanel.tsx?raw";
 import terminalPanelSource from "./TerminalPanel.tsx?raw";
+import terminalStatusBarSource from "./terminal/TerminalStatusBar.tsx?raw";
 import workspacePageSource from "./WorkspacePage.tsx?raw";
 
 test("Workspace remains outside the non-Workspace initial module boundary", () => {
@@ -35,18 +36,29 @@ test("Workspace uses the Terminal page title without rendering a duplicate page 
   expect(workspacePageSource).not.toContain("<p>{copy.description}</p>");
 });
 
-test("Workspace mode tabs mount in the global title bar so the main panel keeps the standard top spacing", () => {
-  expect(appSource).toContain('className="topActions workspaceTopActions"');
-  expect(appSource).toContain("modeBarHost={workspaceModeBarHost}");
-  expect(workspacePageSource).toContain('import { createPortal } from "react-dom"');
-  expect(workspacePageSource).toContain("createPortal(modeBar, modeBarHost)");
+test("Workspace uses sidebar navigation and removes the unused four-button title-bar mode switcher", () => {
+  expect(appSource).not.toContain('className="topActions workspaceTopActions"');
+  expect(appSource).not.toContain("modeBarHost={workspaceModeBarHost}");
+  expect(workspacePageSource).not.toContain('import { createPortal } from "react-dom"');
+  expect(workspacePageSource).not.toContain('className="workspaceModeBar"');
+  expect(appSource).toContain('const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("terminal")');
+  expect(appSource).toContain("onModeChange={selectWorkspaceMode}");
 });
 
-test("terminal chrome avoids duplicate aliases and keeps Split Files-first", () => {
+test("Workspace does not auto-select a host and keeps Hosts first in Management", () => {
+  expect(appSource).toContain('if (!current) return "";');
+  expect(appSource).toContain('return hosts.some((host) => host.hostAlias === current) ? current : "";');
+  expect(appSource).toContain('items: (["dashboard", "terminal", "files", "transfers"] as SectionId[]).map(makeSidebarItem)');
+  expect(appSource).toContain('items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[]).map(makeSidebarItem)');
+});
+
+test("terminal chrome uses a single tab alias, exposes factual status, and keeps Split Files-first", () => {
   expect(terminalPanelSource).toContain("workspaceHostLabel(host)");
-  expect(terminalPanelSource).toContain("session.title !== session.hostAlias");
-  expect(terminalPanelSource).not.toContain("workspaceTerminalStatus");
-  expect(terminalPanelSource).not.toContain('>UTF-8<');
+  expect(terminalPanelSource).toContain("session.hostAlias || session.title");
+  expect(terminalPanelSource).toContain("<TerminalStatusBar");
+  expect(terminalStatusBarSource).toContain("session.createdAt");
+  expect(terminalStatusBarSource).toContain("copy.renderer");
+  expect(terminalStatusBarSource).not.toContain("xterm-256color");
   expect(terminalPanelSource).not.toContain("onOpenTask");
   expect(workspacePageSource).toContain("useState(40)");
   expect(workspacePageSource).not.toContain("closeTarget");
@@ -65,9 +77,10 @@ test("Files starts locally, shares host labels, and keeps Split linked without l
   expect(terminalPanelSource).toContain("workspaceHostLabel(host)");
 });
 
-test("Files toolbar places search with the host and wraps secondary actions below narrow paths", () => {
-  expect(filesPanelSource.indexOf('className="workspaceSearchForm"')).toBeLessThan(
-    filesPanelSource.indexOf('className="workspacePaneToolbar workspaceFilesNavigation"')
-  );
-  expect(filesPanelSource).toContain('className="workspaceFilesSecondaryActions"');
+test("Files keeps primary navigation in one command bar and moves secondary actions into a menu", () => {
+  const commandBarIndex = filesPanelSource.indexOf('className="workspacePaneToolbar workspaceFilesCommandBar"');
+  expect(commandBarIndex).toBeGreaterThan(-1);
+  expect(commandBarIndex).toBeLessThan(filesPanelSource.indexOf('className="workspaceSearchForm"'));
+  expect(filesPanelSource).toContain('className="workspaceFilesMoreActions"');
+  expect(filesPanelSource).toContain('className="workspaceFilesMoreMenu"');
 });

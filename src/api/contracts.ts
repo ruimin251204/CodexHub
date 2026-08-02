@@ -77,6 +77,7 @@ export type CodexHubApi = {
   detectNetworkProxy: () => Promise<NetworkProxyStatus>;
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: AppSettings) => Promise<SettingsSaveResult>;
+  setLaunchAtLogin: (enabled: boolean) => Promise<SettingsSaveResult>;
   chooseCloseButtonBehavior: (behavior: Exclude<CloseButtonBehavior, "ask">) => Promise<SettingsSaveResult>;
   onCloseButtonBehaviorRequested: (handler: () => void) => Promise<UnlistenFn>;
   getSshStatus: () => Promise<SshStatus>;

@@ -32,7 +32,7 @@ export type WorkspaceTerminalPreferencesDto = { fontFamily: WorkspaceTerminalFon
  */
 lineHeight: string, colorScheme: WorkspaceTerminalColorSchemeDto, scrollback: number, cursorStyle: WorkspaceTerminalCursorStyleDto, screenReaderMode: boolean, confirmLargePaste: boolean, };
 
-export type AppSettingsDto = { theme: ThemeChoiceDto, fontPreset: "english" | "zh-cn", platformAppearance: PlatformAppearanceDto, closeButtonBehavior: CloseButtonBehaviorDto, networkProxyMode: NetworkProxyModeDto, networkProxyUrl: string, resourceMonitorAutoRefresh: boolean, resourceMonitorHostOrder: Array<string>, resourceMonitorRefreshSeconds: number, sidebarCompletionIndicators: boolean, hostOperationLogPopups: boolean, personalInfoMasking: boolean, setupGuideDismissed: boolean, workspaceTerminalPreferences: WorkspaceTerminalPreferencesDto, };
+export type AppSettingsDto = { theme: ThemeChoiceDto, fontPreset: "english" | "zh-cn", platformAppearance: PlatformAppearanceDto, closeButtonBehavior: CloseButtonBehaviorDto, networkProxyMode: NetworkProxyModeDto, networkProxyUrl: string, resourceMonitorAutoRefresh: boolean, resourceMonitorHostOrder: Array<string>, resourceMonitorRefreshSeconds: number, sidebarCompletionIndicators: boolean, hostOperationLogPopups: boolean, personalInfoMasking: boolean, launchAtLogin: boolean, setupGuideDismissed: boolean, workspaceTerminalPreferences: WorkspaceTerminalPreferencesDto, };
 
 export type SettingsSaveResultDto = { settings: AppSettingsDto, changed: boolean, backupPath: string | null, };
 
@@ -348,7 +348,7 @@ localGrantId: string | null, destinationPath: string, totalBytes: number | null,
 
 export type WorkspaceEnqueueTransfersRequestDto = { fileSessionId: string, items: Array<WorkspaceTransferDraftDto>, };
 
-export type WorkspaceTransferDto = { transferId: string, taskId: string | null, direction: WorkspaceTransferDirectionDto, hostId: string, hostName: string, hostAlias: string, sourceRef: string, destinationPath: string, state: WorkspaceTransferStateDto, revision: number, bytes: number, total: number | null, speed: number | null, etaSeconds: number | null, attempt: number, resumable: boolean, resumeOffset: number | null, conflictStrategy: WorkspaceConflictStrategyDto, conflictRevision: number | null, errorCode: string | null, fingerprintStatus: string | null, };
+export type WorkspaceTransferDto = { transferId: string, taskId: string | null, direction: WorkspaceTransferDirectionDto, hostId: string, hostName: string, hostAlias: string, sourceRef: string, destinationPath: string, createdAt: string, updatedAt: string, state: WorkspaceTransferStateDto, revision: number, bytes: number, total: number | null, speed: number | null, etaSeconds: number | null, attempt: number, resumable: boolean, resumeOffset: number | null, conflictStrategy: WorkspaceConflictStrategyDto, conflictRevision: number | null, errorCode: string | null, fingerprintStatus: string | null, };
 
 export type WorkspaceTransferSnapshotDto = { transfers: Array<WorkspaceTransferDto>, recoveries: Array<WorkspaceRecoveryDto>, localRecoveries: Array<WorkspaceLocalTransferRecoveryDto>, };
 
@@ -379,7 +379,7 @@ export type WorkspaceSessionHeartbeatEventDto = { sessionId: string, generation:
 
 export type WorkspaceTerminalCwdEventDto = { sessionId: string, generation: number, revision: number, path: string, source: WorkspaceCwdSourceDto, };
 
-export type WorkspaceTransferUpdatedEventDto = { transferId: string, revision: number, state: WorkspaceTransferStateDto, bytes: number, total: number | null, speed: number | null, etaSeconds: number | null, attempt: number, resumable: boolean, errorCode: string | null, taskId: string | null, };
+export type WorkspaceTransferUpdatedEventDto = { transferId: string, updatedAt: string, revision: number, state: WorkspaceTransferStateDto, bytes: number, total: number | null, speed: number | null, etaSeconds: number | null, attempt: number, resumable: boolean, errorCode: string | null, taskId: string | null, };
 
 export type WorkspaceFileSearchStateDto = "running" | "completed" | "cancelled" | "failed";
 

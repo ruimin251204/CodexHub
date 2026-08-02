@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { WorkspaceCopy } from "./copy";
 import type {
   RemoteFileEntry,
@@ -11,21 +11,32 @@ import type {
   WorkspaceFilePreview,
   WorkspaceFilesSession,
   WorkspaceHost,
+  WorkspaceLocale,
   WorkspaceRecovery,
   WorkspaceTerminalCwdEvent,
   WorkspaceTerminalSession
 } from "./types";
 import { workspaceHostLabel } from "./hostLabel";
+import { usePersonalInfoMasking } from "../ui/PersonalInfoMasking";
+import { DirectoryTree } from "./files/DirectoryTree";
+import { FileOperationDialog, FilePreviewDialog } from "./files/FileDialogs";
+import type { PendingFileOperation } from "./files/FileDialogs";
+import { FileTable } from "./files/FileTable";
+import { FilesIcon } from "./files/FilesIcon";
+import { childPath, parentPath } from "./files/fileDisplay";
+import { filesUiCopy } from "./files/filesUiCopy";
+import "./files-redesign.css";
+
+export { formatModifiedAt } from "./files/fileDisplay";
 
 export const WORKSPACE_FILES_LOCATION_EVENT = "codexhub:workspace-files-location";
 
 type SortKey = WorkspaceFileSortField;
-type PendingOperation = {
-  operation: WorkspaceFileOperationKind;
-  entry: RemoteFileEntry | null;
-  name: string;
-  destinationPath: string | null;
-};
+
+const TREE_MIN_WIDTH = 180;
+const TREE_MAX_WIDTH = 520;
+const FILES_TABLE_MIN_WIDTH = 360;
+const DEFAULT_TREE_WIDTH = 248;
 
 type FilesHostView = {
   fileSession: WorkspaceFilesSession | null;
@@ -44,52 +55,20 @@ type FilesHostView = {
   searchTruncated: boolean;
   selectedRefs: Set<string>;
   focusedIndex: number;
+  directoryEntriesByPath: Map<string, RemoteFileEntry[]>;
+  expandedTreePaths: Set<string>;
+  clientPage: number;
+  clientPageSize: number;
 };
 
-const SAFE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
-
-function parentPath(path: string) {
-  if (path === "/") return "/";
-  const normalized = path.replace(/\/+$/, "");
-  const separator = normalized.lastIndexOf("/");
-  return separator <= 0 ? "/" : normalized.slice(0, separator);
-}
-
-function childPath(parent: string, name: string) {
-  return parent === "/" ? `/${name}` : `${parent.replace(/\/+$/, "")}/${name}`;
-}
-
-function displaySize(value: string) {
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes)) return value;
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let result = bytes;
-  let unit = 0;
-  while (result >= 1024 && unit < units.length - 1) {
-    result /= 1024;
-    unit += 1;
+function pathAncestry(path: string) {
+  const ancestry = new Set<string>(["/"]);
+  let cursor = path;
+  while (cursor !== "/") {
+    ancestry.add(cursor);
+    cursor = parentPath(cursor);
   }
-  return unit === 0 ? `${result} ${units[unit]}` : `${result.toFixed(result >= 10 ? 1 : 2)} ${units[unit]}`;
-}
-
-export function formatModifiedAt(value: string | null) {
-  if (!value) return "—";
-  const timestamp = new Date(value);
-  return Number.isNaN(timestamp.getTime()) ? "—" : timestamp.toLocaleString();
-}
-
-function kindLabel(entry: RemoteFileEntry, copy: WorkspaceCopy) {
-  if (entry.kind === "directory") return copy.directory;
-  if (entry.kind === "file") return copy.file;
-  if (entry.kind === "symlink") return copy.symlink;
-  return copy.other;
-}
-
-function iconForEntry(entry: RemoteFileEntry) {
-  if (entry.kind === "directory") return "▰";
-  if (entry.kind === "symlink") return "↗";
-  if (entry.kind === "file") return "▤";
-  return "◇";
+  return ancestry;
 }
 
 export function FilesPanel({
@@ -100,6 +79,8 @@ export function FilesPanel({
   followCwd,
   hosts,
   isActive,
+  locale = "en",
+  compact = false,
   selectedHostAlias,
   onError,
   onFollowCwdChange,
@@ -116,6 +97,9 @@ export function FilesPanel({
   followCwd: boolean;
   hosts: WorkspaceHost[];
   isActive: boolean;
+  locale?: WorkspaceLocale;
+  /** The parent marks the split surface compact; entering it closes the tree once. */
+  compact?: boolean;
   selectedHostAlias: string;
   onError: (error: unknown) => void;
   onFollowCwdChange: (follow: boolean) => void;
@@ -125,6 +109,8 @@ export function FilesPanel({
   onViewRecoveries: () => void;
   onTransfersQueued?: () => void;
 }) {
+  const ui = filesUiCopy[locale];
+  const personalInfo = usePersonalInfoMasking();
   const [fileSession, setFileSession] = useState<WorkspaceFilesSession | null>(null);
   const [page, setPage] = useState<WorkspaceDirectoryPage | null>(null);
   const [loading, setLoading] = useState(false);
@@ -141,9 +127,17 @@ export function FilesPanel({
   const [searchTruncated, setSearchTruncated] = useState(false);
   const [selectedRefs, setSelectedRefs] = useState<Set<string>>(() => new Set());
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [directoryEntriesByPath, setDirectoryEntriesByPath] = useState<Map<string, RemoteFileEntry[]>>(() => new Map());
+  const [expandedTreePaths, setExpandedTreePaths] = useState<Set<string>>(() => new Set(["/"]));
+  const [loadingTreePaths, setLoadingTreePaths] = useState<Set<string>>(() => new Set());
+  const [clientPage, setClientPage] = useState(0);
+  const [clientPageSize, setClientPageSize] = useState(50);
+  const [treeCollapsed, setTreeCollapsed] = useState(() => compact);
+  const [treeWidth, setTreeWidth] = useState(DEFAULT_TREE_WIDTH);
+  const [treeResizing, setTreeResizing] = useState(false);
   const [preview, setPreview] = useState<WorkspaceFilePreview | null>(null);
   const [contextMenu, setContextMenu] = useState<{ entry: RemoteFileEntry; x: number; y: number } | null>(null);
-  const [pendingOperation, setPendingOperation] = useState<PendingOperation | null>(null);
+  const [pendingOperation, setPendingOperation] = useState<PendingFileOperation | null>(null);
   const [operationPreview, setOperationPreview] = useState<WorkspaceFileOperationPreview | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
   const [filesError, setFilesError] = useState(false);
@@ -151,7 +145,9 @@ export function FilesPanel({
   const [createdRecovery, setCreatedRecovery] = useState<WorkspaceRecovery | null>(null);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const locationRef = useRef<HTMLInputElement>(null);
-  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const moreActionsRef = useRef<HTMLDetailsElement>(null);
+  const explorerRef = useRef<HTMLDivElement>(null);
+  const treeResizeCleanupRef = useRef<(() => void) | null>(null);
   const requestSequence = useRef(0);
   const historyIndexRef = useRef(-1);
   const pageSortSignatureRef = useRef("");
@@ -160,8 +156,63 @@ export function FilesPanel({
   const failedHostAliasesRef = useRef(new Set<string>());
   const failedFileSessionIdsRef = useRef(new Map<string, string>());
   const activeHostRef = useRef("");
+  const compactModeRef = useRef(compact);
   const currentViewRef = useRef<FilesHostView | null>(null);
   const retryRequestRef = useRef<{ hostAlias: string; path: string | null } | null>(null);
+
+  useEffect(() => () => treeResizeCleanupRef.current?.(), []);
+
+  useEffect(() => {
+    // A user may open the tree while staying in Split, so only close it when
+    // the parent actually enters compact mode instead of on every rerender.
+    if (compact && !compactModeRef.current) setTreeCollapsed(true);
+    compactModeRef.current = compact;
+  }, [compact]);
+
+  const treeWidthLimit = useCallback(() => {
+    const availableWidth = explorerRef.current?.clientWidth;
+    if (!availableWidth) return TREE_MAX_WIDTH;
+    const remainingFileWidth = compact ? 72 : FILES_TABLE_MIN_WIDTH;
+    return Math.max(TREE_MIN_WIDTH, Math.min(TREE_MAX_WIDTH, availableWidth - remainingFileWidth));
+  }, [compact]);
+
+  const clampTreeWidth = useCallback((width: number) => (
+    Math.max(TREE_MIN_WIDTH, Math.min(treeWidthLimit(), Math.round(width)))
+  ), [treeWidthLimit]);
+
+  // The divider owns only layout state; navigating SFTP paths never resets a user-selected tree width.
+  const startTreeResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    treeResizeCleanupRef.current?.();
+
+    const initialX = event.clientX;
+    const initialWidth = treeWidth;
+    const move = (pointerEvent: PointerEvent) => {
+      setTreeWidth(clampTreeWidth(initialWidth + pointerEvent.clientX - initialX));
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      treeResizeCleanupRef.current = null;
+      setTreeResizing(false);
+    };
+
+    treeResizeCleanupRef.current = stop;
+    setTreeResizing(true);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
+
+  const handleTreeResizeKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const step = event.shiftKey ? 48 : 16;
+    const delta = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+    if (!delta) return;
+    event.preventDefault();
+    setTreeWidth((current) => clampTreeWidth(current + delta));
+  };
 
   historyIndexRef.current = historyIndex;
   sortRef.current = { key: sortKey, ascending: sortAscending };
@@ -181,7 +232,11 @@ export function FilesPanel({
     searchScanned,
     searchTruncated,
     selectedRefs,
-    focusedIndex
+    focusedIndex,
+    directoryEntriesByPath,
+    expandedTreePaths,
+    clientPage,
+    clientPageSize
   };
 
   const restoreHostView = useCallback((view: FilesHostView | null) => {
@@ -201,6 +256,24 @@ export function FilesPanel({
     setSearchTruncated(view?.searchTruncated ?? false);
     setSelectedRefs(view?.selectedRefs ?? new Set());
     setFocusedIndex(view?.focusedIndex ?? 0);
+    setDirectoryEntriesByPath(view?.directoryEntriesByPath ?? new Map());
+    setExpandedTreePaths(view?.expandedTreePaths ?? new Set(["/"]));
+    setLoadingTreePaths(new Set());
+    setClientPage(view?.clientPage ?? 0);
+    setClientPageSize(view?.clientPageSize ?? 50);
+  }, []);
+
+  const rememberDirectoryPage = useCallback((nextPage: WorkspaceDirectoryPage, append = false) => {
+    setDirectoryEntriesByPath((current) => {
+      const next = new Map(current);
+      const directories = nextPage.entries.filter((entry) => entry.kind === "directory");
+      const existing = append ? next.get(nextPage.canonicalPath) ?? [] : [];
+      const merged = new Map(existing.map((entry) => [entry.entryRef, entry]));
+      for (const entry of directories) merged.set(entry.entryRef, entry);
+      next.set(nextPage.canonicalPath, [...merged.values()]);
+      return next;
+    });
+    setExpandedTreePaths((current) => new Set([...current, ...pathAncestry(nextPage.canonicalPath)]));
   }, []);
 
   const navigate = useCallback(async (
@@ -232,9 +305,11 @@ export function FilesPanel({
         sortRef.current.ascending ? "asc" : "desc"
       ].join("\u0000");
       setPage(nextPage);
+      rememberDirectoryPage(nextPage);
       setPathInput(nextPage.canonicalPath);
       setSelectedRefs(new Set());
       setFocusedIndex(0);
+      setClientPage(0);
       setSearchResults(null);
       setSearchId(null);
       if (options.manual) onFollowCwdChange(false);
@@ -258,7 +333,7 @@ export function FilesPanel({
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [api, onError, onFollowCwdChange]);
+  }, [api, onError, onFollowCwdChange, rememberDirectoryPage]);
 
   useEffect(() => {
     const previousHostAlias = activeHostRef.current;
@@ -409,6 +484,28 @@ export function FilesPanel({
   }, []);
 
   useEffect(() => {
+    const closeMoreActions = (event: PointerEvent) => {
+      const menu = moreActionsRef.current;
+      const target = event.target;
+      if (!menu?.open || !(target instanceof Node) || menu.contains(target)) return;
+      menu.open = false;
+    };
+    const closeMoreActionsOnEscape = (event: KeyboardEvent) => {
+      const menu = moreActionsRef.current;
+      if (event.key !== "Escape" || !menu?.open) return;
+      event.preventDefault();
+      menu.open = false;
+      menu.querySelector<HTMLElement>("summary")?.focus();
+    };
+    document.addEventListener("pointerdown", closeMoreActions);
+    document.addEventListener("keydown", closeMoreActionsOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMoreActions);
+      document.removeEventListener("keydown", closeMoreActionsOnEscape);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!contextMenu) return;
     const close = () => setContextMenu(null);
     window.addEventListener("pointerdown", close);
@@ -435,6 +532,78 @@ export function FilesPanel({
   }, [page?.canonicalPath, page?.entries, query, searchResults, showHidden]);
 
   const selectedEntries = entries.filter((entry) => selectedRefs.has(entry.entryRef));
+  const clientPageCount = Math.max(1, Math.ceil(entries.length / clientPageSize));
+  const paginatedEntries = useMemo(
+    () => entries.slice(clientPage * clientPageSize, (clientPage + 1) * clientPageSize),
+    [clientPage, clientPageSize, entries]
+  );
+  const visibleTreeDirectories = useMemo(() => {
+    if (showHidden) return directoryEntriesByPath;
+    const next = new Map<string, RemoteFileEntry[]>();
+    for (const [path, directoryEntries] of directoryEntriesByPath) {
+      next.set(path, directoryEntries.filter((entry) => !entry.name.startsWith(".") || entry.name === "." || entry.name === ".."));
+    }
+    return next;
+  }, [directoryEntriesByPath, showHidden]);
+
+  useEffect(() => {
+    setClientPage((current) => Math.min(current, clientPageCount - 1));
+  }, [clientPageCount]);
+
+  useEffect(() => {
+    setClientPage(0);
+    setFocusedIndex(0);
+  }, [clientPageSize, page?.canonicalPath, query, showHidden]);
+
+  const toggleTreePath = async (path: string) => {
+    const expanded = expandedTreePaths.has(path);
+    setExpandedTreePaths((current) => {
+      const next = new Set(current);
+      if (expanded) next.delete(path); else next.add(path);
+      return next;
+    });
+    if (expanded || !fileSession || directoryEntriesByPath.has(path)) return;
+    setLoadingTreePaths((current) => new Set(current).add(path));
+    try {
+      const treePage = await api.listDirectory({
+        fileSessionId: fileSession.fileSessionId,
+        path,
+        snapshotId: null,
+        cursor: null,
+        pageSize: 500,
+        sort: "name",
+        direction: "asc"
+      });
+      rememberDirectoryPage(treePage);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setLoadingTreePaths((current) => {
+        const next = new Set(current);
+        next.delete(path);
+        return next;
+      });
+    }
+  };
+
+  const selectEntry = (entry: RemoteFileEntry, toggle: boolean) => {
+    setSelectedRefs((current) => {
+      if (!toggle) return new Set([entry.entryRef]);
+      const next = new Set(current);
+      if (next.has(entry.entryRef)) next.delete(entry.entryRef); else next.add(entry.entryRef);
+      return next;
+    });
+  };
+
+  const selectPage = (selected: boolean) => {
+    setSelectedRefs((current) => {
+      const next = new Set(current);
+      for (const entry of paginatedEntries) {
+        if (selected) next.add(entry.entryRef); else next.delete(entry.entryRef);
+      }
+      return next;
+    });
+  };
 
   const loadMore = async () => {
     if (!fileSession || !page?.nextCursor) return;
@@ -452,6 +621,7 @@ export function FilesPanel({
       setPage((current) => current && current.snapshotId === next.snapshotId
         ? { ...next, entries: [...current.entries, ...next.entries] }
         : next);
+      rememberDirectoryPage(next, true);
     } catch (error) {
       onError(error);
     } finally {
@@ -616,28 +786,6 @@ export function FilesPanel({
     else void showPreview(entry);
   };
 
-  const focusRow = (index: number) => {
-    const bounded = Math.max(0, Math.min(entries.length - 1, index));
-    setFocusedIndex(bounded);
-    rowRefs.current.get(entries[bounded]?.entryRef ?? "")?.focus();
-  };
-
-  const handleGridKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, entry: RemoteFileEntry, index: number) => {
-    if (event.key === "ArrowDown") { event.preventDefault(); focusRow(index + 1); }
-    if (event.key === "ArrowUp") { event.preventDefault(); focusRow(index - 1); }
-    if (event.key === "Home") { event.preventDefault(); focusRow(0); }
-    if (event.key === "End") { event.preventDefault(); focusRow(entries.length - 1); }
-    if (event.key === "Enter") { event.preventDefault(); openEntry(entry); }
-    if (event.key === " ") { event.preventDefault(); void showPreview(entry); }
-    if (event.key === "F2" && entry.writable) { event.preventDefault(); askOperation("rename", entry); }
-    if (event.key === "Delete" && entry.writable) { event.preventDefault(); askOperation("delete", entry); }
-    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-      event.preventDefault();
-      const rect = event.currentTarget.getBoundingClientRect();
-      setContextMenu({ entry, x: rect.left + 24, y: rect.top + 24 });
-    }
-  };
-
   const locateTerminal = async () => {
     if (!fileSession || !activeTerminal || activeTerminal.hostAlias !== selectedHostAlias) return;
     try {
@@ -661,57 +809,73 @@ export function FilesPanel({
     : false;
 
   return (
-    <section className="workspaceFilesPanel" aria-label={copy.modes.files}>
-      <div className="workspacePaneToolbar workspaceFilesHostToolbar">
-        <label>
+    <section
+      className="workspaceFilesPanel workspaceFilesRedesign"
+      aria-label={copy.modes.files}
+      data-compact={compact}
+      data-tree-collapsed={treeCollapsed}
+      data-tree-resizing={treeResizing}
+    >
+      <div className="workspacePaneToolbar workspaceFilesCommandBar">
+        <label className="workspaceFilesHostPicker">
           <span>{copy.host}</span>
-          <select value={selectedHostAlias} onChange={(event) => onHostSelected(event.target.value)}>
+          <select aria-label={copy.host} value={selectedHostAlias} onChange={(event) => onHostSelected(event.target.value)}>
             <option value="">{copy.localFiles}</option>
-            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{workspaceHostLabel(host)}</option>)}
+            {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{personalInfo.maskText(workspaceHostLabel(host))}</option>)}
           </select>
         </label>
-        <form className="workspaceSearchForm" onSubmit={(event) => { event.preventDefault(); void startSearch(); }}>
-          <label className="workspaceVisuallyHidden" htmlFor="workspace-file-search">{copy.searchFiles}</label>
-          <input id="workspace-file-search" placeholder={copy.searchFiles} title={copy.recursiveSearch} value={query} onChange={(event) => {
-            setQuery(event.target.value);
-            if (!event.target.value) setSearchResults(null);
-          }} />
-          <button type="submit" disabled={!query.trim()}>{searchId ? copy.stopSearch : "⌕"}</button>
-        </form>
-      </div>
-
-      <div className="workspacePaneToolbar workspaceFilesNavigation">
-        <div className="workspaceButtonGroup">
+        {fileSession?.state === "connected" ? <span aria-label={ui.sftpConnected} className="workspaceFilesConnection" title={ui.sftpConnected}><i aria-hidden="true" />{ui.sftpConnected}</span> : null}
+        <div aria-label={copy.location} className="workspaceButtonGroup workspaceFilesPathActions" role="group">
           <button aria-label={copy.back} disabled={!fileSession || historyIndex <= 0} title={copy.back} type="button" onClick={() => {
             if (!fileSession || historyIndex <= 0) return;
             const nextIndex = historyIndex - 1;
             setHistoryIndex(nextIndex);
             void navigate(fileSession, history[nextIndex], { manual: true, replaceHistory: true });
-          }}>←</button>
+          }}><FilesIcon name="back" /></button>
           <button aria-label={copy.forward} disabled={!fileSession || historyIndex >= history.length - 1} title={copy.forward} type="button" onClick={() => {
             if (!fileSession || historyIndex >= history.length - 1) return;
             const nextIndex = historyIndex + 1;
             setHistoryIndex(nextIndex);
             void navigate(fileSession, history[nextIndex], { manual: true, replaceHistory: true });
-          }}>→</button>
+          }}><FilesIcon name="forward" /></button>
           <button aria-label={copy.up} disabled={!fileSession || !page || page.canonicalPath === "/"} title={copy.up} type="button" onClick={() => {
             if (fileSession && page) void navigate(fileSession, parentPath(page.canonicalPath), { manual: true });
-          }}>↑</button>
+          }}><FilesIcon name="up" /></button>
           <button aria-label={copy.home} disabled={!fileSession} title={copy.home} type="button" onClick={() => {
             if (fileSession) void navigate(fileSession, fileSession.homePath, { manual: true });
-          }}>⌂</button>
+          }}><FilesIcon name="home" /></button>
           <button aria-label={copy.refresh} disabled={!fileSession} title={copy.refresh} type="button" onClick={() => {
             if (fileSession) void navigate(fileSession, page?.canonicalPath ?? null, { manual: false, replaceHistory: true });
-          }}>↻</button>
+          }}><FilesIcon name="refresh" /></button>
         </div>
         <form className="workspaceLocationForm" onSubmit={(event) => {
           event.preventDefault();
           if (fileSession && pathInput.trim()) void navigate(fileSession, pathInput.trim(), { manual: true });
         }}>
           <label className="workspaceVisuallyHidden" htmlFor="workspace-files-location">{copy.location}</label>
-          <input ref={locationRef} id="workspace-files-location" value={pathInput} onChange={(event) => setPathInput(event.target.value)} />
+          <input ref={locationRef} id="workspace-files-location" title={pathInput} value={pathInput} onChange={(event) => setPathInput(event.target.value)} />
         </form>
-        <div className="workspaceFilesSecondaryActions">
+        <form className="workspaceSearchForm" onSubmit={(event) => { event.preventDefault(); void startSearch(); }}>
+          <label className="workspaceVisuallyHidden" htmlFor="workspace-file-search">{copy.searchFiles}</label>
+          <input id="workspace-file-search" placeholder={copy.searchFiles} title={copy.recursiveSearch} value={query} onChange={(event) => {
+            setQuery(event.target.value);
+            if (!event.target.value) setSearchResults(null);
+          }} />
+          <button aria-label={searchId ? copy.stopSearch : copy.searchFiles} type="submit" disabled={!query.trim()}>
+            <FilesIcon name={searchId ? "close" : "search"} />
+          </button>
+        </form>
+        <button aria-label={copy.upload} className="workspaceFilesUploadButton" disabled={!fileSession} title={copy.upload} type="button" onClick={() => void upload()}><FilesIcon name="upload" /> <span>{copy.upload}</span></button>
+        <details className="workspaceFilesMoreActions" ref={moreActionsRef}>
+          <summary aria-label={ui.moreActions} title={ui.moreActions}><FilesIcon name="more" /></summary>
+          <div aria-label={ui.moreActions} className="workspaceFilesMoreMenu" role="group">
+          <button
+            aria-label={treeCollapsed ? ui.showTree : ui.hideTree}
+            aria-pressed={!treeCollapsed}
+            title={treeCollapsed ? ui.showTree : ui.hideTree}
+            type="button"
+            onClick={() => setTreeCollapsed((value) => !value)}
+          ><FilesIcon name="tree" /> <span>{ui.directoryTree}</span></button>
           <button
             aria-label={copy.followCwd}
             aria-pressed={followCwd}
@@ -720,8 +884,7 @@ export function FilesPanel({
             title={!canLocate ? copy.cwdUnavailable : copy.followCwd}
             type="button"
             onClick={() => { if (followCwd) onFollowCwdChange(false); else void locateTerminal(); }}
-          >◎ <span className="workspaceActionLabel">{copy.followCwd}</span></button>
-          <button aria-label={copy.locateTerminal} disabled={!canLocate} title={!canLocate ? copy.cwdUnavailable : copy.locateTerminal} type="button" onClick={() => void locateTerminal()}>⌾</button>
+          ><FilesIcon name="locate" /> <span>{copy.followCwd}</span></button>
           <button
             aria-label={showHidden ? copy.hideHidden : copy.showHidden}
             aria-pressed={showHidden}
@@ -729,9 +892,9 @@ export function FilesPanel({
             title={showHidden ? copy.hideHidden : copy.showHidden}
             type="button"
             onClick={() => setShowHidden((value) => !value)}
-          >.* <span className="workspaceActionLabel">{showHidden ? copy.hideHidden : copy.showHidden}</span></button>
-          <label className="workspaceCompactSelect">
-            <span className="workspaceVisuallyHidden">{copy.sortBy}</span>
+          ><FilesIcon name={showHidden ? "eyeOff" : "eye"} /> <span>{showHidden ? copy.hideHidden : copy.showHidden}</span></button>
+          <label className="workspaceFilesMoreSelect">
+            <span>{copy.sortBy}</span>
             <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
               <option value="name">{copy.sortName}</option>
               <option value="type">{copy.sortType}</option>
@@ -739,11 +902,11 @@ export function FilesPanel({
               <option value="modified">{copy.sortModified}</option>
             </select>
           </label>
-          <button aria-label={sortAscending ? copy.ascending : copy.descending} title={sortAscending ? copy.ascending : copy.descending} type="button" onClick={() => setSortAscending((value) => !value)}>{sortAscending ? "↑" : "↓"}</button>
-          <button aria-label={copy.upload} disabled={!fileSession} type="button" onClick={() => void upload()}>⇧ <span className="workspaceActionLabel">{copy.upload}</span></button>
-          <button aria-label={copy.download} disabled={selectedEntries.length === 0} type="button" onClick={() => void download()}>⇩ <span className="workspaceActionLabel">{copy.download}</span></button>
-          <button aria-label={copy.newFolder} disabled={!fileSession || !page} type="button" onClick={() => askOperation("create-directory", null, page?.canonicalPath ?? null)}>＋ <span className="workspaceActionLabel">{copy.newFolder}</span></button>
-        </div>
+          <button aria-label={sortAscending ? copy.ascending : copy.descending} title={sortAscending ? copy.ascending : copy.descending} type="button" onClick={() => setSortAscending((value) => !value)}><FilesIcon name={sortAscending ? "sortAscending" : "sortDescending"} /><span>{sortAscending ? copy.ascending : copy.descending}</span></button>
+          <button aria-label={copy.download} disabled={selectedEntries.length === 0} title={copy.download} type="button" onClick={() => void download()}><FilesIcon name="download" /><span>{copy.download}</span></button>
+          <button aria-label={copy.newFolder} disabled={!fileSession || !page} title={copy.newFolder} type="button" onClick={() => askOperation("create-directory", null, page?.canonicalPath ?? null)}><FilesIcon name="folderPlus" /><span>{copy.newFolder}</span></button>
+          </div>
+        </details>
       </div>
 
       {!followCwd && activeTerminal?.hostAlias === selectedHostAlias ? <div className="workspaceInfoBar">{copy.followCwdPaused}</div> : null}
@@ -752,94 +915,98 @@ export function FilesPanel({
         <div className="workspaceRecoveryNotice" role="status">
           <span>{copy.recoveryReady}</span>
           <button type="button" onClick={onViewRecoveries}>{copy.viewRecovery}</button>
-          <button aria-label={copy.close} type="button" onClick={() => setCreatedRecovery(null)}>×</button>
+          <button aria-label={copy.close} type="button" onClick={() => setCreatedRecovery(null)}><FilesIcon name="close" /></button>
         </div>
       ) : null}
 
-      <div className="workspaceFileGrid" role="grid" aria-busy={loading} aria-label={page?.canonicalPath ?? copy.modes.files}>
-        <div className="workspaceFileGridHeader" role="row">
-          <span role="columnheader">{copy.fileName}</span>
-          <span role="columnheader">{copy.fileType}</span>
-          <span role="columnheader">{copy.fileSize}</span>
-          <span role="columnheader">{copy.fileModified}</span>
-        </div>
-        <div className="workspaceFileGridBody" role="rowgroup">
-          {entries.map((entry, index) => (
-            <div
-              aria-selected={selectedRefs.has(entry.entryRef)}
-              className="workspaceFileRow"
-              data-kind={entry.kind}
-              draggable={entry.writable && entry.nameEncoding === "utf8"}
-              key={entry.entryRef}
-              ref={(node) => { if (node) rowRefs.current.set(entry.entryRef, node); else rowRefs.current.delete(entry.entryRef); }}
-              role="row"
-              tabIndex={focusedIndex === index ? 0 : -1}
-              onClick={(event) => {
-                setFocusedIndex(index);
-                setSelectedRefs((current) => {
-                  if (event.ctrlKey || event.metaKey) {
-                    const next = new Set(current);
-                    if (next.has(entry.entryRef)) next.delete(entry.entryRef); else next.add(entry.entryRef);
-                    return next;
-                  }
-                  return new Set([entry.entryRef]);
-                });
-              }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setSelectedRefs(new Set([entry.entryRef]));
-                setContextMenu({ entry, x: event.clientX, y: event.clientY });
-              }}
-              onDoubleClick={() => openEntry(entry)}
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("application/x-codexhub-remote-entry-ref", entry.entryRef);
-              }}
-              onDragOver={(event) => { if (entry.kind === "directory") event.preventDefault(); }}
-              onDrop={(event) => {
-                if (entry.kind !== "directory") return;
-                const entryRef = event.dataTransfer.getData("application/x-codexhub-remote-entry-ref");
-                const source = entries.find((candidate) => candidate.entryRef === entryRef);
-                if (source && source.entryRef !== entry.entryRef) {
-                  event.preventDefault();
-                  askOperation("move", source, entry.canonicalPath);
-                }
-              }}
-              onKeyDown={(event) => handleGridKeyDown(event, entry, index)}
-            >
-              <span className="workspaceFileName" role="gridcell" title={entry.canonicalPath}><span aria-hidden="true">{iconForEntry(entry)}</span>{entry.name}</span>
-              <span role="gridcell">{kindLabel(entry, copy)}</span>
-              <span role="gridcell">{entry.kind === "directory" ? "—" : displaySize(entry.size)}</span>
-              <span role="gridcell">{formatModifiedAt(entry.modifiedAt)}</span>
-            </div>
-          ))}
+      <div
+        className="workspaceFilesExplorer"
+        ref={explorerRef}
+        style={{ "--workspace-files-tree-width": `${treeWidth}px` } as CSSProperties}
+      >
+        {!treeCollapsed ? (
+          <>
+            <DirectoryTree
+              copy={ui}
+              currentPath={page?.canonicalPath ?? null}
+              directoryEntriesByPath={visibleTreeDirectories}
+              expandedPaths={expandedTreePaths}
+              loadingPaths={loadingTreePaths}
+              session={fileSession}
+              onNavigate={(path) => { if (fileSession) void navigate(fileSession, path, { manual: true }); }}
+              onToggle={(path) => void toggleTreePath(path)}
+            />
+            <button
+              aria-label={ui.resizeDirectoryTree}
+              aria-orientation="vertical"
+              aria-valuemax={TREE_MAX_WIDTH}
+              aria-valuemin={TREE_MIN_WIDTH}
+              aria-valuenow={treeWidth}
+              className="workspaceFilesTreeResizeHandle"
+              role="separator"
+              type="button"
+              onKeyDown={handleTreeResizeKeyDown}
+              onPointerDown={startTreeResize}
+            />
+          </>
+        ) : null}
+        <main className="workspaceFilesTablePane" aria-busy={loading}>
+          <FileTable
+            compact={compact}
+            copy={copy}
+            entries={paginatedEntries}
+            focusedIndex={focusedIndex}
+            locale={locale}
+            selectedRefs={selectedRefs}
+            sortAscending={sortAscending}
+            sortKey={sortKey}
+            ui={ui}
+            onAskOperation={askOperation}
+            onContextMenu={(entry, point) => setContextMenu({ entry, ...point })}
+            onFocusedIndexChange={setFocusedIndex}
+            onMove={(source, destination) => askOperation("move", source, destination.canonicalPath)}
+            onOpenEntry={openEntry}
+            onSelectEntry={selectEntry}
+            onSelectPage={selectPage}
+            onShowPreview={(entry) => void showPreview(entry)}
+          />
           {!loading && filesError ? (
             <div className="workspaceEmptyState workspaceFileEmpty" role="alert">
               <p>{copy.filesUnavailable}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  retryRequestRef.current = { hostAlias: selectedHostAlias, path: failedPath };
-                  setConnectionAttempt((value) => value + 1);
-                }}
-              >{copy.retryLoad}</button>
+              <button type="button" onClick={() => {
+                retryRequestRef.current = { hostAlias: selectedHostAlias, path: failedPath };
+                setConnectionAttempt((value) => value + 1);
+              }}>{copy.retryLoad}</button>
             </div>
           ) : null}
-          {!loading && !filesError && page !== null && entries.length === 0
-            ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.emptyDirectory}</div>
-            : null}
-          {!loading && !filesError && page === null && !selectedHostAlias
-            ? (
-              <div className="workspaceEmptyState workspaceFileEmpty">
-                <strong>{copy.localFiles}</strong>
-                <p>{hosts.length === 0 ? copy.noHosts : copy.localFilesHint}</p>
-              </div>
-            )
-            : null}
+          {!loading && !filesError && page !== null && entries.length === 0 ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.emptyDirectory}</div> : null}
+          {!loading && !filesError && page === null && !selectedHostAlias ? (
+            <div className="workspaceEmptyState workspaceFileEmpty">
+              <strong>{copy.localFiles}</strong>
+              <p>{hosts.length === 0 ? copy.noHosts : copy.localFilesHint}</p>
+            </div>
+          ) : null}
           {loading ? <div className="workspacePaneState">{copy.loading}</div> : null}
-        </div>
+          {page && !filesError ? (
+            <footer className="workspaceFilesPagination">
+              <span
+                aria-label={`${entries.length} ${ui.loadedItems}; ${selectedEntries.length} ${ui.selected}`}
+                className="workspaceFilesPaginationSummary"
+                title={`${entries.length} ${ui.loadedItems}; ${selectedEntries.length} ${ui.selected}`}
+              >
+                <strong>{entries.length}</strong><small>{ui.loadedItems}</small><span aria-hidden="true"> · </span><strong>{selectedEntries.length}</strong><small>{ui.selected}</small>
+              </span>
+              <nav aria-label={ui.pagination}>
+                <button aria-label={ui.previousPage} disabled={clientPage === 0} type="button" onClick={() => { setClientPage((value) => Math.max(0, value - 1)); setFocusedIndex(0); }}>‹</button>
+                <span>{ui.page} {clientPage + 1} {ui.of} {clientPageCount}</span>
+                <button aria-label={ui.nextPage} disabled={clientPage >= clientPageCount - 1} type="button" onClick={() => { setClientPage((value) => Math.min(clientPageCount - 1, value + 1)); setFocusedIndex(0); }}>›</button>
+              </nav>
+              <label><span className="workspaceVisuallyHidden">{ui.rowsPerPage}</span><select aria-label={ui.rowsPerPage} value={clientPageSize} onChange={(event) => setClientPageSize(Number(event.target.value))}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
+              {page.nextCursor && searchResults === null ? <button className="workspaceLoadMore" disabled={loading} type="button" onClick={() => void loadMore()}>{copy.loadMore}</button> : null}
+            </footer>
+          ) : null}
+        </main>
       </div>
-      {page?.nextCursor && searchResults === null ? <button className="workspaceLoadMore" disabled={loading} type="button" onClick={() => void loadMore()}>{copy.loadMore}</button> : null}
 
       {contextMenu ? (
         <div className="workspaceContextMenu" role="menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
@@ -869,53 +1036,18 @@ export function FilesPanel({
         </div>
       ) : null}
 
-      {preview ? (
-        <div className="workspaceInlineDialogBackdrop" role="presentation">
-          <section aria-labelledby="workspace-preview-title" className="workspaceInlineDialog workspacePreviewDialog" role="dialog" aria-modal="true">
-            <header><h3 id="workspace-preview-title">{copy.previewTitle}: {preview.name}</h3><button aria-label={copy.close} type="button" onClick={() => setPreview(null)}>×</button></header>
-            <div className="workspacePreviewBody">
-              {preview.kind === "text" && preview.text !== null ? <pre>{preview.text}</pre> : null}
-              {preview.kind === "image" && preview.dataBase64 && preview.mimeType && SAFE_IMAGE_TYPES.has(preview.mimeType)
-                ? <img alt={preview.name} src={`data:${preview.mimeType};base64,${preview.dataBase64}`} />
-                : null}
-              {preview.blockedReason ? <p role="alert">{copy.previewBlocked} {preview.blockedReason}</p> : null}
-              {preview.kind === "metadata" && !preview.blockedReason ? <p>{copy.noPreview}</p> : null}
-            </div>
-            <footer>{preview.mimeType ?? copy.unknown} · {displaySize(preview.size)}{preview.truncated ? " · …" : ""}</footer>
-          </section>
-        </div>
-      ) : null}
-
-      {pendingOperation ? (
-        <div className="workspaceInlineDialogBackdrop" role="presentation">
-          <section aria-labelledby="workspace-operation-title" className="workspaceInlineDialog workspaceOperationDialog" role="alertdialog" aria-modal="true">
-            <h3 id="workspace-operation-title">{copy.operationTitle}</h3>
-            {!operationPreview && ["rename", "create-directory"].includes(pendingOperation.operation) ? (
-              <label>{pendingOperation.operation === "create-directory" ? copy.folderName : copy.destinationName}
-                <input autoFocus value={pendingOperation.name} onChange={(event) => setPendingOperation((current) => current ? { ...current, name: event.target.value } : current)} />
-                {!operationNameValid ? <small role="alert">{copy.invalidName}</small> : null}
-              </label>
-            ) : null}
-            {operationPreview ? (
-              <div className="workspaceOperationPreview">
-                <dl>
-                  <dt>{copy.host}</dt><dd>{operationPreview.hostAlias}</dd>
-                  {operationPreview.sourcePath ? <><dt>{copy.source}</dt><dd>{operationPreview.sourcePath}</dd></> : null}
-                  {operationPreview.targetPath ? <><dt>{copy.destination}</dt><dd>{operationPreview.targetPath}</dd></> : null}
-                  {operationPreview.backupPath ? <><dt>{copy.backup}</dt><dd>{operationPreview.backupPath}</dd></> : null}
-                </dl>
-                <p>{operationPreview.impactSummary}</p>
-                <p className="workspaceWarningText">{copy.operationExpires}</p>
-              </div>
-            ) : null}
-            <div className="workspaceDialogActions">
-              <button disabled={operationBusy} type="button" onClick={() => { setPendingOperation(null); setOperationPreview(null); }}>{copy.cancel}</button>
-              {!operationPreview ? <button className="workspacePrimaryButton" disabled={operationBusy || !operationNameValid} type="button" onClick={() => void prepareOperation()}>{operationBusy ? copy.busy : pendingOperation.operation === "create-directory" ? copy.confirmOperation : copy.preview}</button> : null}
-              {operationPreview ? <button className="workspaceDangerButton" disabled={operationBusy} type="button" onClick={() => void confirmOperation()}>{operationBusy ? copy.busy : copy.confirmOperation}</button> : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <FilePreviewDialog copy={copy} preview={preview} onClose={() => setPreview(null)} />
+      <FileOperationDialog
+        busy={operationBusy}
+        copy={copy}
+        nameValid={operationNameValid}
+        pending={pendingOperation}
+        preview={operationPreview}
+        onCancel={() => { setPendingOperation(null); setOperationPreview(null); }}
+        onConfirm={() => void confirmOperation()}
+        onNameChange={(name) => setPendingOperation((current) => current ? { ...current, name } : current)}
+        onPrepare={() => void prepareOperation()}
+      />
     </section>
   );
 }

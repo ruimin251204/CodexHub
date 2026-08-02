@@ -1,0 +1,117 @@
+.desktopFrame > .codexHubAppShell {
+  height: 100%;
+  min-height: 0;
+}
+
+.desktopFrame:not([data-custom-titlebar="true"]) > .codexHubAppShell {
+  min-height: 100vh;
+}
+
+.codexHubMain {
+  /* This is the single owner of the detail-surface corner and background. */
+  overflow: hidden;
+  border-top-left-radius: var(--radius-lg);
+  background: var(--surface-solid);
+}
+
+.codexHubContent {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  border-top-left-radius: inherit;
+  background: transparent;
+}
+
+/* The glass chrome stays continuous around the detail-surface corner. */
+.codexHubAppShell .ch-sidebar {
+  border-right: 0;
+  box-shadow: none;
+}
+
+.desktopFrame[data-custom-titlebar="true"] .appTitleBar::after {
+  display: none;
+}
+
+.codexHubSidebarBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.codexHubSidebarBrand img { width: 30px; height: 30px; border-radius: 8px; }
+.codexHubSidebarBrand strong { overflow: hidden; font-size: 1.08rem; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
+
+.codexHubGlobalSearch { position: relative; }
+.codexHubSearchResults { position: absolute; z-index: 80; top: calc(100% + 8px); right: 0; left: 0; display: grid; max-height: 320px; overflow: auto; padding: 6px; border: 1px solid var(--ch-border); border-radius: 11px; background: var(--ch-surface); box-shadow: var(--ch-shadow-md); }
+.codexHubSearchResults:empty::before { content: "—"; padding: 12px; color: var(--ch-text-faint); text-align: center; }
+.codexHubSearchResults button { display: grid; gap: 2px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ch-text); text-align: left; }
+.codexHubSearchResults button:hover { background: var(--ch-accent-soft); }
+.codexHubSearchResults strong { font-size: 0.78rem; }
+.codexHubSearchResults small { overflow: hidden; color: var(--ch-text-muted); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.codexHubSidebarFooterActions { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.codexHubSidebarUtility {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0 8px;
+  color: var(--ch-text-muted);
+  background: transparent;
+}
+.codexHubSidebarUtility:hover:not(:disabled),
+.codexHubSidebarUtility[data-active="true"] { border-color: var(--ch-border); color: var(--ch-text); background: color-mix(in srgb, var(--ch-text) 6%, transparent); }
+.codexHubSidebarUtility svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.codexHubSidebarUtility > span { min-width: 0; overflow: hidden; font-size: 0.75rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.codexHubSidebarUtility.sidebarUpdateButton { flex: 0 1 auto; margin: 0; border-color: color-mix(in srgb, var(--ch-accent) 24%, var(--ch-border)); padding-inline: 8px; color: var(--ch-accent-strong); background: var(--ch-accent-soft); }
+.codexHubSidebarUtility.sidebarUpdateButton:disabled { cursor: default; opacity: 0.68; }
+
+/* Keep the settings row on the same icon and text baseline as primary navigation. */
+.ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__bottom { align-items: stretch; min-height: 44px; }
+.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarFooterActions,
+.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility,
+.ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__collapse { min-height: 44px; height: 44px; border-radius: var(--ch-radius-md); }
+.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) { justify-content: flex-start; padding-inline: 11px; }
+.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) > span { font-size: 0.92rem; }
+.codexHubSidebarUtility[data-active="true"] { position: relative; border-color: transparent; color: var(--ch-text); background: var(--ch-surface); }
+.codexHubSidebarUtility[data-active="true"]::before { position: absolute; top: 50%; left: 0; width: 3px; height: 20px; border-radius: 0 999px 999px 0; pointer-events: none; background: var(--ch-accent); content: ""; transform: translateY(-50%); }
+.ch-sidebar[data-collapsed="true"] .codexHubSidebarBrand strong,
+.ch-sidebar[data-collapsed="true"] .codexHubSidebarUtility > span { display: none; }
+.ch-sidebar[data-collapsed="true"] .codexHubSidebarFooterActions { flex-direction: column; }
+.ch-sidebar[data-collapsed="true"] .codexHubSidebarUtility { flex: 0 0 36px; width: 36px; padding: 0; }
+
+.codexHubContent[data-section="terminal"],
+.codexHubContent[data-section="files"],
+.codexHubContent[data-section="transfers"] { display: flex; flex-direction: column; padding: 16px 18px 18px; overflow: hidden; }
+.codexHubContent[data-section="terminal"] > .topBar,
+.codexHubContent[data-section="files"] > .topBar,
+.codexHubContent[data-section="transfers"] > .topBar { flex: 0 0 auto; width: min(100%, var(--app-content-max)); max-width: var(--app-content-max); min-height: 58px; margin: 0 auto; padding: 0 4px 12px; align-items: center; }
+.codexHubContent[data-section="terminal"] > .topBar h1,
+.codexHubContent[data-section="files"] > .topBar h1,
+.codexHubContent[data-section="transfers"] > .topBar h1 { font-size: 1.3rem; line-height: 1.2; }
+.codexHubContent[data-section="terminal"] > .workspacePage,
+.codexHubContent[data-section="files"] > .workspacePage,
+.codexHubContent[data-section="transfers"] > .workspacePage { flex: 1 1 0; width: min(100%, var(--app-content-max)); max-width: var(--app-content-max); min-height: 0; margin: 0 auto; overflow: hidden; }
+.codexHubContent[data-section="terminal"] .chTerminal,
+.codexHubContent[data-section="files"] .workspaceFilesRedesign,
+.codexHubContent[data-section="transfers"] .workspaceTransfersPanel { height: 100%; min-height: 0; }
+
+/* Split remains inside the Terminal section, so both live panes need the same bounded height. */
+.codexHubContent[data-section="terminal"] .workspacePageBody[data-mode="split"] .chTerminal,
+.codexHubContent[data-section="terminal"] .workspacePageBody[data-mode="split"] .workspaceFilesRedesign { height: 100%; min-height: 0; }
+
+@media (max-width: 960px) {
+  .codexHubSidebarUtility > span { display: none; }
+  .codexHubSidebarUtility { flex: 0 0 36px; width: 36px; padding: 0; }
+}
+
+@media (max-width: 720px) {
+  .codexHubContent[data-section="terminal"],
+  .codexHubContent[data-section="files"],
+  .codexHubContent[data-section="transfers"] { padding: 10px; }
+}

@@ -1,8 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { workspaceCopy } from "./copy";
 import { FilesPanel, formatModifiedAt } from "./FilesPanel";
 import { workspaceHostLabel } from "./hostLabel";
+import { resolveFileColumnWidths } from "./files/FileTable";
+import { filesUiCopy } from "./files/filesUiCopy";
+import { createPersonalInfoMasker } from "../personalInfo";
+import { PersonalInfoMaskingProvider } from "../ui/PersonalInfoMasking";
 import type {
   RemoteFileEntry,
   WorkspaceApi,
@@ -63,7 +67,7 @@ function page(path: string, entries: RemoteFileEntry[]): WorkspaceDirectoryPage 
   };
 }
 
-function renderPanel(entries: RemoteFileEntry[] = [directory]) {
+function renderPanel(entries: RemoteFileEntry[] = [directory], options: { masking?: boolean; compact?: boolean } = {}) {
   const listDirectory = vi.fn(async ({ path }: { path: string | null }) =>
     path === directory.canonicalPath
       ? page(directory.canonicalPath, [])
@@ -78,7 +82,7 @@ function renderPanel(entries: RemoteFileEntry[] = [directory]) {
     }
   } as unknown as WorkspaceApi;
 
-  render(
+  const panel = (
     <FilesPanel
       activeTerminal={null}
       api={api}
@@ -87,6 +91,7 @@ function renderPanel(entries: RemoteFileEntry[] = [directory]) {
       followCwd={false}
       hosts={[host]}
       isActive
+      compact={options.compact}
       selectedHostAlias={host.hostAlias}
       onError={vi.fn()}
       onFollowCwdChange={vi.fn()}
@@ -96,23 +101,30 @@ function renderPanel(entries: RemoteFileEntry[] = [directory]) {
       onViewRecoveries={vi.fn()}
     />
   );
+  render(options.masking ? (
+    <PersonalInfoMaskingProvider value={createPersonalInfoMasker(true, [{ username: "demo" }])}>
+      {panel}
+    </PersonalInfoMaskingProvider>
+  ) : panel);
   return listDirectory;
 }
 
 function errorPanel(
   api: WorkspaceApi,
   onError: ReturnType<typeof vi.fn>,
-  options: { isActive?: boolean; selectedHostAlias?: string; hosts?: WorkspaceHost[] } = {}
+  options: { isActive?: boolean; selectedHostAlias?: string; hosts?: WorkspaceHost[]; locale?: "en" | "zh" } = {}
 ) {
+  const locale = options.locale ?? "en";
   return (
     <FilesPanel
       activeTerminal={null}
       api={api}
-      copy={workspaceCopy.en}
+      copy={workspaceCopy[locale]}
       cwd={null}
       followCwd={false}
       hosts={options.hosts ?? [host]}
       isActive={options.isActive ?? true}
+      locale={locale}
       selectedHostAlias={options.selectedHostAlias ?? host.hostAlias}
       onError={onError}
       onFollowCwdChange={vi.fn()}
@@ -167,6 +179,178 @@ test("dot-prefixed paths are hidden by default and can be revealed", async () =>
 
   fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.hideHidden }));
   expect(screen.queryByRole("row", { name: /.config/i })).not.toBeInTheDocument();
+});
+
+test("the focused two-pane view keeps only name, size and modified file columns", async () => {
+  renderPanel();
+
+  const grid = await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
+
+  expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileName })).toBeInTheDocument();
+  expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileSize })).toBeInTheDocument();
+  expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileModified })).toBeInTheDocument();
+  expect(within(grid).queryByRole("columnheader", { name: workspaceCopy.en.fileType })).not.toBeInTheDocument();
+  expect(within(grid).queryByRole("columnheader", { name: filesUiCopy.en.permissions })).not.toBeInTheDocument();
+  expect(within(grid).queryByRole("columnheader", { name: filesUiCopy.en.owner })).not.toBeInTheDocument();
+  expect(screen.queryByRole("complementary", { name: filesUiCopy.en.details })).not.toBeInTheDocument();
+});
+
+test("directory tree keeps the real remote user name visible when personal masking is enabled", async () => {
+  renderPanel([directory], { masking: true });
+
+  const tree = await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree });
+  expect(within(tree).getByRole("button", { name: "demo" })).toBeInTheDocument();
+  expect(within(tree).queryByRole("button", { name: "d*" })).not.toBeInTheDocument();
+});
+
+test("Files more-actions menu closes from an outside press or Escape", async () => {
+  renderPanel();
+  await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
+
+  const menu = document.querySelector<HTMLDetailsElement>(".workspaceFilesMoreActions");
+  const toggle = menu?.querySelector<HTMLElement>("summary");
+  expect(menu).not.toBeNull();
+  expect(toggle).not.toBeNull();
+  if (!menu || !toggle) throw new Error("Files more-actions menu is unavailable");
+
+  fireEvent.click(toggle);
+  expect(menu.open).toBe(true);
+  fireEvent.pointerDown(toggle);
+  expect(menu.open).toBe(true);
+
+  fireEvent.pointerDown(document.body);
+  expect(menu.open).toBe(false);
+
+  fireEvent.click(toggle);
+  expect(menu.open).toBe(true);
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(menu.open).toBe(false);
+  expect(toggle).toHaveFocus();
+});
+
+test("directory tree and file columns expose pointer resize controls", async () => {
+  renderPanel();
+
+  await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
+  const explorer = document.querySelector<HTMLDivElement>(".workspaceFilesExplorer");
+  expect(explorer).not.toBeNull();
+  if (!explorer) throw new Error("Files explorer is unavailable");
+  Object.defineProperty(explorer, "clientWidth", { configurable: true, value: 1000 });
+
+  const treeResizeHandle = screen.getByRole("separator", { name: filesUiCopy.en.resizeDirectoryTree });
+  fireEvent.pointerDown(treeResizeHandle, { button: 0, clientX: 248 });
+  fireEvent.pointerMove(window, { clientX: 320 });
+  expect(explorer.style.getPropertyValue("--workspace-files-tree-width")).toBe("320px");
+  fireEvent.pointerUp(window);
+
+  const nameResizeHandle = screen.getByRole("separator", { name: `${filesUiCopy.en.resizeColumn}: ${workspaceCopy.en.fileName}` });
+  fireEvent.pointerDown(nameResizeHandle, { button: 0, clientX: 100 });
+  fireEvent.pointerMove(window, { clientX: 180 });
+  expect(screen.getByRole("grid", { name: filesUiCopy.en.tableView }).style.getPropertyValue("--workspace-file-name-column-width")).toBe("420px");
+  fireEvent.pointerUp(window);
+});
+
+test("compact Files starts with its directory tree collapsed and can open it on demand", async () => {
+  renderPanel([directory], { compact: true });
+
+  await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
+  expect(screen.queryByRole("tree", { name: filesUiCopy.en.directoryTree })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.showTree }));
+  expect(await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree })).toBeInTheDocument();
+});
+
+test("entering compact Files closes the tree once without overriding a later user choice", async () => {
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const panelProps = {
+    activeTerminal: null,
+    api,
+    copy: workspaceCopy.en,
+    cwd: null,
+    followCwd: false,
+    hosts: [host],
+    isActive: true,
+    selectedHostAlias: host.hostAlias,
+    onError: vi.fn(),
+    onFollowCwdChange: vi.fn(),
+    onHostSelected: vi.fn(),
+    onOpenTerminalAt: vi.fn(),
+    onRecoveryCreated: vi.fn(),
+    onViewRecoveries: vi.fn()
+  };
+  const renderPanelForMode = (compact: boolean) => <FilesPanel {...panelProps} compact={compact} />;
+  const view = render(renderPanelForMode(false));
+
+  expect(await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree })).toBeInTheDocument();
+  view.rerender(renderPanelForMode(true));
+  await waitFor(() => expect(screen.queryByRole("tree", { name: filesUiCopy.en.directoryTree })).not.toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.showTree }));
+  expect(await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree })).toBeInTheDocument();
+
+  view.rerender(renderPanelForMode(true));
+  expect(await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree })).toBeInTheDocument();
+});
+
+test("file columns fit the compact table viewport without horizontal overflow", () => {
+  const widths = resolveFileColumnWidths({ name: 340, size: 124, modified: 188 }, 230, true);
+
+  expect(widths.name).toBeGreaterThan(0);
+  expect(widths.size).toBeGreaterThan(0);
+  expect(widths.modified).toBeGreaterThan(0);
+  expect(widths.name + widths.size + widths.modified).toBe(182);
+});
+
+test("directory tree expansion lazily lists the selected real canonical path", async () => {
+  const listDirectory = renderPanel();
+  const tree = await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree });
+
+  fireEvent.click(within(tree).getByRole("button", { name: `${filesUiCopy.en.expandDirectory}: ${directory.name}` }));
+
+  await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({
+    fileSessionId: session.fileSessionId,
+    path: directory.canonicalPath,
+    sort: "name",
+    direction: "asc"
+  })));
+});
+
+test("client pagination and page checkboxes keep selection explicit", async () => {
+  const entries = Array.from({ length: 30 }, (_, index): RemoteFileEntry => ({
+    ...directory,
+    entryRef: `entry-${index}`,
+    canonicalPath: `${session.homePath}/item-${index}`,
+    name: `item-${index}`,
+    kind: "file"
+  }));
+  renderPanel(entries);
+  await screen.findByRole("row", { name: /item-0/i });
+
+  fireEvent.change(screen.getByRole("combobox", { name: filesUiCopy.en.rowsPerPage }), { target: { value: "25" } });
+  await waitFor(() => expect(screen.queryByRole("row", { name: /item-29/i })).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("checkbox", { name: filesUiCopy.en.selectAllPage }));
+  expect(screen.getByLabelText(/25 selected/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.nextPage }));
+  expect(await screen.findByRole("row", { name: /item-29/i })).toBeInTheDocument();
+});
+
+test("Files-specific redesign copy follows the requested locale", async () => {
+  const stop = () => undefined;
+  const api = { openFiles: vi.fn(), events: { onFileSearchUpdated: vi.fn().mockReturnValue(stop), onLocalDrop: vi.fn().mockReturnValue(stop) } } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn(), { selectedHostAlias: "", locale: "zh" }));
+
+  expect(await screen.findByRole("complementary", { name: filesUiCopy.zh.directoryTree })).toBeInTheDocument();
+  expect(screen.queryByRole("complementary", { name: filesUiCopy.zh.details })).not.toBeInTheDocument();
 });
 
 test.each(["double-click", "enter"])("%s opens a directory by canonical POSIX path", async (action) => {

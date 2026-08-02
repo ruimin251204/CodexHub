@@ -25,6 +25,7 @@ const requiredFiles = [
   "index.html",
   "src/main.tsx",
   "src/App.tsx",
+  "src/components/Layout/Sidebar.tsx",
   "src/ui/ModalFrame.tsx",
   "src/ui/AlertModalFrame.tsx",
   "src/ui/ConfirmDialog.tsx",
@@ -405,7 +406,7 @@ for (const token of ["APPDATA", "LOCALAPPDATA", "USERPROFILE", "WindowStyle", "R
 }
 
 const cargoToml = read("src-tauri/Cargo.toml");
-for (const token of ["tauri-plugin-updater", "url = \"2\"", "base64 = \"0.22\""]) {
+for (const token of ["tauri-plugin-updater", "tauri-plugin-autostart", "url = \"2\"", "base64 = \"0.22\""]) {
   if (!cargoToml.includes(token)) fail(`missing updater Cargo dependency token: ${token}`);
 }
 if (!cargoToml.includes("features = [\"tray-icon\"]")) fail("Tauri dependency should enable the tray-icon feature");
@@ -471,6 +472,9 @@ if (!/#\[serde\(default = "default_true"\)\]\s*pub\(crate\) host_operation_log_p
 }
 if (!rustBackend.includes("host_operation_log_popups: true")) {
   fail("default Rust settings must enable host-operation log pop-ups");
+}
+for (const token of ["launch_at_login", "launch_at_login: false", "TauriLoginLaunchController", "save_after_login_launch_change", "set_launch_at_login", "login_launch.set_enabled(desired_enabled)?", "context.config().identifier.clone()", "app_name(autostart_app_name)"]) {
+  if (!rustBackend.includes(token)) fail(`missing native startup settings token: ${token}`);
 }
 for (const token of [
   "CODEX_NATIVE_PLATFORM_SCRIPT",
@@ -573,6 +577,7 @@ for (const command of [
   "detect_network_proxy",
   "get_settings",
   "save_settings",
+  "set_launch_at_login",
   "choose_close_button_behavior",
   "get_ssh_status",
   "generate_ed25519_key",
@@ -1254,6 +1259,7 @@ for (const token of [
 }
 
 const app = read("src/App.tsx");
+const sidebarComponent = read("src/components/Layout/Sidebar.tsx");
 const mockApiSource = read("src/api/mock.ts");
 const modalFrameSource = read("src/ui/ModalFrame.tsx");
 const operationProgressSource = read("src/ui/OperationProgress.tsx");
@@ -1276,7 +1282,7 @@ if (app.includes("copy.monitor.noGpuProcesses")) fail("resource monitor should h
 for (const token of ["MonitorHostRow", "monitorTable"]) {
   if (app.includes(token)) fail(`resource monitor should use Bento cards instead of table UI: ${token}`);
 }
-for (const label of ["Home", "主页", "Hosts", "Profiles", "Skills", "Tasks", "任务", "Settings", "Host Matrix", "主机矩阵", "Font", "Sidebar visual hints", "侧边栏视觉提示", "Host list", "主机列表", "Local config", "本地配置", "Appearance", "外观", "Local keys", "本地密钥", "Version info", "版本信息", "Other", "其他", "Program close button behavior", "程序关闭按钮行为", "Host IP", "Codex版本", "Test all", "一键测试", "Update outdated", "一键更新", "Details", "详情", "Logs", "日志", "Copied!", "复制成功！", "Add Server", "添加服务器", "来源", "System", "系统", "Codex", "API config", "API 配置", "Test latency", "测试延迟", "stdout", "stderr", "Install Codex", "Update Codex", "新增 SSH Host", "连接进程", "BootstrapProgressLog", "Ask next time", "Exit app", "Minimize to tray", "关闭按钮", "下次询问", "退出程序", "最小化到托盘"]) {
+for (const label of ["Home", "主页", "Hosts", "Profiles", "Skills", "Tasks", "任务", "Settings", "Host Matrix", "主机矩阵", "Font", "Sidebar visual hints", "侧边栏视觉提示", "Host list", "主机列表", "Local config", "本地配置", "Appearance", "外观", "Local keys", "本地密钥", "Version info", "版本信息", "Other", "其他", "Program close button behavior", "程序关闭按钮行为", "Launch at login", "开机自启", "Host IP", "Codex版本", "Test all", "一键测试", "Update outdated", "一键更新", "Details", "详情", "Logs", "日志", "Copied!", "复制成功！", "Add Server", "添加服务器", "来源", "System", "系统", "Codex", "API config", "API 配置", "Test latency", "测试延迟", "stdout", "stderr", "Install Codex", "Update Codex", "新增 SSH Host", "连接进程", "BootstrapProgressLog", "Ask next time", "Exit app", "Minimize to tray", "关闭按钮", "下次询问", "退出程序", "最小化到托盘"]) {
   if (!app.includes(label)) fail(`missing UI label: ${label}`);
 }
 for (const token of [
@@ -1292,11 +1298,17 @@ for (const token of [
 ]) {
   if (!app.includes(token)) fail(`missing close-button UI token: ${token}`);
 }
-for (const token of ["appUpdateStatus", "appUpdateFailureTask", "appUpdateChecking", "appUpdateInstalling", "copy.settings.appUpdates", "copy.settings.dailyUpdateCheck", "copy.settings.softwareName", "copy.settings.installedAt", "copy.settings.updatedAt", "copy.settings.checkStableUpdate", "copy.settings.installStableUpdate", "copy.settings.checkFailed", "copy.settings.updateCheckFailureHint", "copy.settings.pendingConfiguration", 'className="sshHostsTable versionInfoTable"', "appUpdateStatus.softwareName", "appUpdateStatus.installedAt ?? copy.settings.unknown", "appVersionTone(appUpdateStatus.currentVersion, appUpdateStatus.latestVersion)", "appUpdateLatestVersionLabel(appUpdateStatus, copy)", "appLatestVersionTone(appUpdateStatus)", "title={personalInfo.maskText(appUpdateStatus.message)}", "appUpdateStatus.checkedAt ?? copy.settings.notChecked", "latestAppUpdateTask", "latestAppInstallTask", "footer={("]) {
+for (const token of ["appUpdateStatus", "appUpdateFailureTask", "appUpdateChecking", "appUpdateInstalling", "copy.settings.appUpdates", "copy.settings.dailyUpdateCheck", "copy.settings.softwareName", "copy.settings.installedAt", "copy.settings.updatedAt", "copy.settings.checkStableUpdate", "copy.settings.installStableUpdate", "copy.settings.checkFailed", "copy.settings.updateCheckFailureHint", "copy.settings.pendingConfiguration", 'className="settingsUpdateSummary"', "appUpdateStatus.softwareName", "appUpdateStatus.installedAt ?? copy.settings.unknown", "appVersionTone(appUpdateStatus.currentVersion, appUpdateStatus.latestVersion)", "appUpdateLatestVersionLabel(appUpdateStatus, copy)", "appLatestVersionTone(appUpdateStatus)", "title={personalInfo.maskText(appUpdateStatus.message)}", "appUpdateStatus.checkedAt ?? copy.settings.notChecked", "latestAppUpdateTask", "latestAppInstallTask", "footer={("]) {
   if (!app.includes(token)) fail(`missing stable updater Settings UI token: ${token}`);
 }
 for (const token of ["NetworkProxyManualModal", "networkProxyManualOpen", "handleNetworkProxyChoice", "copy.settings.networkProxy", "copy.settings.networkProxyOptions", "copy.settings.networkProxyManualTitle", "copy.settings.networkProxyPort", "copy.settings.networkProxySave", "onNetworkProxyModeChange", "onNetworkProxyManualRequest", "networkProxyControl"]) {
   if (!app.includes(token)) fail(`missing network proxy Settings UI token: ${token}`);
+}
+for (const token of ["launchAtLoginAvailable", "onLaunchAtLoginChange", "api.setLaunchAtLogin", "copy.settings.launchAtLogin", "launchAtLoginDesktopOnly", "copy.settings.launchAtLoginHint", "SettingsToggleRow"]) {
+  if (!app.includes(token)) fail(`missing launch-at-login Settings UI token: ${token}`);
+}
+if (!mockApiSource.includes("Launch at login requires the Tauri desktop backend.")) {
+  fail("Mock launch-at-login must explicitly reject instead of simulating an OS registration");
 }
 if (app.includes("networkProxyInline")) fail("network proxy Settings UI should not expose an inline proxy input");
 for (const token of ["APP_UPDATE_DAILY_CHECK_HOUR = 4", "nextDailyAppUpdateCheckAt", "runStableUpdateCheck(\"daily\")", "scheduleNextAppUpdateCheck", "appUpdateStatusRef", "appUpdateBusyRef"]) {
@@ -1327,14 +1339,16 @@ for (const token of [
   "runSectionOperation",
   "markSectionCompletionSignal",
   "clearSectionCompletionSignal(item.id)",
-  "className=\"navCompletionDot\"",
-  "data-tone={completionTone}",
+  "indicator: completionTone",
   "copy.settings.sidebarCompletionIndicators",
   "className=\"pillToggle\"",
   "role=\"switch\"",
   "onSidebarCompletionIndicatorsChange"
 ]) {
   if (!app.includes(token)) fail(`missing sidebar completion indicator UI token: ${token}`);
+}
+for (const token of ["className=\"ch-sidebar__indicator\"", "data-tone={item.indicator.tone}"]) {
+  if (!sidebarComponent.includes(token)) fail(`missing Design System sidebar completion indicator token: ${token}`);
 }
 for (const token of [
   "SetupGuideModal",
@@ -1375,8 +1389,18 @@ for (const token of [
 ]) {
   if (!app.includes(token)) fail(`missing setup guide or empty-state token: ${token}`);
 }
-for (const token of ['new URL("../src-tauri/icons/128x128.png", import.meta.url).href', '<img className="appIcon" src={appLogoUrl} alt="" aria-hidden="true" />']) {
+for (const token of ['new URL("../src-tauri/icons/128x128.png", import.meta.url).href', 'className="codexHubSidebarBrand"', '<img src={appLogoUrl} alt="" aria-hidden="true" />']) {
   if (!app.includes(token)) fail(`missing app logo UI token: ${token}`);
+}
+for (const token of [
+  '<AppTitleBar copy={copy} search={globalSearchControl}',
+  'items: (["dashboard", "terminal", "files", "transfers"] as SectionId[])',
+  'items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[])',
+  'className="codexHubSidebarFooterActions"',
+  'className="codexHubSidebarUtility"',
+  'className="codexHubSidebarUtility sidebarUpdateButton"'
+]) {
+  if (!app.includes(token)) fail(`missing integrated titlebar/sidebar shell token: ${token}`);
 }
 if (app.includes('new URL("../figs/app-logo.png", import.meta.url).href')) fail("runtime sidebar logo should not bundle figs/app-logo.png");
 for (const token of ["copy.hosts.source", "copy.dashboard.system", "copy.hosts.codex", "copy.hosts.configExists", "copy.hosts.latency", "copy.hosts.skills"]) {
@@ -1771,8 +1795,8 @@ for (const token of [
   if (!app.includes(token)) fail(`missing backend-batched host-operation UI token: ${token}`);
 }
 if (app.includes("TaskDrawer")) fail("global Task drawer should be removed while the Tasks page remains available");
-if (!app.includes('apiMode === "mock" ? copy.common.mockMode : copy.common.backendMode')) {
-  fail("the pre-drawer backend-mode footer should remain explicit in desktop and Mock modes");
+if (app.includes('apiMode === "mock" ? copy.common.mockMode : copy.common.backendMode')) {
+  fail("the legacy backend-mode hint should not remain in the sidebar footer");
 }
 for (const token of ["value < 100", "value < 300", "return { label: host.codexVersion || copy.profiles.notChecked, tone: \"green\" }", "const updateDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled;"]) {
   if (app.includes(token)) fail(`Host latency/version UI should not keep old absolute or always-update logic: ${token}`);
@@ -2147,7 +2171,7 @@ const settings = read("src/settings.ts");
 for (const fontPreset of ["English", "简体中文", "zh-cn"]) {
   if (!settings.includes(fontPreset)) fail(`missing font preset: ${fontPreset}`);
 }
-for (const token of ["setupGuideDismissed", "setupGuideDismissed: false", "platformAppearance", "platformAppearance: \"auto\"", "networkProxyMode", "networkProxyMode: \"auto\"", "networkProxyUrl", "sidebarCompletionIndicators", "sidebarCompletionIndicators: true", "candidate.sidebarCompletionIndicators !== false", "hostOperationLogPopups", "hostOperationLogPopups: true", "candidate.hostOperationLogPopups !== false", "personalInfoMasking", "personalInfoMasking: true", "candidate.personalInfoMasking !== false", "resolvePlatformAppearance", "applyPlatformAppearance"]) {
+for (const token of ["setupGuideDismissed", "setupGuideDismissed: false", "platformAppearance", "platformAppearance: \"auto\"", "networkProxyMode", "networkProxyMode: \"auto\"", "networkProxyUrl", "sidebarCompletionIndicators", "sidebarCompletionIndicators: true", "candidate.sidebarCompletionIndicators !== false", "hostOperationLogPopups", "hostOperationLogPopups: true", "candidate.hostOperationLogPopups !== false", "personalInfoMasking", "personalInfoMasking: true", "candidate.personalInfoMasking !== false", "launchAtLogin", "launchAtLogin: false", "candidate.launchAtLogin === true", "resolvePlatformAppearance", "applyPlatformAppearance"]) {
   if (!settings.includes(token)) fail(`missing settings token: ${token}`);
 }
 if (!settings.includes('isWindows(platform) ? "windows" : "macos"')) {
@@ -2215,14 +2239,17 @@ if (styles.includes("monitorBentoTile")) fail("resource monitor should use simpl
 for (const token of [".monitorTable", "min-width: 980px"]) {
   if (styles.includes(token)) fail(`resource monitor table style should be removed: ${token}`);
 }
-for (const token of ["appUpdatePanel", "appUpdateSchedule", "sidebarUpdateButton", "versionInfoTable", "taskLogModalHint", "networkProxyControl", "table-layout: fixed", "white-space: normal", "overflow-wrap: anywhere"]) {
+for (const token of ["appUpdatePanel", "appUpdateSchedule", "sidebarUpdateButton", "settingsSurfacePanel", "settingsPanelLayout", "settingsChoiceCard", "settingsToggleList", "settingsUpdateSummary", "settingsUpdateLead", "settingsUpdateFact", "taskLogModalHint", "networkProxyControl"]) {
   if (!styles.includes(token)) fail(`missing stable updater Settings style token: ${token}`);
 }
-const versionInfoTableStyle = styles.match(/\.versionInfoTable\s*\{[^}]*\}/)?.[0] ?? "";
-if (!versionInfoTableStyle.includes("min-width: 0")) fail("Version info table should shrink inside the Settings card");
-const versionInfoCellStyle = styles.match(/\.versionInfoTable th,\s*\.versionInfoTable td\s*\{[^}]*\}/)?.[0] ?? "";
-if (!versionInfoCellStyle.includes("white-space: normal") || !versionInfoCellStyle.includes("overflow-wrap: anywhere")) {
-  fail("Version info table cells should wrap internally instead of forcing horizontal overflow");
+const updateSummaryStyle = styles.match(/\.settingsUpdateSummary\s*\{[^}]*\}/)?.[0] ?? "";
+if (!updateSummaryStyle.includes("display: grid")) fail("Update summary should use a responsive grid instead of a table");
+if (!updateSummaryStyle.includes("grid-template-columns: repeat(4")) {
+  fail("Update summary should keep its four overview cards on one row when space permits");
+}
+const updateFactStyle = styles.match(/\.settingsUpdateFact\s*\{[^}]*\}/)?.[0] ?? "";
+if (!updateFactStyle.includes("display: grid")) {
+  fail("Update summary metadata should render as direct cards in the shared grid");
 }
 for (const token of ["--font-ui", "--font-mono", "--app-content-max: 1220px", "--content-max: var(--app-content-max)", "font-family: var(--font-ui)", "font-family: var(--font-mono)"]) {
   if (!styles.includes(token)) fail(`missing font token: ${token}`);
@@ -2235,21 +2262,12 @@ for (const removedToken of ["localCodexStatus", "localCodexBusy", "onRefreshLoca
 }
 if (app.includes("<select value={settings.fontPreset}")) fail("font setting should use the same segmented module style as theme");
 if (!styles.includes('.segmentedControl[data-options="2"]')) fail("missing two-option segmented control style");
-if (!app.includes('className="settingsRows dividedSettingsRows appearanceRows"')) fail("missing divided appearance settings row group");
-const appearanceDividerCount = (app.match(/data-divider="true"/g) ?? []).length;
-if (appearanceDividerCount < 3) fail("settings cards should keep theme, sidebar visual hint, and close behavior dividers");
-if (!/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings\.theme}<\/span>/.test(app)) {
-  fail("appearance card should place the first divider above the theme row");
+for (const token of ["SettingsPanelSection", "SettingsChoiceCard", "SettingsToggleRow", "settingsAppearanceChoiceGrid", "settingsSystemChoiceGrid", "settingsUpdateSummary"]) {
+  if (!app.includes(token)) fail(`missing unified Settings card token: ${token}`);
 }
-if (/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings\.platformAppearance}<\/span>/.test(app)) {
-  fail("appearance card should not place the first divider above the platform row");
-}
-if (!/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings\.sidebarCompletionIndicators}<\/span>/.test(app)) {
-  fail("appearance card should place a divider above the sidebar visual hints row");
-}
-const sidebarVisualHintRow = app.indexOf("<span>{copy.settings.sidebarCompletionIndicators}</span>");
-const logPopupHintRow = app.indexOf("<span>{copy.settings.hostOperationLogPopups}</span>");
-const personalInfoMaskingRow = app.indexOf("<span>{copy.settings.personalInfoMasking}</span>");
+const sidebarVisualHintRow = app.indexOf("checked={settings.sidebarCompletionIndicators}");
+const logPopupHintRow = app.indexOf("checked={settings.hostOperationLogPopups}");
+const personalInfoMaskingRow = app.indexOf("checked={settings.personalInfoMasking}");
 if (sidebarVisualHintRow < 0 || logPopupHintRow <= sidebarVisualHintRow) {
   fail("appearance settings must place the log pop-up pill directly after sidebar visual hints");
 }
@@ -2258,38 +2276,78 @@ if (personalInfoMaskingRow <= logPopupHintRow) {
 }
 for (const token of [
   "onHostOperationLogPopupsChange",
-  "data-enabled={settings.hostOperationLogPopups}",
-  "aria-checked={settings.hostOperationLogPopups}",
-  "onHostOperationLogPopupsChange(!settings.hostOperationLogPopups)"
+  "checked={settings.hostOperationLogPopups}",
+  "onChange={onHostOperationLogPopupsChange}",
+  "aria-checked={checked}",
+  "data-enabled={checked}"
 ]) {
   if (!app.includes(token)) fail(`missing host-operation log pop-up Settings pill behavior: ${token}`);
 }
 for (const token of [
   "onPersonalInfoMaskingChange",
-  "data-enabled={settings.personalInfoMasking}",
-  "aria-checked={settings.personalInfoMasking}",
-  "onPersonalInfoMaskingChange(!settings.personalInfoMasking)"
+  "checked={settings.personalInfoMasking}",
+  "onChange={onPersonalInfoMaskingChange}",
+  "onClick={() => onChange(!checked)}"
 ]) {
   if (!app.includes(token)) fail(`missing personal information masking Settings pill behavior: ${token}`);
 }
-if (!/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings\.closeButtonBehavior}<\/span>/.test(app)) {
-  fail("other settings card should place a divider above the close button behavior row");
-}
-if (/className="settingControlRow" data-divider="true">\s*<span>{copy\.settings\.networkProxy}<\/span>/.test(app)) {
-  fail("other settings card should not place a divider above the network proxy row");
-}
 for (const token of [
-  ".dividedSettingsRows",
-  '.dividedSettingsRows .settingControlRow[data-divider="true"]::before',
-  "min-height: 60px",
-  "padding: 8px 0",
-  ".dividedSettingsRows .segmentedControl",
-  "min-height: 38px",
-  ".dividedSettingsRows .segmentedControl button"
+  ".settingsPanelSection",
+  ".settingsChoiceCard",
+  ".settingsToggleRow",
+  ".settingsUpdateFact",
+  ".terminalTypographyCard",
+  "grid-template-columns: repeat(4, minmax(0, 1fr))",
+  "container-type: inline-size",
+  ".terminalPreferencesAppearanceGrid"
 ]) {
-  if (!styles.includes(token)) fail(`missing appearance row alignment style token: ${token}`);
+  if (!styles.includes(token)) fail(`missing unified Settings layout style token: ${token}`);
 }
-for (const token of ["titleDragRegion", "captionGlyph::before", "appTitleBar", "captionButton", "modalHeader", "modalTitleIcon", "emojiIcon", "navIcon", "navGlyph", "navLabel", "navCompletionDot", "navCompletionDot[data-tone=\"error\"]", "commandBar", "commandGroup", "pillToggle", "pillToggleThumb", "translateX(22px)", "metricPrimary", "metricSecondary", "matrixHeader", "matrixEmptyState", "matrixEmptyIcon", ".hostMeta .badge"]) {
+if (app.includes('<h3 className="settingsPanelSectionTitle">') || app.includes('className="terminalPreferencesSectionTitle"')) {
+  fail("Settings groups should not render redundant small section labels");
+}
+const appShellStyles = read("src/components/app-shell-integration.css");
+for (const token of [".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-lg)"]) {
+  if (!appShellStyles.includes(token)) fail(`missing rounded content-shell token: ${token}`);
+}
+const codexHubMainStyle = appShellStyles.match(/\.codexHubMain\s*\{[^}]*\}/)?.[0] ?? "";
+const codexHubContentStyle = appShellStyles.match(/\.codexHubContent\s*\{[^}]*\}/)?.[0] ?? "";
+for (const token of ["overflow: hidden", "border-top-left-radius: var(--radius-lg)", "background: var(--surface-solid)"]) {
+  if (!codexHubMainStyle.includes(token)) fail(`main detail surface should own its rounded background: ${token}`);
+}
+for (const token of ["min-height: 0", "border-top-left-radius: inherit", "background: transparent"]) {
+  if (!codexHubContentStyle.includes(token)) fail(`content shell should inherit the detail surface corner: ${token}`);
+}
+for (const token of [".codexHubAppShell .ch-sidebar", "border-right: 0", ".appTitleBar::after", "display: none"]) {
+  if (!appShellStyles.includes(token)) fail(`glass chrome must not leave a square corner divider: ${token}`);
+}
+const desktopRootStyle = styles.match(/html,\s*body,\s*#root\s*\{[^}]*\}/)?.[0] ?? "";
+for (const token of ["height: 100%", "overflow: hidden"]) {
+  if (!desktopRootStyle.includes(token)) fail(`desktop root must not create a global page scrollbar: ${token}`);
+}
+const desktopFrameStyle = styles.match(/\.desktopFrame\s*\{[^}]*\}/)?.[0] ?? "";
+for (const token of ["height: 100vh", "min-height: 0", "overflow: hidden"]) {
+  if (!desktopFrameStyle.includes(token)) fail(`desktop frame must constrain global overflow: ${token}`);
+}
+for (const token of ['.codexHubContent[data-section="transfers"] .workspaceTransfersPanel', "height: 100%; min-height: 0;"]) {
+  if (!appShellStyles.includes(token)) fail(`Transfers should share the bounded content surface: ${token}`);
+}
+if (!appShellStyles.includes('> .workspacePage { flex: 1 1 0;')) {
+  fail("workspace detail surfaces should consume only the content height left by their page heading");
+}
+const transferStyles = read("src/workspace/transfers-redesign.css");
+const transferPanelStyle = transferStyles.match(/\.workspaceTransfersPanel\s*\{[^}]*\}/)?.[0] ?? "";
+if (!transferPanelStyle.includes("overflow: hidden") || transferPanelStyle.includes("overflow-y: auto")) {
+  fail("Transfers root should not create a second page scrollbar");
+}
+const transferContentStyle = transferStyles.match(/\.transferPageContent\s*\{[^}]*\}/)?.[0] ?? "";
+for (const token of ["flex: 1 1 auto", "min-height: 0", "overflow-y: auto"]) {
+  if (!transferContentStyle.includes(token)) fail(`Transfers content should own the single vertical scroll area: ${token}`);
+}
+for (const token of ['.workspacePageBody[data-mode="transfers"]', ".workspacePageBody[data-mode=\"transfers\"] > .workspaceTransfersPanel"]) {
+  if (!styles.includes(token)) fail(`missing bounded Transfers workspace token: ${token}`);
+}
+for (const token of ["titleBarSearchRegion", "captionGlyph::before", "appTitleBar", "captionButton", "modalHeader", "modalTitleIcon", "emojiIcon", "navIcon", "navGlyph", "navLabel", "navCompletionDot", "navCompletionDot[data-tone=\"error\"]", "commandBar", "commandGroup", "pillToggle", "pillToggleThumb", "translateX(22px)", "metricPrimary", "metricSecondary", "matrixHeader", "matrixEmptyState", "matrixEmptyIcon", ".hostMeta .badge"]) {
   if (!styles.includes(token)) fail(`missing dashboard home polish style token: ${token}`);
 }
 for (const token of ["setupGuideModal", "setupGuideLanguage", "setupGuideLanguageOption", "setupGuideHostList", "setupGuideHostHeader", "setupGuideActions", "emptyListState", "emptyListIcon", "emptyListActions"]) {

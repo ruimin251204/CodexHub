@@ -15,6 +15,7 @@ export const commandPolicies = {
   install_stable_update: { effect: "remote-write", liveSsh: false, sensitiveInput: false },
   get_settings: { effect: "read", liveSsh: false, sensitiveInput: false },
   save_settings: { effect: "local-write", liveSsh: false, sensitiveInput: false },
+  set_launch_at_login: { effect: "local-write", liveSsh: false, sensitiveInput: false },
   detect_network_proxy: { effect: "read", liveSsh: false, sensitiveInput: false },
   choose_close_button_behavior: { effect: "local-write", liveSsh: false, sensitiveInput: false },
   get_ssh_status: { effect: "read", liveSsh: false, sensitiveInput: false },

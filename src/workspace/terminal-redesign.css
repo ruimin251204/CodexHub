@@ -1,0 +1,682 @@
+/* Terminal chrome is isolated from PTY data; xterm remains the only byte renderer. */
+.chTerminal {
+  --ch-terminal-accent: #2f6fec;
+  --ch-terminal-bg: #111417;
+  --ch-terminal-elevated: #171b20;
+  --ch-terminal-shell: #0c0f12;
+  --ch-terminal-border: rgba(255, 255, 255, 0.095);
+  --ch-terminal-muted: #929ba8;
+  --ch-terminal-strong: #c3cad4;
+  --ch-terminal-empty-text: #aeb6c1;
+  --ch-terminal-empty-accent: #719cef;
+  --ch-terminal-empty-glow: rgba(54, 113, 238, 0.12);
+  --ch-terminal-scrollbar: #49525e;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  container: ch-terminal / inline-size;
+  min-height: min(720px, calc(100vh - 158px));
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: 0 18px 46px color-mix(in srgb, #17233e 10%, transparent), var(--shadow-soft);
+}
+
+.chTerminal[data-terminal-theme="light"] {
+  --ch-terminal-bg: #fbfcfe;
+  --ch-terminal-elevated: #f1f4f8;
+  --ch-terminal-shell: #e8edf3;
+  --ch-terminal-border: rgba(32, 41, 56, 0.14);
+  --ch-terminal-muted: #5d6878;
+  --ch-terminal-strong: #263244;
+  --ch-terminal-empty-text: #5b6676;
+  --ch-terminal-empty-accent: #2f6fec;
+  --ch-terminal-empty-glow: rgba(47, 111, 236, 0.1);
+  --ch-terminal-scrollbar: #a7b0bd;
+  /* Keep the light renderer edge-to-edge instead of inheriting a dark card frame. */
+  border-color: transparent;
+}
+
+.chTerminal[data-terminal-theme="light"] .chTerminalInstance[data-focused="true"] { box-shadow: none; }
+
+/* xterm's stock viewport is black; keep its one-pixel shell aligned with the light canvas. */
+.chTerminal[data-terminal-theme="light"] .workspaceXtermCanvas,
+.chTerminal[data-terminal-theme="light"] .workspaceXtermCanvas .xterm,
+.chTerminal[data-terminal-theme="light"] .workspaceXtermCanvas .xterm-viewport,
+.chTerminal[data-terminal-theme="light"] .workspaceXtermCanvas .composition-view {
+  background-color: var(--ch-terminal-bg);
+}
+
+.chTerminal[data-terminal-theme="light"] .workspaceXtermCanvas .xterm { padding: 0; }
+.chTerminal[data-terminal-theme="light"] .workspaceXtermCanvas .composition-view { color: #202938; }
+
+.chTerminal[data-terminal-theme="high-contrast"] {
+  --ch-terminal-bg: #000;
+  --ch-terminal-elevated: #080808;
+  --ch-terminal-shell: #000;
+  --ch-terminal-border: rgba(255, 255, 255, 0.72);
+  --ch-terminal-muted: #e7e7e7;
+  --ch-terminal-strong: #fff;
+  --ch-terminal-empty-text: #fff;
+  --ch-terminal-empty-accent: #ffff00;
+  --ch-terminal-empty-glow: rgba(255, 255, 0, 0.1);
+  --ch-terminal-scrollbar: #fff;
+}
+
+.chTerminalIcon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.chTerminalToolbar {
+  position: relative;
+  z-index: 8;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 50px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-solid) 94%, var(--surface-muted));
+}
+
+.chTerminalToolbar button,
+.chTerminalToolbar summary,
+.chTerminalTabAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--surface-solid);
+  box-shadow: 0 1px 2px color-mix(in srgb, #17233e 5%, transparent);
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.chTerminalToolbar button:not(:disabled):hover,
+.chTerminalToolbar summary:hover,
+.chTerminalTabAdd:not(:disabled):hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+}
+
+.chTerminalToolbar button:not(:disabled):active,
+.chTerminalToolbar summary:active,
+.chTerminalTabAdd:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.chTerminalToolbar button:focus-visible,
+.chTerminalToolbar summary:focus-visible,
+.chTerminalTab button:focus-visible,
+.chTerminalTabAdd:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ch-terminal-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.chTerminalToolbar button:disabled,
+.chTerminalTabAdd:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.chTerminalActionGroup {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chTerminalToolbarTabsPlaceholder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chTerminalMenu {
+  position: relative;
+}
+
+.chTerminalMenu > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chTerminalMenu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chTerminalMenu[open] > summary {
+  border-color: color-mix(in srgb, var(--ch-terminal-accent) 45%, var(--border));
+  color: var(--ch-terminal-accent);
+  background: color-mix(in srgb, var(--ch-terminal-accent) 8%, var(--surface-solid));
+}
+
+.chTerminalMenuPopover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  gap: 3px;
+  width: max-content;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-solid);
+  box-shadow: 0 16px 42px rgba(12, 23, 45, 0.18);
+}
+
+.chTerminalMenuPopover button {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  border-color: transparent;
+  padding: 7px 9px;
+  box-shadow: none;
+}
+
+.chTerminalMenuPopover button > span:first-child {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.chTerminalMenuPopover button[data-selected="true"] {
+  color: var(--ch-terminal-accent);
+  background: color-mix(in srgb, var(--ch-terminal-accent) 8%, var(--surface-solid));
+}
+
+.chTerminalTabs.workspaceTerminalTabs {
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  scrollbar-width: thin;
+}
+
+.chTerminalTab.workspaceTerminalTab {
+  position: relative;
+  height: 34px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.chTerminalTab.workspaceTerminalTab[data-active="true"] {
+  border-color: color-mix(in srgb, var(--ch-terminal-accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--ch-terminal-accent) 10%, var(--surface-solid));
+  box-shadow: none;
+}
+
+.chTerminalTab.workspaceTerminalTab[data-active="true"]::after {
+  content: none;
+}
+
+.chTerminalTab.workspaceTerminalTab > button:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 280px;
+  height: 32px;
+  padding: 0 5px 0 9px;
+}
+
+.chTerminalTab.workspaceTerminalTab > button:first-child > span:not(.workspaceConnectionDot) {
+  min-width: 0;
+}
+
+.chTerminalTab.workspaceTerminalTab > button:last-child {
+  display: grid;
+  flex: 0 0 auto;
+  width: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  height: 26px;
+  place-items: center;
+  margin-right: 3px;
+  padding: 0;
+}
+
+.chTerminalToolbar .chTerminalTabAdd {
+  flex: 0 0 auto;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  margin: 0 0 0 2px;
+  border-color: #2865d8;
+  padding: 0;
+  color: #fff;
+  background: linear-gradient(180deg, #3d7cf0, #2865d8);
+  box-shadow: 0 5px 12px color-mix(in srgb, var(--ch-terminal-accent) 22%, transparent);
+}
+
+.chTerminalToolbar .chTerminalTabAdd:not(:disabled):hover {
+  border-color: #1e54bb;
+  color: #fff;
+  background: linear-gradient(180deg, #3375ef, #1e54bb);
+}
+
+.chTerminalStage.workspaceTerminalStage {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ch-terminal-shell);
+}
+
+.chTerminalInstance.workspaceTerminalInstance {
+  position: relative;
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ch-terminal-bg);
+}
+
+.chTerminalInstance.workspaceTerminalInstance[data-visible="true"] {
+  display: flex;
+}
+
+.chTerminalInstance[data-focused="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ch-terminal-accent) 32%, transparent);
+}
+
+.chTerminalInstance .workspaceXterm {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--ch-terminal-bg);
+}
+
+.chTerminalInstance .workspaceXterm::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.18) 0.6px, transparent 0.7px);
+  background-size: 4px 4px;
+  content: "";
+}
+
+.chTerminalInstance .workspaceXterm[data-terminal-theme="light"]::after {
+  opacity: 0.08;
+  background-image: radial-gradient(circle at 1px 1px, rgba(27, 45, 72, 0.16) 0.6px, transparent 0.7px);
+}
+
+.chTerminalInstance .workspaceXterm[data-terminal-theme="high-contrast"]::after {
+  opacity: 0.04;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.42) 0.6px, transparent 0.7px);
+}
+
+.chTerminalInstance .workspaceXtermCanvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 13px 15px 9px;
+}
+
+.chTerminalInstance .workspaceXtermCanvas .xterm {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 1px;
+}
+
+.chTerminalInstance .workspaceXtermCanvas .xterm-viewport {
+  scrollbar-color: var(--ch-terminal-scrollbar) transparent;
+  scrollbar-width: thin;
+}
+
+.chTerminalInstance .workspaceTerminalSearch {
+  z-index: 5;
+  top: 12px;
+  right: 14px;
+  border-color: #3b444f;
+  color: #e6e9ee;
+  background: rgba(27, 32, 38, 0.96);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.chTerminalInstance .workspaceTerminalSearch input {
+  border-color: #414b57;
+  color: #eef1f5;
+  background: #111417;
+}
+
+.chTerminalInstance .workspaceTerminalSearch button {
+  color: #d7dce3;
+}
+
+.chTerminalInstance .workspaceTerminalSearch button:hover {
+  background: #303741;
+}
+
+.chTerminalStatusBar {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  flex: 0 0 35px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 35px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border-top: 1px solid var(--ch-terminal-border);
+  color: var(--ch-terminal-muted);
+  font-size: 0.69rem;
+  background: linear-gradient(180deg, var(--ch-terminal-elevated), var(--ch-terminal-bg));
+}
+
+.chTerminalStatusGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.chTerminalStatusGroup:nth-child(2) {
+  justify-content: center;
+  padding-inline: 14px;
+  border-right: 1px solid var(--ch-terminal-border);
+  border-left: 1px solid var(--ch-terminal-border);
+}
+
+.chTerminalStatusGroup:last-child {
+  justify-content: flex-end;
+}
+
+.chTerminalStatusGroup strong {
+  overflow: hidden;
+  color: var(--ch-terminal-strong);
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.chTerminalStatusMono {
+  font-family: var(--font-mono, "Cascadia Mono", "SFMono-Regular", Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.chTerminalStateDot,
+.chTerminalEncodingDot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #7e8793;
+  box-shadow: 0 0 0 3px rgba(126, 135, 147, 0.11);
+}
+
+.chTerminalStateDot[data-state="connected"],
+.chTerminalEncodingDot {
+  background: #56c58b;
+  box-shadow: 0 0 0 3px rgba(86, 197, 139, 0.12);
+}
+
+.chTerminalStateDot[data-state="creating"],
+.chTerminalStateDot[data-state="connecting"],
+.chTerminalStateDot[data-state="reconnecting"] {
+  background: #e9b949;
+  box-shadow: 0 0 0 3px rgba(233, 185, 73, 0.12);
+}
+
+.chTerminalStateDot[data-state="disconnected"],
+.chTerminalStateDot[data-state="failed"] {
+  background: #ed6a70;
+  box-shadow: 0 0 0 3px rgba(237, 106, 112, 0.12);
+}
+
+.chTerminalEmptyState.workspaceEmptyState {
+  min-height: 0;
+  height: 100%;
+  color: var(--ch-terminal-empty-text);
+  background:
+    radial-gradient(circle at 50% 36%, var(--ch-terminal-empty-glow), transparent 34%),
+    var(--ch-terminal-bg);
+}
+
+.chTerminalEmptyState .chTerminalIcon {
+  color: var(--ch-terminal-empty-accent);
+}
+
+.chTerminalEmptyState .chTerminalPrimaryAction {
+  border-color: #3b78ec;
+  color: #fff;
+  background: #2d69dc;
+}
+
+.chTerminalHostPickerBackdrop {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 21, 31, 0.38);
+  backdrop-filter: blur(5px);
+}
+
+.chTerminalHostPickerDialog {
+  width: min(100%, 430px);
+  max-height: min(500px, calc(100% - 40px));
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface-solid);
+  box-shadow: 0 24px 64px rgba(12, 23, 45, 0.28);
+  outline: none;
+}
+
+.chTerminalHostPickerDialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 12px;
+}
+
+.chTerminalHostPickerDialog h2,
+.chTerminalHostPickerDialog p {
+  margin: 0;
+}
+
+.chTerminalHostPickerDialog h2 {
+  color: var(--text);
+  font-size: 0.96rem;
+}
+
+.chTerminalHostPickerDialog p {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.chTerminalHostPickerDialog > header > button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--surface-solid);
+}
+
+.chTerminalHostPickerDialog > header > button:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.chTerminalHostPickerList {
+  display: grid;
+  gap: 7px;
+  padding: 0 12px 12px;
+}
+
+.chTerminalHostPickerOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-align: left;
+  background: var(--surface-solid);
+}
+
+.chTerminalHostPickerOption:hover,
+.chTerminalHostPickerOption[data-preferred="true"] {
+  border-color: color-mix(in srgb, var(--ch-terminal-accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--ch-terminal-accent) 7%, var(--surface-solid));
+}
+
+.chTerminalHostPickerDialog button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ch-terminal-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.chTerminal:fullscreen,
+.chTerminal[data-fullscreen="true"] {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-solid);
+}
+
+@container ch-terminal (max-width: 760px) {
+  .chTerminalToolbar {
+    gap: 7px;
+  }
+
+  .chTerminalTab.workspaceTerminalTab > button:first-child {
+    max-width: 190px;
+  }
+
+  .chTerminalStatusBar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .chTerminalRendererStatus {
+    display: none;
+  }
+
+  .chTerminalStatusGroup:nth-child(2) {
+    justify-content: flex-end;
+    border-right: 0;
+  }
+}
+
+@container ch-terminal (max-width: 520px) {
+  .chTerminalToolbar {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .chTerminalMenuPopover {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .chTerminalTab.workspaceTerminalTab > button:first-child {
+    max-width: 132px;
+  }
+
+  .chTerminalInstance .workspaceXtermCanvas {
+    padding: 9px 8px 6px;
+  }
+
+  .chTerminalStatusBar {
+    padding-inline: 9px;
+  }
+
+  .chTerminalStatusGroup:first-child > span:last-child,
+  .chTerminalStatusGroup:nth-child(2) > span:first-child {
+    display: none;
+  }
+
+  .chTerminalStatusGroup:nth-child(2) {
+    padding-left: 9px;
+  }
+}
+
+/* Keep control text throughout ordinary and Split widths; compress only when four labels cannot fit. */
+@container ch-terminal (max-width: 480px) {
+  .chTerminalToolbar [data-label-mode="responsive"] {
+    display: none;
+  }
+
+  .chTerminalToolbar button,
+  .chTerminalToolbar summary {
+    min-width: 34px;
+    padding-inline: 8px;
+  }
+
+  .chTerminalActionGroup {
+    gap: 4px;
+  }
+
+  .chTerminalTab.workspaceTerminalTab > button:first-child {
+    max-width: 104px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chTerminalToolbar button,
+  .chTerminalToolbar summary,
+  .chTerminalTabAdd {
+    transition: none;
+  }
+}

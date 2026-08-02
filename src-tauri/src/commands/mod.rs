@@ -11,6 +11,7 @@ pub(crate) use host_ssh::*;
 pub(crate) use profiles::*;
 pub(crate) use settings::{
     choose_close_button_behavior, detect_network_proxy, get_settings, save_settings,
+    set_launch_at_login,
 };
 pub(crate) use skills::*;
 pub(crate) use storage::{

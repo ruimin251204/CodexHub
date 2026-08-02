@@ -7,36 +7,24 @@ import type {
   WorkspaceLocalTransferRecoveryPurgePreview,
   WorkspaceRecovery,
   WorkspaceRecoveryPurgePreview,
-  WorkspaceTransfer
+  WorkspaceTransfer,
+  WorkspaceLocale
 } from "./types";
-
-function numberLabel(value: string | null) {
-  if (value === null) return "—";
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return value;
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let scaled = numeric;
-  let unit = 0;
-  while (scaled >= 1024 && unit < units.length - 1) {
-    scaled /= 1024;
-    unit += 1;
-  }
-  return unit === 0 ? `${scaled} ${units[unit]}` : `${scaled.toFixed(scaled >= 10 ? 1 : 2)} ${units[unit]}`;
-}
-
-function progressValue(transfer: WorkspaceTransfer) {
-  if (!transfer.total) return null;
-  const bytes = Number(transfer.bytes);
-  const total = Number(transfer.total);
-  if (!Number.isFinite(bytes) || !Number.isFinite(total) || total <= 0) return null;
-  return Math.max(0, Math.min(100, (bytes / total) * 100));
-}
+import { transferUiCopy } from "./transfers/copy";
+import { TransferRecoveryCards } from "./transfers/TransferRecoveryCards";
+import { TransferStats } from "./transfers/TransferStats";
+import { TransferTable } from "./transfers/TransferTable";
+import "./transfers-redesign.css";
+import { usePersonalInfoMasking } from "../ui/PersonalInfoMasking";
 
 export function TransfersPanel({
   api,
   copy,
+  locale,
   recoveries,
   transfers,
+  onNewTransfer,
+  onRefresh,
   onError,
   onOpenTask,
   onRecoveryUpdated,
@@ -46,8 +34,11 @@ export function TransfersPanel({
 }: {
   api: WorkspaceApi;
   copy: WorkspaceCopy;
+  locale?: WorkspaceLocale;
   recoveries: WorkspaceRecovery[];
   transfers: WorkspaceTransfer[];
+  onNewTransfer?: () => void;
+  onRefresh?: () => Promise<void> | void;
   onError: (error: unknown) => void;
   onOpenTask?: (taskId: string) => void;
   onRecoveryUpdated: (recovery: WorkspaceRecovery) => void;
@@ -55,6 +46,9 @@ export function TransfersPanel({
   onLocalRecoveryRemoved: (recoveryId: string) => void;
   onLocalRecoveryUpdated: (recovery: WorkspaceLocalTransferRecovery) => void;
 }) {
+  const resolvedLocale = locale ?? "en";
+  const ui = transferUiCopy[resolvedLocale];
+  const personalInfo = usePersonalInfoMasking();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conflict, setConflict] = useState<WorkspaceTransfer | null>(null);
   const [conflictPolicy, setConflictPolicy] = useState<Exclude<WorkspaceConflictPolicy, "ask">>("keep-both");
@@ -148,114 +142,52 @@ export function TransfersPanel({
     await resume({ fileSessionId: session.fileSessionId, localGrantId: grant.grantId });
   };
 
+  const refresh = () => {
+    if (!onRefresh) return;
+    void act("refresh", async () => { await onRefresh(); });
+  };
+
   return (
-    <section className="workspaceTransfersPanel" aria-label={copy.modes.transfers}>
-      <div className="workspaceTransfersTableWrap">
-        <table className="workspaceTransfersTable">
-          <thead>
-            <tr>
-              <th>{copy.transfer}</th>
-              <th>{copy.source}</th>
-              <th>{copy.destination}</th>
-              <th>{copy.progress}</th>
-              <th>{copy.speed}</th>
-              <th>{copy.eta}</th>
-              <th>{copy.attempt}</th>
-              <th>{copy.status}</th>
-              <th>{copy.actions}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transfers.map((transfer) => {
-              const progress = progressValue(transfer);
-              const busy = busyId === transfer.transferId;
-              return (
-                <tr key={transfer.transferId} data-state={transfer.state}>
-                  <td><span className="workspaceTransferDirection" data-direction={transfer.direction}>{transfer.direction === "upload" ? "⇧" : "⇩"}</span><span>{transfer.hostAlias}</span><small>{transfer.transferId}</small></td>
-                  <td title={transfer.sourceLabel}>{transfer.sourceLabel}</td>
-                  <td title={transfer.targetLabel}>{transfer.targetLabel}</td>
-                  <td>
-                    <div className="workspaceProgressLabel"><span>{numberLabel(transfer.bytes)} / {numberLabel(transfer.total)}</span><span>{progress === null ? "—" : `${progress.toFixed(0)}%`}</span></div>
-                    <progress max={100} value={progress ?? undefined} />
-                  </td>
-                  <td>{transfer.speedBytesPerSecond ? `${numberLabel(transfer.speedBytesPerSecond)}/s` : "—"}</td>
-                  <td>{transfer.etaSeconds === null ? "—" : `${transfer.etaSeconds} ${copy.seconds}`}</td>
-                  <td>{transfer.attempt}</td>
-                  <td><span className="workspaceStatusChip" data-state={transfer.state}>{transfer.state}</span></td>
-                  <td>
-                    <div className="workspaceTransferActions">
-                      {transfer.capabilities.canPause ? <button disabled={busy} type="button" onClick={() => void act(transfer.transferId, () => api.pauseTransfer({ transferId: transfer.transferId, revision: transfer.revision }))}>{copy.pause}</button> : null}
-                      {transfer.capabilities.canResume ? <button disabled={busy} type="button" onClick={() => void act(transfer.transferId, () => resumeOrReauthorize(transfer, false))}>{copy.resume}</button> : null}
-                      {transfer.capabilities.canRetry ? <button disabled={busy} type="button" onClick={() => void act(transfer.transferId, () => resumeOrReauthorize(transfer, false))}>{copy.retry}</button> : null}
-                      {transfer.capabilities.canRestart ? <button disabled={busy} type="button" onClick={() => void act(transfer.transferId, () => resumeOrReauthorize(transfer, true))}>{copy.restart}</button> : null}
-                      {transfer.capabilities.canCancel ? <button disabled={busy} type="button" onClick={() => void act(transfer.transferId, () => api.cancelTransfer({ transferId: transfer.transferId, revision: transfer.revision }))}>{copy.cancelTransfer}</button> : null}
-                      {transfer.state === "waiting-conflict" && transfer.conflictRevision !== null ? <button className="workspacePrimaryButton" disabled={busy} type="button" onClick={() => setConflict(transfer)}>{copy.actions}</button> : null}
-                    </div>
-                    {transfer.state === "failed" || transfer.errorCode ? (
-                      <details className="workspaceTransferFailure">
-                        <summary>{copy.failureDetails}</summary>
-                        <dl>
-                          <dt>{copy.errorCode}</dt><dd>{transfer.errorCode ?? copy.unknown}</dd>
-                          <dt>{copy.resumeOffset}</dt><dd>{transfer.resumeOffset ?? "—"}</dd>
-                          <dt>{copy.fingerprint}</dt><dd>{transfer.fingerprintState}</dd>
-                        </dl>
-                        {transfer.errorMessage ? <p>{transfer.errorMessage}</p> : null}
-                        {transfer.taskId && onOpenTask ? <button type="button" onClick={() => onOpenTask(transfer.taskId!)}>{copy.viewTask}</button> : null}
-                      </details>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {transfers.length === 0 ? <div className="workspaceEmptyState">{copy.transfersEmpty}</div> : null}
+    <section aria-describedby="transfer-page-description" className="workspaceTransfersPanel" aria-label={copy.modes.transfers}>
+      <header className="transferPageHeader">
+        <div className="transferPageIntro">
+          <span className="transferPageIcon" aria-hidden="true">⇩</span>
+          <p id="transfer-page-description">{ui.description}</p>
+        </div>
+        <div className="transferPageActions">
+          {onRefresh ? <button disabled={busyId === "refresh"} type="button" onClick={refresh}><span aria-hidden="true">↻</span><span>{ui.refresh}</span></button> : null}
+          {onNewTransfer ? <button className="transferPrimaryAction" type="button" onClick={onNewTransfer}><span aria-hidden="true">＋</span><span>{ui.newTransfer}</span></button> : null}
+        </div>
+      </header>
+
+      <div className="transferPageContent">
+        <TransferStats copy={ui} transfers={transfers} />
+        <TransferTable
+          busyId={busyId}
+          copy={copy}
+          transfers={transfers}
+          ui={ui}
+          onCancel={(transfer) => void act(transfer.transferId, () => api.cancelTransfer({ transferId: transfer.transferId, revision: transfer.revision }))}
+          onOpenTask={onOpenTask}
+          onPause={(transfer) => void act(transfer.transferId, () => api.pauseTransfer({ transferId: transfer.transferId, revision: transfer.revision }))}
+          onResolveConflict={setConflict}
+          onResume={(transfer, restart) => void act(transfer.transferId, () => resumeOrReauthorize(transfer, restart))}
+        />
+        <TransferRecoveryCards
+          busyId={busyId}
+          copy={copy}
+          locale={resolvedLocale}
+          localRecoveries={localRecoveries}
+          recoveries={recoveries}
+          transfers={transfers}
+          ui={ui}
+          onOpenTask={onOpenTask}
+          onPrepareLocalPurge={prepareLocalPurge}
+          onPreparePurge={preparePurge}
+          onRestore={restore}
+          onRestoreLocal={restoreLocal}
+        />
       </div>
-
-      <section className="workspaceRecoveries" aria-labelledby="workspace-recovery-title">
-        <h2 id="workspace-recovery-title">{copy.recoveries}</h2>
-        {recoveries.length === 0 ? <p>{copy.recoveriesEmpty}</p> : (
-          <div className="workspaceRecoveryList">
-            {recoveries.map((recovery) => (
-              <article className="workspaceRecoveryCard" key={recovery.recoveryId}>
-                <header><strong>{recovery.operation}</strong><span className="workspaceStatusChip" data-state={recovery.state}>{recovery.state}</span></header>
-                <dl>
-                  <dt>{copy.host}</dt><dd>{recovery.hostAlias}</dd>
-                  <dt>{copy.source}</dt><dd>{recovery.originalPath}</dd>
-                  <dt>{copy.backup}</dt><dd>{recovery.recoveryPath}</dd>
-                </dl>
-                {recovery.reason ? <p role="alert">{recovery.reason}</p> : null}
-                <div className="workspaceRecoveryActions">
-                  <button disabled={busyId === recovery.recoveryId || recovery.state !== "available"} type="button" onClick={() => restore(recovery)}>{copy.restore}</button>
-                  <button className="workspaceDangerButton" disabled={busyId === recovery.recoveryId || recovery.state !== "available"} type="button" onClick={() => preparePurge(recovery)}>{copy.purge}</button>
-                  {recovery.taskId && onOpenTask ? <button type="button" onClick={() => onOpenTask(recovery.taskId!)}>{copy.viewTask}</button> : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="workspaceRecoveries" aria-labelledby="workspace-local-recovery-title">
-        <h2 id="workspace-local-recovery-title">{copy.localRecoveries}</h2>
-        {localRecoveries.length === 0 ? <p>{copy.localRecoveriesEmpty}</p> : (
-          <div className="workspaceRecoveryList">
-            {localRecoveries.map((recovery) => (
-              <article className="workspaceRecoveryCard" key={recovery.recoveryId}>
-                <header><strong>{copy.localDownloadReplacement}</strong><span className="workspaceStatusChip" data-state={recovery.state}>{recovery.state}</span></header>
-                <dl>
-                  <dt>{copy.destination}</dt><dd>{recovery.destinationName}</dd>
-                  <dt>{copy.backup}</dt><dd>{recovery.backupName}</dd>
-                </dl>
-                <div className="workspaceRecoveryActions">
-                  <button disabled={busyId === recovery.recoveryId || recovery.state !== "available"} type="button" onClick={() => restoreLocal(recovery)}>{copy.restore}</button>
-                  <button className="workspaceDangerButton" disabled={busyId === recovery.recoveryId || recovery.state !== "available"} type="button" onClick={() => prepareLocalPurge(recovery)}>{copy.purge}</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
 
       {conflict ? (
         <div className="workspaceInlineDialogBackdrop" role="presentation">
@@ -281,7 +213,7 @@ export function TransfersPanel({
           <section aria-describedby="workspace-purge-body" aria-labelledby="workspace-purge-title" className="workspaceInlineDialog" role="alertdialog" aria-modal="true">
             <h3 id="workspace-purge-title">{copy.purgeTitle}</h3>
             <p id="workspace-purge-body">{copy.purgeBody}</p>
-            <code>{purgePreview.recoveryPath}</code>
+            <code>{personalInfo.maskText(purgePreview.recoveryPath)}</code>
             <div className="workspaceDialogActions">
               <button type="button" onClick={() => setPurgePreview(null)}>{copy.cancel}</button>
               <button className="workspaceDangerButton" disabled={busyId === purgePreview.recoveryId} type="button" onClick={confirmPurge}>{copy.confirmPurge}</button>

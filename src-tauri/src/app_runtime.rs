@@ -2,7 +2,15 @@ use crate::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let context = tauri::generate_context!();
+    // The identifier differs between dev and stable builds, so their startup entries stay isolated.
+    let autostart_app_name = context.config().identifier.clone();
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .app_name(autostart_app_name)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -49,6 +57,7 @@ pub fn run() {
             install_stable_update,
             get_settings,
             save_settings,
+            set_launch_at_login,
             detect_network_proxy,
             choose_close_button_behavior,
             get_ssh_status,
@@ -144,7 +153,7 @@ pub fn run() {
             workspace_select_upload_sources,
             workspace_select_download_target
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building CodexHub")
         .run({
             // Window hide/minimize keeps Workspace sessions alive. Only a true

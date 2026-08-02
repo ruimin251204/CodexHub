@@ -1,0 +1,309 @@
+.workspaceTransfersPanel {
+  --transfer-blue: #2f6df6;
+  --transfer-green: #24b26b;
+  --transfer-red: #e74b57;
+  --transfer-violet: #7657e8;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 88% 2%, color-mix(in srgb, var(--transfer-blue) 7%, transparent), transparent 26rem),
+    var(--surface-muted);
+  color: var(--text);
+}
+
+.workspaceTransfersPanel .srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.transferPageHeader {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 82px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.transferPageHeader,
+.transferPageContent,
+.transferTableCard,
+.transferTableScroller,
+.transferSupportGrid {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.transferPageHeader > div,
+.transferPageActions,
+.transferEndpoint,
+.transferFilters,
+.transferFilterTools,
+.transferDirectionTabs,
+.transferStatusFilters,
+.transferPagination,
+.transferPagination > div,
+.transferSupportCard > header,
+.transferRecentItem,
+.transferRecoveryActions,
+.transferRowActions {
+  display: flex;
+  align-items: center;
+}
+
+.transferPageHeader > div { gap: 12px; }
+.transferPageIntro p { margin: 0; color: var(--text-muted); font-size: 0.8rem; }
+.transferPageIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--transfer-blue) 8%, var(--surface-solid));
+  color: var(--transfer-blue);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.transferPageActions { gap: 10px; }
+.transferPageActions button,
+.transferRecoveryActions button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-solid);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.transferPageActions button:hover:not(:disabled),
+.transferRecoveryActions button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--transfer-blue) 55%, var(--border)); }
+.transferPageActions .transferPrimaryAction {
+  min-width: 164px;
+  border-color: transparent;
+  background: linear-gradient(135deg, #3374f6, #1f5ce1);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--transfer-blue) 24%, transparent);
+  color: #fff;
+}
+
+.transferPageContent {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px 24px;
+}
+.transferStats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-solid);
+  box-shadow: 0 8px 28px color-mix(in srgb, #14213d 7%, transparent);
+}
+.transferStatCard { display: grid; grid-template-columns: 42px 1fr; gap: 11px; min-width: 0; padding: 20px 17px; }
+.transferStatCard + .transferStatCard { border-left: 1px solid var(--border); }
+.transferStatIcon,
+.transferSupportIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--transfer-blue) 12%, var(--surface-muted));
+  color: var(--transfer-blue);
+  font-weight: 800;
+}
+.transferStatCard[data-tone="active"] .transferStatIcon,
+.transferStatCard[data-tone="completed"] .transferStatIcon { background: color-mix(in srgb, var(--transfer-green) 13%, var(--surface-muted)); color: var(--transfer-green); }
+.transferStatCard[data-tone="failed"] .transferStatIcon { background: color-mix(in srgb, var(--transfer-red) 12%, var(--surface-muted)); color: var(--transfer-red); }
+.transferStatCard[data-tone="throughput"] .transferStatIcon { background: color-mix(in srgb, var(--transfer-violet) 12%, var(--surface-muted)); color: var(--transfer-violet); }
+.transferStatCard > div { display: grid; min-width: 0; }
+.transferStatLabel { color: var(--text-muted); font-size: 0.77rem; }
+.transferStatCard strong { margin-top: 2px; overflow: hidden; font-size: 1.35rem; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.transferStatCard small { margin-top: 5px; overflow: hidden; color: var(--text-faint); font-size: 0.69rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.transferTableCard,
+.transferSupportCard {
+  min-width: 0;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-solid);
+  box-shadow: 0 8px 28px color-mix(in srgb, #14213d 6%, transparent);
+}
+.transferFilters { justify-content: space-between; gap: 12px; min-height: 56px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.transferDirectionTabs { align-self: stretch; gap: 4px; }
+.transferDirectionTabs button,
+.transferStatusFilters button,
+.transferClearFilter {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.transferDirectionTabs button[aria-selected="true"],
+.transferStatusFilters button[aria-pressed="true"] { border-color: var(--border); background: var(--surface-muted); color: var(--transfer-blue); font-weight: 650; box-shadow: 0 2px 7px color-mix(in srgb, #15213a 6%, transparent); }
+.transferFilterTools { justify-content: flex-end; gap: 7px; min-width: 0; }
+.transferSearch { position: relative; display: flex; align-items: center; min-width: 180px; max-width: 260px; }
+.transferSearch > span[aria-hidden] { position: absolute; left: 11px; color: var(--text-faint); }
+.transferSearch input {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px 0 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background: var(--surface-muted);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+}
+.transferSearch input:focus { border-color: var(--transfer-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--transfer-blue) 13%, transparent); }
+.transferStatusFilters { gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; }
+.transferStatusFilters button { min-height: 28px; padding-inline: 10px; }
+.transferClearFilter { color: var(--transfer-blue); }
+
+.transferTableScroller { width: 100%; min-width: 0; overflow-x: auto; }
+.transferTable { width: 100%; min-width: 1020px; border-collapse: collapse; table-layout: fixed; }
+.transferTable th { height: 36px; padding: 0 14px; background: var(--surface-muted); color: var(--text-faint); font-size: 0.69rem; font-weight: 620; text-align: left; }
+.transferTable td { height: 64px; padding: 8px 14px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem; vertical-align: middle; }
+.transferTable tbody tr:hover { background: color-mix(in srgb, var(--transfer-blue) 3%, var(--surface-solid)); }
+.transferTable th:nth-child(1), .transferTable th:nth-child(2) { width: 22%; }
+.transferTable th:nth-child(3) { width: 17%; }
+.transferTable th:nth-child(4) { width: 10%; }
+.transferTable th:nth-child(5) { width: 8%; }
+.transferTable th:nth-child(6) { width: 7%; }
+.transferTable th:nth-child(7) { width: 10%; }
+.transferEndpoint { min-width: 0; gap: 9px; }
+.transferEndpoint > span:last-child { display: grid; min-width: 0; }
+.transferEndpoint strong { overflow: hidden; color: var(--text); font-size: 0.76rem; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.transferEndpoint small { margin-top: 3px; overflow: hidden; color: var(--text-faint); font-size: 0.67rem; text-overflow: ellipsis; white-space: nowrap; }
+.transferFileIcon,
+.transferHostIcon { flex: 0 0 auto; display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; background: color-mix(in srgb, var(--transfer-blue) 9%, var(--surface-muted)); color: var(--transfer-blue); font-weight: 800; }
+.transferFileIcon[data-direction="download"] { color: var(--transfer-violet); background: color-mix(in srgb, var(--transfer-violet) 9%, var(--surface-muted)); }
+.transferProgressLabel { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--text-muted); font-size: 0.68rem; }
+.transferTable progress { display: block; width: 100%; height: 5px; overflow: hidden; border: 0; border-radius: 999px; accent-color: var(--transfer-blue); }
+.transferTable progress::-webkit-progress-bar { border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.transferTable progress::-webkit-progress-value { border-radius: 999px; background: var(--transfer-blue); }
+.transferTable tr[data-state="completed"] progress { accent-color: var(--transfer-green); }
+.transferTable tr[data-state="completed"] progress::-webkit-progress-value { background: var(--transfer-green); }
+.transferTable tr[data-state="failed"] progress { accent-color: var(--transfer-red); }
+.transferTable tr[data-state="failed"] progress::-webkit-progress-value { background: var(--transfer-red); }
+.transferStatus { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text-muted); font-size: 0.68rem; white-space: nowrap; }
+.transferStatus i { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.transferStatus[data-state="running"],
+.transferStatus[data-state="completed"],
+.transferStatus[data-state="verifying"],
+.transferStatus[data-state="finalizing"] { background: color-mix(in srgb, var(--transfer-green) 11%, transparent); color: var(--transfer-green); }
+.transferStatus[data-state="failed"],
+.transferStatus[data-state="cancelled"],
+.transferStatus[data-state="interrupted"] { background: color-mix(in srgb, var(--transfer-red) 11%, transparent); color: var(--transfer-red); }
+.transferStatus[data-state="queued"],
+.transferStatus[data-state="paused"],
+.transferStatus[data-state="pausing"],
+.transferStatus[data-state="waiting-conflict"] { background: color-mix(in srgb, #e49a2d 12%, transparent); color: #c77b0c; }
+.transferRowActions { position: relative; justify-content: flex-end; gap: 4px; }
+.transferRowActions > button,
+.transferMoreActions summary { display: grid; width: 29px; height: 29px; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; list-style: none; }
+.transferRowActions > button:hover:not(:disabled),
+.transferMoreActions summary:hover { border-color: var(--transfer-blue); color: var(--transfer-blue); }
+.transferMoreActions { position: relative; }
+.transferMoreActions summary::-webkit-details-marker { display: none; }
+.transferMoreActions > div { position: absolute; z-index: 6; top: 34px; right: 0; display: grid; gap: 8px; width: 220px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-solid); box-shadow: 0 14px 36px rgba(10, 22, 45, 0.18); }
+.transferMoreActions p { display: grid; gap: 3px; margin: 0; overflow-wrap: anywhere; }
+.transferMoreActions button { justify-self: start; border: 0; background: transparent; color: var(--transfer-blue); cursor: pointer; }
+.transferEmptyState { display: grid; min-height: 160px; place-items: center; color: var(--text-muted); font-size: 0.82rem; }
+.transferPagination { justify-content: flex-end; gap: 18px; min-height: 48px; padding: 7px 14px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.72rem; }
+.transferPagination > span { margin-right: auto; }
+.transferPagination label { display: flex; align-items: center; gap: 6px; }
+.transferPagination select { height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-solid); color: var(--text); }
+.transferPagination > div { gap: 8px; }
+.transferPagination button { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-solid); color: var(--text); cursor: pointer; }
+.transferPagination button:disabled { opacity: 0.35; cursor: default; }
+
+.transferSupportGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.transferSupportCard { display: grid; align-content: start; }
+.transferSupportCard > header { align-items: flex-start; gap: 10px; padding: 15px 16px 12px; border-bottom: 1px solid var(--border); }
+.transferSupportCard h2 { margin: 0; font-size: 0.84rem; }
+.transferSupportCard header p { margin: 3px 0 0; color: var(--text-faint); font-size: 0.68rem; line-height: 1.45; }
+.transferSupportIcon { width: 31px; height: 31px; border-radius: 9px; }
+.transferSupportList { max-height: 276px; overflow: auto; }
+.transferSupportEmpty { margin: 0; padding: 24px 16px; color: var(--text-faint); font-size: 0.75rem; text-align: center; }
+.transferRecoveryItem { display: grid; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.transferRecoveryItem:last-child,
+.transferRecentItem:last-child { border-bottom: 0; }
+.transferRecoveryItem > div:first-child { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; min-width: 0; }
+.transferRecoveryItem strong { overflow: hidden; color: var(--text); font-size: 0.75rem; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+.transferRecoveryItem small { color: var(--text-faint); font-size: 0.66rem; }
+.transferRecoveryItem span { grid-column: 1 / -1; overflow: hidden; color: var(--text-muted); font-size: 0.67rem; text-overflow: ellipsis; white-space: nowrap; }
+.transferRecoveryActions { gap: 6px; flex-wrap: wrap; }
+.transferRecoveryActions button { min-height: 28px; padding-inline: 9px; font-size: 0.68rem; }
+.transferRecoveryActions .transferDangerAction { color: var(--transfer-red); }
+.transferRecentItem { gap: 9px; min-width: 0; padding: 11px 16px; border-bottom: 1px solid var(--border); }
+.transferRecentItem > div { display: grid; flex: 1; min-width: 0; }
+.transferRecentItem strong { overflow: hidden; color: var(--text); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+.transferRecentItem small { margin-top: 3px; color: var(--text-faint); font-size: 0.65rem; }
+.transferRecentItem .transferStatus { flex: 0 0 auto; }
+
+@media (max-width: 1180px) {
+  .transferStats { grid-template-columns: repeat(3, 1fr); }
+  .transferStatCard:nth-child(4) { border-left: 0; border-top: 1px solid var(--border); }
+  .transferStatCard:nth-child(5) { border-top: 1px solid var(--border); }
+  .transferFilters { align-items: flex-start; flex-direction: column; }
+  .transferFilterTools { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .transferSupportGrid { grid-template-columns: 1fr 1fr; }
+  .transferSupportCard:last-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .transferPageHeader { align-items: flex-start; padding: 13px 14px; }
+  .transferPageIntro p { display: none; }
+  .transferPageActions button { min-width: 38px; padding-inline: 10px; }
+  .transferPageActions button span { display: none; }
+  .transferPageContent { padding: 12px; }
+  .transferStats { grid-template-columns: 1fr 1fr; }
+  .transferStatCard { padding: 14px; }
+  .transferStatCard:nth-child(3) { border-left: 0; border-top: 1px solid var(--border); }
+  .transferStatCard:nth-child(4) { border-left: 1px solid var(--border); }
+  .transferStatCard:nth-child(5) { grid-column: 1 / -1; border-left: 0; }
+  .transferDirectionTabs { width: 100%; }
+  .transferDirectionTabs button { flex: 1; padding-inline: 7px; }
+  .transferSearch { max-width: none; width: 100%; }
+  .transferStatusFilters { width: 100%; overflow-x: auto; }
+  .transferSupportGrid { grid-template-columns: 1fr; }
+  .transferSupportCard:last-child { grid-column: auto; }
+  .transferPagination { gap: 8px; }
+  .transferPagination label { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .transferPageActions button,
+  .transferDirectionTabs button,
+  .transferStatusFilters button,
+  .transferRowActions button { transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease; }
+  .transferPageActions .transferPrimaryAction:hover { transform: translateY(-1px); }
+}

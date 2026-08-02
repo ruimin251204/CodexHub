@@ -1359,6 +1359,8 @@ fn transfer_to_dto(value: &WorkspaceTransfer) -> TransferDto {
         host_alias: value.host_alias.clone(),
         source_ref: value.source_locator.clone(),
         destination_path: value.target_locator.clone(),
+        created_at: value.created_at.clone(),
+        updated_at: value.updated_at.clone(),
         state: parse_transfer_state(&value.state),
         revision: value.revision as u64,
         bytes: value.bytes_transferred as u64,
@@ -1413,8 +1415,16 @@ fn dto_to_transfer(value: &TransferDto) -> Result<WorkspaceTransfer, String> {
         error_code: value.error_code.clone(),
         error_detail: None,
         task_id: value.task_id.clone(),
-        created_at: now.clone(),
-        updated_at: now,
+        created_at: if value.created_at.is_empty() {
+            now.clone()
+        } else {
+            value.created_at.clone()
+        },
+        updated_at: if value.updated_at.is_empty() {
+            now
+        } else {
+            value.updated_at.clone()
+        },
         revision: 0,
     })
 }
@@ -1440,7 +1450,7 @@ fn dto_to_transfer_update(
         error_code: value.error_code.clone(),
         error_detail: None,
         task_id: value.task_id.clone(),
-        updated_at: Local::now().to_rfc3339(),
+        updated_at: value.updated_at.clone(),
     })
 }
 
@@ -1940,6 +1950,8 @@ mod tests {
             host_alias: "server".into(),
             source_ref: "grant-1".into(),
             destination_path: "/tmp/file".into(),
+            created_at: "2026-07-30T00:00:00Z".into(),
+            updated_at: "2026-07-30T00:00:00Z".into(),
             state: TransferState::Interrupted,
             revision: 1,
             bytes: 4,

@@ -111,7 +111,7 @@ impl Default for WorkspaceTerminalPreferences {
             font_family: WorkspaceTerminalFontFamily::SystemMono,
             font_size: 14,
             line_height: "1.25".into(),
-            color_scheme: WorkspaceTerminalColorScheme::FollowApp,
+            color_scheme: WorkspaceTerminalColorScheme::Dark,
             scrollback: 5_000,
             cursor_style: WorkspaceTerminalCursorStyle::Block,
             screen_reader_mode: false,
@@ -122,6 +122,10 @@ impl Default for WorkspaceTerminalPreferences {
 
 impl WorkspaceTerminalPreferences {
     fn normalized(mut self) -> Self {
+        // Keep terminal appearance independent from the application-wide theme after migration.
+        if self.color_scheme == WorkspaceTerminalColorScheme::FollowApp {
+            self.color_scheme = WorkspaceTerminalColorScheme::Dark;
+        }
         self.font_size = self.font_size.clamp(12, 24);
         self.scrollback = self.scrollback.clamp(100, 20_000);
         let parsed = self
@@ -162,6 +166,8 @@ pub(crate) struct AppSettings {
     #[serde(default = "default_true")]
     pub(crate) personal_info_masking: bool,
     #[serde(default)]
+    pub(crate) launch_at_login: bool,
+    #[serde(default)]
     pub(crate) setup_guide_dismissed: bool,
     #[serde(default)]
     pub(crate) workspace_terminal_preferences: WorkspaceTerminalPreferences,
@@ -191,6 +197,7 @@ impl Default for AppSettings {
             sidebar_completion_indicators: true,
             host_operation_log_popups: true,
             personal_info_masking: true,
+            launch_at_login: false,
             setup_guide_dismissed: false,
             workspace_terminal_preferences: WorkspaceTerminalPreferences::default(),
         }
@@ -391,6 +398,7 @@ mod tests {
 
         let settings = read_settings_at(&path).expect("legacy settings should load");
         assert!(settings.personal_info_masking);
+        assert!(!settings.launch_at_login);
         assert!(!settings.host_operation_log_popups);
         fs::remove_dir_all(dir).expect("test directory should be removed");
     }

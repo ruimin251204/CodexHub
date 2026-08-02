@@ -68,6 +68,7 @@ pub struct TerminalCwdEvent {
 #[ts(rename = "WorkspaceTransferUpdatedEventDto")]
 pub struct TransferUpdatedEvent {
     pub transfer_id: String,
+    pub updated_at: String,
     #[ts(type = "number")]
     pub revision: u64,
     pub state: TransferState,

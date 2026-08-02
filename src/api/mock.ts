@@ -66,7 +66,7 @@ const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 let mockProfiles = clone(fallbackProfiles);
 let mockHosts = clone(fallbackHosts);
-let mockProfileCredentialIds = new Set<string>();
+const mockProfileCredentialIds = new Set<string>();
 let mockSkillPacks = clone(fallbackSkillPacks);
 let mockTasks = clone(fallbackTasks);
 const mockAcknowledgedTaskIds = new Set<string>();
@@ -1495,15 +1495,19 @@ export const mockApi: CodexHubApi = {
   installStableUpdate: async () => fallbackAppUpdateStatus,
   detectNetworkProxy: async () => fallbackNetworkProxyStatus,
   getSettings: async () => {
-    const settings = normalizeSettings(loadMockSettings());
+    const settings = normalizeSettings({ ...loadMockSettings(), launchAtLogin: false });
     saveMockSettings(settings);
     return settings;
   },
   saveSettings: async (settings: AppSettings) => {
     const current = normalizeSettings(loadMockSettings());
-    const normalized = normalizeSettings(settings);
+    const normalized = normalizeSettings({ ...settings, launchAtLogin: false });
+    // Mock mode never creates an OS startup entry.
     saveMockSettings(normalized);
     return { settings: normalized, changed: JSON.stringify(current) !== JSON.stringify(normalized), backupPath: null };
+  },
+  setLaunchAtLogin: async (_enabled: boolean) => {
+    throw new Error("Launch at login requires the Tauri desktop backend.");
   },
   chooseCloseButtonBehavior: async (behavior: Exclude<CloseButtonBehavior, "ask">) => {
     const current = normalizeSettings(loadMockSettings());

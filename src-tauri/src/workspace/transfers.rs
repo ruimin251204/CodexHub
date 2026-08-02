@@ -150,6 +150,7 @@ impl TransferQueue {
                     "The transfer destination path is required.",
                 ));
             }
+            let now = chrono::Local::now().to_rfc3339();
             let transfer = TransferDto {
                 transfer_id: format!("transfer-{}", Uuid::new_v4()),
                 batch_id: batch_id.clone(),
@@ -160,6 +161,8 @@ impl TransferQueue {
                 host_alias: draft.host_alias,
                 source_ref: draft.source_ref,
                 destination_path: draft.destination_path,
+                created_at: now.clone(),
+                updated_at: now,
                 state: TransferState::Queued,
                 revision: 1,
                 bytes: 0,
@@ -724,6 +727,7 @@ impl TransferQueue {
         let mut updated = current;
         mutate(&mut updated)?;
         updated.revision = updated.revision.saturating_add(1);
+        updated.updated_at = chrono::Local::now().to_rfc3339();
         self.persistence
             .upsert(&updated)
             .map_err(|error| WorkspaceError::new("transfer-storage-unavailable", error))?;
@@ -739,6 +743,7 @@ impl TransferQueue {
             TRANSFER_UPDATED_EVENT,
             &TransferUpdatedEvent {
                 transfer_id: transfer.transfer_id.clone(),
+                updated_at: transfer.updated_at.clone(),
                 revision: transfer.revision,
                 state: transfer.state,
                 bytes: transfer.bytes,

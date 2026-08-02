@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { createPortal } from "react-dom";
 import { workspaceCopy } from "./copy";
 import { useWorkspaceController } from "./controller";
 import { FilesPanel, WORKSPACE_FILES_LOCATION_EVENT } from "./FilesPanel";
@@ -14,13 +13,13 @@ import type {
   WorkspaceMode,
   WorkspacePlatform,
   WorkspaceTerminalPreferences,
+  WorkspaceTerminalHostRequest,
   WorkspaceTerminalSession
 } from "./types";
 
 const TERMINAL_COLUMNS = 120;
 const TERMINAL_ROWS = 32;
-const WORKSPACE_MODES: WorkspaceMode[] = ["terminal", "files", "split", "transfers"];
-
+const SPLIT_STACK_BREAKPOINT = 900;
 function isTerminalTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest(".workspaceXtermCanvas, .xterm"));
 }
@@ -41,40 +40,52 @@ export function WorkspacePage({
   api,
   className,
   defaultMode = "terminal",
+  mode: controlledMode,
   hosts,
   initialHostAlias = "",
   locale,
-  modeBarHost,
   onError,
   onTerminalRendererError,
   onModeChange,
   onOpenTask,
+  onSelectedHostChange,
+  onTerminalHostRequestHandled,
   platform,
+  selectedHostAlias: controlledHostAlias,
+  terminalHostRequest,
   terminalPreferences
 }: {
   api: WorkspaceApi;
   className?: string;
   defaultMode?: WorkspaceMode;
+  mode?: WorkspaceMode;
   hosts: WorkspaceHost[];
   initialHostAlias?: string;
   locale: WorkspaceLocale;
-  modeBarHost?: HTMLElement | null;
   onError: (error: unknown) => void;
   onTerminalRendererError: (failure: TerminalRendererFailure) => void;
   onModeChange?: (mode: WorkspaceMode) => void;
   onOpenTask?: (taskId: string) => void;
+  onSelectedHostChange?: (hostAlias: string) => void;
+  onTerminalHostRequestHandled?: (requestId: number) => void;
   platform: WorkspacePlatform;
+  selectedHostAlias?: string;
+  terminalHostRequest?: WorkspaceTerminalHostRequest | null;
   terminalPreferences: WorkspaceTerminalPreferences;
 }) {
   const copy = workspaceCopy[locale];
   const controller = useWorkspaceController(api, onError);
-  const [mode, setMode] = useState<WorkspaceMode>(defaultMode);
+  const [internalMode, setInternalMode] = useState<WorkspaceMode>(defaultMode);
+  const mode = controlledMode ?? internalMode;
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [selectedHostAlias, setSelectedHostAlias] = useState(initialHostAlias);
+  const [internalHostAlias, setInternalHostAlias] = useState(initialHostAlias);
+  const selectedHostAlias = controlledHostAlias ?? internalHostAlias;
   const [followCwd, setFollowCwd] = useState(true);
   const [splitRatio, setSplitRatio] = useState(40);
+  const [isStackedSplit, setIsStackedSplit] = useState(false);
   const splitRef = useRef<HTMLDivElement>(null);
-  const modeTabRefs = useRef(new Map<WorkspaceMode, HTMLButtonElement>());
+  const consumedTerminalHostRequestIdRef = useRef<number | null>(null);
+  const latestTerminalHostRequestIdRef = useRef(0);
 
   const sessions = useMemo(
     () => controller.state.sessions.filter((session) => session.state !== "closed"),
@@ -84,41 +95,70 @@ export function WorkspacePage({
   const cwd = activeTerminal ? controller.state.cwdBySession[activeTerminal.sessionId] ?? null : null;
 
   useEffect(() => {
-    if (activeSessionId && sessions.some((session) => session.sessionId === activeSessionId)) return;
-    setActiveSessionId(sessions[sessions.length - 1]?.sessionId ?? null);
-  }, [activeSessionId, sessions]);
+    const container = splitRef.current;
+    if (!container || mode !== "split") {
+      setIsStackedSplit(false);
+      return;
+    }
 
-  const chooseMode = (next: WorkspaceMode) => {
-    setMode(next);
+    // Split behavior follows the usable Workspace width, which may be narrower than the window.
+    const updateSplitLayout = () => {
+      const width = container.getBoundingClientRect().width;
+      setIsStackedSplit(width > 0 && width < SPLIT_STACK_BREAKPOINT);
+    };
+
+    updateSplitLayout();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateSplitLayout);
+      return () => window.removeEventListener("resize", updateSplitLayout);
+    }
+
+    const observer = new ResizeObserver(updateSplitLayout);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [mode]);
+
+  const chooseMode = useCallback((next: WorkspaceMode) => {
+    setInternalMode(next);
     onModeChange?.(next);
-  };
+  }, [onModeChange]);
 
-  const selectRelativeMode = (delta: number) => {
-    const current = WORKSPACE_MODES.indexOf(mode);
-    const next = WORKSPACE_MODES[(current + delta + WORKSPACE_MODES.length) % WORKSPACE_MODES.length];
-    chooseMode(next);
-    requestAnimationFrame(() => modeTabRefs.current.get(next)?.focus());
-  };
+  const selectHost = useCallback((hostAlias: string) => {
+    setInternalHostAlias(hostAlias);
+    onSelectedHostChange?.(hostAlias);
+  }, [onSelectedHostChange]);
 
-  const selectModeAndFocus = (next: WorkspaceMode) => {
-    chooseMode(next);
-    requestAnimationFrame(() => modeTabRefs.current.get(next)?.focus());
-  };
+  /** Keeps the selected app host aligned with the PTY receiving terminal input. */
+  const activateTerminal = useCallback((sessionId: string, knownSession?: WorkspaceTerminalSession) => {
+    const session = knownSession ?? sessions.find((candidate) => candidate.sessionId === sessionId);
+    if (!session) return;
+    setActiveSessionId(sessionId);
+    if (mode === "terminal" || mode === "split") selectHost(session.hostAlias);
+    if (mode === "split") setFollowCwd(true);
+  }, [mode, selectHost, sessions]);
 
-  const openTerminal = async (
+  useEffect(() => {
+    if (activeSessionId && sessions.some((session) => session.sessionId === activeSessionId)) return;
+    const fallbackSession = sessions[sessions.length - 1];
+    if (fallbackSession) activateTerminal(fallbackSession.sessionId);
+    else setActiveSessionId(null);
+  }, [activeSessionId, activateTerminal, sessions]);
+
+  const openTerminal = useCallback(async (
     hostAlias: string,
-    initialDirectory?: { fileSessionId: string; path: string }
+    initialDirectory?: { fileSessionId: string; path: string },
+    terminalHostRequestId?: number
   ) => {
-    if (!hostAlias) return;
+    const isCurrentHostRequest = () => terminalHostRequestId === undefined
+      || latestTerminalHostRequestIdRef.current === terminalHostRequestId;
+    if (!hostAlias || !isCurrentHostRequest()) return;
+    selectHost(hostAlias);
     const keepSplit = mode === "split";
     try {
       const existing = sessions.find((session) => session.hostAlias === hostAlias && session.state !== "closing");
       if (!initialDirectory && existing) {
-        setActiveSessionId(existing.sessionId);
-        if (keepSplit) {
-          setSelectedHostAlias(hostAlias);
-          setFollowCwd(true);
-        }
+        if (!isCurrentHostRequest()) return;
+        activateTerminal(existing.sessionId);
         chooseMode(keepSplit ? "split" : "terminal");
         return;
       }
@@ -129,26 +169,63 @@ export function WorkspacePage({
         initialDirectory: initialDirectory ?? null
       });
       controller.upsertSession(session);
-      setActiveSessionId(session.sessionId);
-      if (keepSplit || initialDirectory) setSelectedHostAlias(hostAlias);
-      if (keepSplit) setFollowCwd(true);
+      if (!isCurrentHostRequest()) return;
+      activateTerminal(session.sessionId, session);
       chooseMode(keepSplit ? "split" : "terminal");
     } catch (error) {
       onError(error);
     }
-  };
+  }, [activateTerminal, api, chooseMode, controller, mode, onError, selectHost, sessions]);
+
+  useEffect(() => {
+    if (mode !== "terminal" && mode !== "split") return;
+    if (!terminalHostRequest || consumedTerminalHostRequestIdRef.current === terminalHostRequest.requestId) return;
+    consumedTerminalHostRequestIdRef.current = terminalHostRequest.requestId;
+    latestTerminalHostRequestIdRef.current = terminalHostRequest.requestId;
+    onTerminalHostRequestHandled?.(terminalHostRequest.requestId);
+
+    const currentSession = sessions.find((session) => (
+      session.hostAlias === terminalHostRequest.hostAlias && session.state !== "closing"
+    ));
+    if (currentSession) {
+      activateTerminal(currentSession.sessionId);
+      return;
+    }
+
+    // The Workspace may have just mounted, before its controller has restored sessions.
+    // Read the backend snapshot once so an existing PTY is activated rather than duplicated.
+    void (async () => {
+      try {
+        const snapshot = await api.listTerminalSessions();
+        if (latestTerminalHostRequestIdRef.current !== terminalHostRequest.requestId) return;
+        const existing = snapshot.find((session) => (
+          session.hostAlias === terminalHostRequest.hostAlias
+          && session.state !== "closed"
+          && session.state !== "closing"
+        ));
+        if (existing) {
+          controller.upsertSession(existing);
+          activateTerminal(existing.sessionId, existing);
+          return;
+        }
+        await openTerminal(terminalHostRequest.hostAlias, undefined, terminalHostRequest.requestId);
+      } catch (error) {
+        if (latestTerminalHostRequestIdRef.current === terminalHostRequest.requestId) onError(error);
+      }
+    })();
+  }, [activateTerminal, api, controller, mode, onError, onTerminalHostRequestHandled, openTerminal, sessions, terminalHostRequest]);
 
   useEffect(() => {
     if (mode !== "split" || !activeTerminal) return;
-    setSelectedHostAlias(activeTerminal.hostAlias);
+    selectHost(activeTerminal.hostAlias);
     setFollowCwd(true);
-  }, [activeTerminal?.hostAlias, activeTerminal?.sessionId, mode]);
+  }, [activeTerminal?.hostAlias, activeTerminal?.sessionId, mode, selectHost]);
 
   const reconnect = async (session: WorkspaceTerminalSession) => {
     try {
       const reconnected = await api.reconnectTerminal({ sessionId: session.sessionId });
       controller.upsertSession(reconnected);
-      setActiveSessionId(reconnected.sessionId);
+      activateTerminal(reconnected.sessionId, reconnected);
     } catch (error) {
       onError(error);
     }
@@ -158,7 +235,10 @@ export function WorkspacePage({
     try {
       await api.closeTerminal({ sessionId: target.sessionId, generation: target.generation });
       controller.removeSession(target.sessionId);
-      setActiveSessionId(nextActiveSession(sessions, target.sessionId));
+      if (target.sessionId !== activeSessionId) return;
+      const nextSessionId = nextActiveSession(sessions, target.sessionId);
+      if (nextSessionId) activateTerminal(nextSessionId);
+      else setActiveSessionId(null);
     } catch (error) {
       onError(error);
     }
@@ -187,29 +267,33 @@ export function WorkspacePage({
       } else if (closeTerminalShortcut && activeTerminal) {
         event.preventDefault();
         void closeTerminal(activeTerminal);
-      } else if (macPreviousTabShortcut) {
-        event.preventDefault();
-        if (sessions.length > 0) {
-          const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
-          setActiveSessionId(sessions[(index - 1 + sessions.length) % sessions.length]?.sessionId ?? null);
-        }
-      } else if (macNextTabShortcut) {
-        event.preventDefault();
-        if (sessions.length > 0) {
-          const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
-          setActiveSessionId(sessions[(index + 1) % sessions.length]?.sessionId ?? null);
-        }
-      } else if (nextTabShortcut) {
-        event.preventDefault();
-        if (sessions.length > 0) {
-          const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
-          setActiveSessionId(sessions[(index + 1) % sessions.length]?.sessionId ?? null);
-        }
-      } else if (previousTabShortcut) {
-        event.preventDefault();
-        if (sessions.length > 0) {
-          const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
-          setActiveSessionId(sessions[(index - 1 + sessions.length) % sessions.length]?.sessionId ?? null);
+        } else if (macPreviousTabShortcut) {
+          event.preventDefault();
+          if (sessions.length > 0) {
+            const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
+            const next = sessions[(index - 1 + sessions.length) % sessions.length];
+            if (next) activateTerminal(next.sessionId);
+          }
+        } else if (macNextTabShortcut) {
+          event.preventDefault();
+          if (sessions.length > 0) {
+            const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
+            const next = sessions[(index + 1) % sessions.length];
+            if (next) activateTerminal(next.sessionId);
+          }
+        } else if (nextTabShortcut) {
+          event.preventDefault();
+          if (sessions.length > 0) {
+            const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
+            const next = sessions[(index + 1) % sessions.length];
+            if (next) activateTerminal(next.sessionId);
+          }
+        } else if (previousTabShortcut) {
+          event.preventDefault();
+          if (sessions.length > 0) {
+            const index = Math.max(0, sessions.findIndex((session) => session.sessionId === activeSessionId));
+            const next = sessions[(index - 1 + sessions.length) % sessions.length];
+            if (next) activateTerminal(next.sessionId);
         }
       } else if (filesShortcut) {
         event.preventDefault();
@@ -224,14 +308,16 @@ export function WorkspacePage({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeSessionId, activeTerminal, mode, platform, selectedHostAlias, sessions]);
+  }, [activateTerminal, activeSessionId, activeTerminal, mode, openTerminal, platform, selectedHostAlias, sessions]);
 
   const onSplitterKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+    const decreaseKey = isStackedSplit ? "ArrowUp" : "ArrowLeft";
+    const increaseKey = isStackedSplit ? "ArrowDown" : "ArrowRight";
+    if (event.key === decreaseKey) {
       event.preventDefault();
       setSplitRatio((value) => Math.max(35, value - 5));
     }
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+    if (event.key === increaseKey) {
       event.preventDefault();
       setSplitRatio((value) => Math.min(75, value + 5));
     }
@@ -245,8 +331,10 @@ export function WorkspacePage({
     event.currentTarget.setPointerCapture(event.pointerId);
     const move = (moveEvent: PointerEvent) => {
       const rect = container.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      setSplitRatio(Math.max(35, Math.min(75, ((moveEvent.clientX - rect.left) / rect.width) * 100)));
+      const size = isStackedSplit ? rect.height : rect.width;
+      const offset = isStackedSplit ? moveEvent.clientY - rect.top : moveEvent.clientX - rect.left;
+      if (size <= 0) return;
+      setSplitRatio(Math.max(35, Math.min(75, (offset / size) * 100)));
     };
     const finish = () => {
       window.removeEventListener("pointermove", move);
@@ -262,14 +350,18 @@ export function WorkspacePage({
       api={api}
       copy={copy}
       hosts={hosts}
+      locale={locale}
       platform={platform}
       preferences={terminalPreferences}
       sessions={sessions}
-      onActivateSession={setActiveSessionId}
+      selectedHostAlias={selectedHostAlias}
+      onActivateSession={activateTerminal}
       onCloseSession={(session) => void closeTerminal(session)}
       onError={onError}
       onRendererError={onTerminalRendererError}
       onHostSelected={(hostAlias) => void openTerminal(hostAlias)}
+      isFilesSplit={mode === "split"}
+      onToggleFilesSplit={() => chooseMode(mode === "split" ? "terminal" : "split")}
       onReconnect={(session) => void reconnect(session)}
     />
   );
@@ -282,10 +374,12 @@ export function WorkspacePage({
       followCwd={followCwd}
       hosts={hosts}
       isActive={mode === "files" || mode === "split"}
+      compact={mode === "split"}
+      locale={locale}
       selectedHostAlias={selectedHostAlias}
       onError={onError}
       onFollowCwdChange={setFollowCwd}
-      onHostSelected={setSelectedHostAlias}
+      onHostSelected={selectHost}
       onOpenTerminalAt={(hostAlias, fileSessionId, path) => void openTerminal(hostAlias, { fileSessionId, path })}
       onRecoveryCreated={controller.upsertRecovery}
       onViewRecoveries={() => chooseMode("transfers")}
@@ -293,45 +387,13 @@ export function WorkspacePage({
     />
   );
 
-  const modeBar = (
-    <div
-      className="workspaceModeBar"
-      role="tablist"
-      aria-label={copy.title}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") { event.preventDefault(); selectRelativeMode(-1); }
-        if (event.key === "ArrowRight") { event.preventDefault(); selectRelativeMode(1); }
-        if (event.key === "Home") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[0]); }
-        if (event.key === "End") { event.preventDefault(); selectModeAndFocus(WORKSPACE_MODES[WORKSPACE_MODES.length - 1]); }
-      }}
-    >
-      {WORKSPACE_MODES.map((entry) => (
-        <button
-          aria-controls="workspace-mode-content"
-          aria-selected={mode === entry}
-          key={entry}
-          ref={(node) => {
-            if (node) modeTabRefs.current.set(entry, node);
-            else modeTabRefs.current.delete(entry);
-          }}
-          role="tab"
-          tabIndex={mode === entry ? 0 : -1}
-          type="button"
-          onClick={() => chooseMode(entry)}
-        >{copy.modes[entry]}</button>
-      ))}
-    </div>
-  );
-
   return (
     <section className={`workspacePage${className ? ` ${className}` : ""}`} aria-label={copy.title}>
-      {/* App supplies the title-bar host; isolated previews retain the inline fallback. */}
-      {modeBarHost === undefined ? modeBar : modeBarHost ? createPortal(modeBar, modeBarHost) : null}
-
       <div
         ref={splitRef}
         className="workspacePageBody"
         data-mode={mode}
+        data-split-layout={mode === "split" ? (isStackedSplit ? "stacked" : "side-by-side") : undefined}
         id="workspace-mode-content"
         role="tabpanel"
         style={{ "--workspace-split-ratio": `${splitRatio}%` } as CSSProperties}
@@ -341,8 +403,8 @@ export function WorkspacePage({
           {filesPanel}
         </div>
         <div
-          aria-label="Resize workspace panes"
-          aria-orientation="vertical"
+          aria-label={copy.resizeWorkspacePanes}
+          aria-orientation={isStackedSplit ? "horizontal" : "vertical"}
           aria-valuemax={75}
           aria-valuemin={35}
           aria-valuenow={Math.round(splitRatio)}
@@ -359,11 +421,14 @@ export function WorkspacePage({
           <TransfersPanel
             api={api}
             copy={copy}
+            locale={locale}
             recoveries={controller.state.recoveries}
             localRecoveries={controller.state.localRecoveries}
             transfers={controller.state.transfers}
             onError={onError}
+            onNewTransfer={() => chooseMode("files")}
             onOpenTask={onOpenTask}
+            onRefresh={controller.reload}
             onRecoveryUpdated={controller.upsertRecovery}
             onLocalRecoveryRemoved={controller.removeLocalRecovery}
             onLocalRecoveryUpdated={controller.upsertLocalRecovery}

@@ -600,6 +600,8 @@ pub struct TransferDto {
     pub host_alias: String,
     pub source_ref: String,
     pub destination_path: String,
+    pub created_at: String,
+    pub updated_at: String,
     pub state: TransferState,
     #[ts(type = "number")]
     pub revision: u64,

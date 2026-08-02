@@ -21,6 +21,8 @@ const session = (generation: number, revision: number): WorkspaceTerminalSession
 const transfer = (revision: number): WorkspaceTransfer => ({
   transferId: "transfer-test",
   revision,
+  createdAt: "2026-07-30T00:00:00Z",
+  updatedAt: "2026-07-30T00:00:01Z",
   direction: "upload",
   hostAlias: "test-host",
   sourceLabel: "source.txt",
@@ -82,6 +84,7 @@ test("Workspace transfer events merge progress without reloading the queue", () 
     event: {
       transferId: "transfer-test",
       revision: 2,
+      updatedAt: "2026-07-30T00:00:02Z",
       state: "interrupted",
       bytes: "9",
       total: "12",

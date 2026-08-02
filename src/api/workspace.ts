@@ -102,6 +102,8 @@ function transfer(raw: WorkspaceTransferDto): WorkspaceTransfer {
   return {
     transferId: raw.transferId,
     revision: numberValue(raw.revision),
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
     direction: raw.direction,
     hostAlias: raw.hostAlias,
     sourceLabel: raw.sourceRef.startsWith("grant-") ? "Local selection" : raw.sourceRef,
@@ -274,6 +276,7 @@ export const desktopWorkspaceApi: WorkspaceApi = {
     onTransferUpdated: (handler) => subscribe<WorkspaceTransferUpdatedEventDto>("workspace_list_transfers", "workspace-transfer-updated", (raw) => handler({
       transferId: raw.transferId,
       revision: numberValue(raw.revision),
+      updatedAt: raw.updatedAt,
       state: raw.state,
       bytes: decimalText(raw.bytes),
       total: raw.total === null ? null : decimalText(raw.total),

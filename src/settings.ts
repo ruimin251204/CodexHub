@@ -41,12 +41,13 @@ export const defaultSettings: AppSettings = {
   sidebarCompletionIndicators: true,
   hostOperationLogPopups: true,
   personalInfoMasking: true,
+  launchAtLogin: false,
   setupGuideDismissed: false,
   workspaceTerminalPreferences: {
     fontFamily: "system-mono",
     fontSize: 14,
     lineHeight: "1.25",
-    colorScheme: "follow-app",
+    colorScheme: "dark",
     scrollback: 5000,
     cursorStyle: "block",
     screenReaderMode: false,
@@ -119,6 +120,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     sidebarCompletionIndicators: candidate.sidebarCompletionIndicators !== false,
     hostOperationLogPopups: candidate.hostOperationLogPopups !== false,
     personalInfoMasking: candidate.personalInfoMasking !== false,
+    launchAtLogin: candidate.launchAtLogin === true,
     setupGuideDismissed: candidate.setupGuideDismissed === true,
     workspaceTerminalPreferences: normalizeWorkspaceTerminalPreferences(candidate.workspaceTerminalPreferences)
   };
@@ -134,7 +136,8 @@ function normalizeWorkspaceTerminalPreferences(value: unknown): AppSettings["wor
       : defaults.fontFamily,
     fontSize: typeof current?.fontSize === "number" ? Math.max(12, Math.min(24, Math.round(current.fontSize))) : defaults.fontSize,
     lineHeight: Number.isFinite(lineHeight) ? Math.max(1, Math.min(2, lineHeight)).toFixed(2) : defaults.lineHeight,
-    colorScheme: ["follow-app", "light", "dark", "high-contrast"].includes(current?.colorScheme ?? "")
+    // Legacy follow-app values are deliberately migrated to the independent dark terminal default.
+    colorScheme: ["light", "dark", "high-contrast"].includes(current?.colorScheme ?? "")
       ? current!.colorScheme!
       : defaults.colorScheme,
     scrollback: typeof current?.scrollback === "number" ? Math.max(100, Math.min(20000, Math.round(current.scrollback))) : defaults.scrollback,

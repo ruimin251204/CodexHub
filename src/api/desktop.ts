@@ -170,6 +170,13 @@ export const desktopApi: CodexHubApi = {
       return { ...saved, settings: nextSettings };
     });
   },
+  setLaunchAtLogin: (enabled: boolean) => {
+    return requiredInvoke<SettingsSaveResult>("set_launch_at_login", { enabled }).then((saved) => {
+      const nextSettings = normalizeSettings(saved.settings);
+      saveDesktopSettingsCache(nextSettings);
+      return { ...saved, settings: nextSettings };
+    });
+  },
   chooseCloseButtonBehavior: (behavior: Exclude<CloseButtonBehavior, "ask">) => {
     return requiredInvoke<SettingsSaveResult>("choose_close_button_behavior", { behavior }).then((saved) => {
       const nextSettings = normalizeSettings(saved.settings);

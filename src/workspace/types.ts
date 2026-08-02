@@ -2,11 +2,18 @@ export type WorkspaceLocale = "en" | "zh";
 export type WorkspacePlatform = "windows" | "macos" | "linux";
 export type WorkspaceMode = "terminal" | "files" | "split" | "transfers";
 
+/** One-shot app-chrome request to align the selected host with a terminal PTY. */
+export type WorkspaceTerminalHostRequest = {
+  requestId: number;
+  hostAlias: string;
+};
+
 export type WorkspaceHost = {
   id: string;
   name: string;
   hostAlias: string;
   status: "online" | "offline" | "unknown" | "testing" | string;
+  latencyMs?: number | null;
 };
 
 export type TerminalSessionState =
@@ -180,6 +187,8 @@ export type WorkspaceTransferCapabilities = {
 export type WorkspaceTransfer = {
   transferId: string;
   revision: number;
+  createdAt: string;
+  updatedAt: string;
   direction: WorkspaceTransferDirection;
   hostAlias: string;
   sourceLabel: string;
@@ -202,7 +211,7 @@ export type WorkspaceTransfer = {
 
 /** High-frequency backend event. Immutable labels stay in the loaded snapshot. */
 export type WorkspaceTransferUpdatedEvent = Pick<WorkspaceTransfer,
-  "transferId" | "revision" | "state" | "bytes" | "total" |
+  "transferId" | "revision" | "updatedAt" | "state" | "bytes" | "total" |
   "speedBytesPerSecond" | "etaSeconds" | "attempt" | "resumable" |
   "errorCode" | "taskId"
 >;
@@ -373,7 +382,7 @@ export const defaultTerminalPreferences: WorkspaceTerminalPreferences = {
   fontFamily: "system-mono",
   fontSize: 14,
   lineHeight: 1.25,
-  colorScheme: "follow-app",
+  colorScheme: "dark",
   scrollback: 5000,
   cursorStyle: "block",
   screenReaderMode: false,

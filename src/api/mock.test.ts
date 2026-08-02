@@ -3,6 +3,11 @@ import type { HostOperationProgressEvent, HostResourceProgressEvent } from "../m
 import { mockApi } from "./mock";
 import { unavailableWorkspaceApi } from "./workspace";
 
+test("Mock launch at login remains disabled because it cannot modify the operating system", async () => {
+  await expect(mockApi.setLaunchAtLogin(true)).rejects.toThrow("requires the Tauri desktop backend");
+  expect((await mockApi.getSettings()).launchAtLogin).toBe(false);
+});
+
 test("Mock Workspace methods and nested events explicitly require desktop", async () => {
   await expect(unavailableWorkspaceApi.listTerminalSessions())
     .rejects.toThrow("desktop-backend-required");

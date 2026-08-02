@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { WorkspaceCopy } from "./copy";
+import { usePersonalInfoMasking } from "../ui/PersonalInfoMasking";
 import type {
   TerminalOutputFrame,
   WorkspaceApi,
@@ -10,6 +11,10 @@ import type {
 
 export const WORKSPACE_TERMINAL_SEARCH_EVENT = "codexhub:workspace-terminal-search";
 export const WORKSPACE_TERMINAL_FOCUS_EVENT = "codexhub:workspace-terminal-focus";
+export const WORKSPACE_TERMINAL_COPY_EVENT = "codexhub:workspace-terminal-copy";
+
+/** Terminal color mode is deliberately independent from the surrounding app theme. */
+export type TerminalThemeOverride = "preferences" | "dark" | "light" | "high-contrast";
 
 /** Stable identifiers for a sanitized renderer-failure task. */
 export type TerminalRendererFailure = {
@@ -76,23 +81,67 @@ function resolveFontFamily(preference: WorkspaceTerminalPreferences["fontFamily"
   }
 }
 
-function resolveTerminalTheme(preference: WorkspaceTerminalPreferences["colorScheme"]): Record<string, string> {
-  const rootTheme = document.documentElement.dataset.theme;
-  const dark = preference === "dark"
-    || (preference === "follow-app" && (rootTheme === "dark" || (!rootTheme && matchMedia("(prefers-color-scheme: dark)").matches)));
-  if (preference === "high-contrast") {
+function resolveTerminalThemeMode(
+  preference: WorkspaceTerminalPreferences["colorScheme"],
+  override: TerminalThemeOverride
+): Exclude<TerminalThemeOverride, "preferences"> {
+  if (override !== "preferences") return override;
+  // Legacy follow-app preferences fall back to dark rather than reading app/system state.
+  return preference === "light" || preference === "high-contrast" ? preference : "dark";
+}
+
+function resolveTerminalTheme(mode: Exclude<TerminalThemeOverride, "preferences">): Record<string, string> {
+  if (mode === "high-contrast") {
     return {
       background: "#000000",
       foreground: "#ffffff",
       cursor: "#ffff00",
       selectionBackground: "#1aebff66",
       black: "#000000",
-      brightBlack: "#a0a0a0"
+      brightBlack: "#a0a0a0",
+      red: "#ff5f5f",
+      green: "#5cff8d",
+      yellow: "#ffe36e",
+      blue: "#6db4ff",
+      magenta: "#e29cff",
+      cyan: "#72f1ff"
     };
   }
-  return dark
-    ? { background: "#181818", foreground: "#f3f4f6", cursor: "#f3f4f6", selectionBackground: "#5b9cff55" }
-    : { background: "#ffffff", foreground: "#182033", cursor: "#182033", selectionBackground: "#0067c044" };
+  return mode === "dark"
+    ? {
+        background: "#111417",
+        foreground: "#d8dee9",
+        cursor: "#f4f7fb",
+        cursorAccent: "#111417",
+        selectionBackground: "#4d8eff55",
+        black: "#15191d",
+        red: "#ff6b74",
+        green: "#7bd88f",
+        yellow: "#f3cf65",
+        blue: "#6ca9ff",
+        magenta: "#c792ea",
+        cyan: "#64d8cb",
+        white: "#d8dee9",
+        brightBlack: "#68717d",
+        brightWhite: "#ffffff"
+      }
+    : {
+        background: "#fbfcfe",
+        foreground: "#202938",
+        cursor: "#202938",
+        cursorAccent: "#fbfcfe",
+        selectionBackground: "#2f6feb33",
+        black: "#202938",
+        red: "#cf3f4b",
+        green: "#238636",
+        yellow: "#9a6700",
+        blue: "#0969da",
+        magenta: "#8250df",
+        cyan: "#1b7c83",
+        white: "#d0d7de",
+        brightBlack: "#57606a",
+        brightWhite: "#ffffff"
+      };
 }
 
 function isClipboardShortcut(event: KeyboardEvent, platform: "windows" | "macos" | "linux", key: "c" | "v") {
@@ -107,6 +156,7 @@ export function XtermTerminal({
   platform,
   preferences,
   session,
+  themeOverride = "preferences",
   onError,
   onRendererError
 }: {
@@ -116,9 +166,11 @@ export function XtermTerminal({
   platform: "windows" | "macos" | "linux";
   preferences: WorkspaceTerminalPreferences;
   session: WorkspaceTerminalSession;
+  themeOverride?: TerminalThemeOverride;
   onError: (error: unknown) => void;
   onRendererError: (failure: TerminalRendererFailure) => void;
 }) {
+  const personalInfo = usePersonalInfoMasking();
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XtermLike | null>(null);
   const fitAddonRef = useRef<FitAddonLike | null>(null);
@@ -145,7 +197,11 @@ export function XtermTerminal({
   preferencesRef.current = preferences;
   onErrorRef.current = onError;
   onRendererErrorRef.current = onRendererError;
-  const theme = useMemo(() => resolveTerminalTheme(preferences.colorScheme), [preferences.colorScheme]);
+  const resolvedThemeMode = useMemo(
+    () => resolveTerminalThemeMode(preferences.colorScheme, themeOverride),
+    [preferences.colorScheme, themeOverride]
+  );
+  const theme = useMemo(() => resolveTerminalTheme(resolvedThemeMode), [resolvedThemeMode]);
   themeRef.current = theme;
 
   useEffect(() => {
@@ -404,11 +460,25 @@ export function XtermTerminal({
       const detail = (event as CustomEvent<{ sessionId: string }>).detail;
       if (detail?.sessionId === session.sessionId) terminalRef.current?.focus();
     };
+    const onCopy = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId: string }>).detail;
+      const terminal = terminalRef.current;
+      if (detail?.sessionId !== session.sessionId || !terminal) return;
+      if (!terminal.hasSelection()) {
+        terminal.focus();
+        return;
+      }
+      void navigator.clipboard.writeText(terminal.getSelection())
+        .then(() => terminal.focus())
+        .catch((error) => onErrorRef.current(error));
+    };
     document.addEventListener(WORKSPACE_TERMINAL_SEARCH_EVENT, onSearch);
     document.addEventListener(WORKSPACE_TERMINAL_FOCUS_EVENT, onFocus);
+    document.addEventListener(WORKSPACE_TERMINAL_COPY_EVENT, onCopy);
     return () => {
       document.removeEventListener(WORKSPACE_TERMINAL_SEARCH_EVENT, onSearch);
       document.removeEventListener(WORKSPACE_TERMINAL_FOCUS_EVENT, onFocus);
+      document.removeEventListener(WORKSPACE_TERMINAL_COPY_EVENT, onCopy);
     };
   }, [session.sessionId]);
 
@@ -425,7 +495,7 @@ export function XtermTerminal({
   };
 
   return (
-    <div className="workspaceXterm" data-active={active}>
+    <div className="workspaceXterm" data-active={active} data-terminal-theme={resolvedThemeMode}>
       {searchOpen ? (
         <form className="workspaceTerminalSearch" onSubmit={(event) => {
           event.preventDefault();
@@ -458,7 +528,7 @@ export function XtermTerminal({
           }}>×</button>
         </form>
       ) : null}
-      <div ref={containerRef} className="workspaceXtermCanvas" aria-label={`${session.title} — ${session.hostAlias}`} />
+      <div ref={containerRef} className="workspaceXtermCanvas" aria-label={personalInfo.maskText(`${session.title} — ${session.hostAlias}`)} />
       {loading ? <div className="workspacePaneState">{copy.loading}</div> : null}
       {loadError ? <div className="workspacePaneState workspacePaneError" role="alert">{copy.terminalUnavailable}</div> : null}
       {loadError ? <button className="workspaceRendererRetry" type="button" onClick={() => setRendererRetry((value) => value + 1)}>{copy.retryLoad}</button> : null}

@@ -2075,6 +2075,8 @@ mod tests {
             host_alias: "host".into(),
             source_ref: "/remote/report.txt".into(),
             destination_path: "download".into(),
+            created_at: "2026-07-30T00:00:00Z".into(),
+            updated_at: "2026-07-30T00:00:00Z".into(),
             state: TransferState::Interrupted,
             revision: 1,
             bytes: 4,
