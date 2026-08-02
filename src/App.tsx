@@ -86,6 +86,9 @@ import type { SidebarGroup } from "./components/Layout";
 import { SearchBox } from "./components/UI";
 import type { StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
+import { searchGlobalEntries } from "./search/globalSearch";
+import { createGlobalSearchCatalog } from "./search/globalSearchCatalog";
+import type { CodexHubSearchEntry, SearchSectionId } from "./search/globalSearchCatalog";
 import "./components/design-system.css";
 import "./components/app-shell-integration.css";
 import {
@@ -107,7 +110,7 @@ const WorkspacePage = lazy(async () => {
   return { default: module.WorkspacePage };
 });
 
-type SectionId = "dashboard" | "hosts" | "terminal" | "files" | "transfers" | "profiles" | "skills" | "monitor" | "tasks" | "settings";
+type SectionId = SearchSectionId;
 type NavIconId = SectionId;
 type PlatformIconId =
   | SectionId
@@ -137,6 +140,7 @@ type CommandBarAction = {
 type SetupGuideStep = "preferences" | "ssh";
 type SectionCompletionTone = "success" | "error";
 type SectionCompletionSignals = Partial<Record<SectionId, SectionCompletionTone>>;
+type AppSearchEntry = CodexHubSearchEntry;
 type SectionOperationOptions<T> = {
   classify?: (result: T) => SectionCompletionTone | null;
 };
@@ -474,6 +478,7 @@ export const uiCopy = {
       noHosts: "No hosts",
       searchPlaceholder: "Search hosts, files, commands...",
       clearSearch: "Clear search",
+      noSearchResults: "No matching pages, settings, or hosts",
       notifications: "Notifications",
       openSettings: "Open settings",
       localSession: "Local session",
@@ -1361,6 +1366,7 @@ export const uiCopy = {
       noHosts: "暂无主机",
       searchPlaceholder: "搜索主机、文件、命令...",
       clearSearch: "清除搜索",
+      noSearchResults: "未找到匹配的页面、设置或主机",
       notifications: "通知",
       openSettings: "打开设置",
       localSession: "本地会话",
@@ -2821,6 +2827,7 @@ function App() {
     try { return window.localStorage.getItem("codexhub.sidebar-collapsed") === "true"; } catch { return false; }
   });
   const [globalSearch, setGlobalSearch] = useState("");
+  const [pendingSearchTargetId, setPendingSearchTargetId] = useState<string | null>(null);
   // Workspace keeps Split as a view state while the sidebar continues to highlight Terminal.
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("terminal");
   const [workspaceHostAlias, setWorkspaceHostAlias] = useState("");
@@ -2868,6 +2875,31 @@ function App() {
     window.addEventListener("keydown", focusGlobalSearch);
     return () => window.removeEventListener("keydown", focusGlobalSearch);
   }, []);
+
+  useEffect(() => {
+    if (!pendingSearchTargetId || activeSection !== "settings") return;
+    let target: HTMLElement | null = null;
+    let highlightTimer: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      target = document.getElementById(pendingSearchTargetId);
+      if (!target) {
+        setPendingSearchTargetId(null);
+        return;
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus({ preventScroll: true });
+      target.dataset.searchHighlight = "true";
+      highlightTimer = window.setTimeout(() => {
+        target?.removeAttribute("data-search-highlight");
+        setPendingSearchTargetId((current) => current === pendingSearchTargetId ? null : current);
+      }, 1600);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (highlightTimer !== undefined) window.clearTimeout(highlightTimer);
+      target?.removeAttribute("data-search-highlight");
+    };
+  }, [activeSection, pendingSearchTargetId]);
 
   useEffect(() => {
     setWorkspaceHostAlias((current) => {
@@ -4812,26 +4844,39 @@ function App() {
       items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[]).map(makeSidebarItem)
     }
   ];
-  const globalSearchMatches = globalSearch.trim() ? [
-    ...copy.navItems
-      .filter((item) => `${item.label} ${item.id}`.toLocaleLowerCase().includes(globalSearch.trim().toLocaleLowerCase()))
-      .slice(0, 5)
-      .map((item) => ({ id: `section:${item.id}`, label: item.label, detail: copy.sections[item.id].body, section: item.id as SectionId })),
-    ...hosts
-      .filter((host) => `${host.hostAlias} ${host.name}`.toLocaleLowerCase().includes(globalSearch.trim().toLocaleLowerCase()))
-      .slice(0, 5)
-      .map((host) => ({ id: `host:${host.id}`, label: personalInfoMasker.maskText(host.hostAlias), detail: personalInfoMasker.maskText(host.name), hostAlias: host.hostAlias }))
-  ] : [];
+  const globalSearchCatalog = useMemo<AppSearchEntry[]>(() => [
+    ...createGlobalSearchCatalog(copy),
+    ...hosts.map((host) => ({
+      id: `host:${host.id}`,
+      label: personalInfoMasker.maskText(host.hostAlias),
+      detail: personalInfoMasker.maskText(host.name),
+      section: "terminal" as const,
+      hostAlias: host.hostAlias,
+      keywords: [host.hostAlias, host.name, "host", "server", "ssh", "主机", "服务器"],
+      priority: 15
+    }))
+  ], [copy, hosts, personalInfoMasker]);
+  const globalSearchMatches = useMemo(
+    () => searchGlobalEntries(globalSearch, globalSearchCatalog, 10),
+    [globalSearch, globalSearchCatalog]
+  );
   const chooseGlobalSearchResult = (result: (typeof globalSearchMatches)[number]) => {
-    if ("section" in result) selectSection(result.section);
-    if ("hostAlias" in result) {
+    if (result.hostAlias) {
       requestWorkspaceTerminalHost(result.hostAlias);
       selectWorkspaceMode("terminal");
+    } else {
+      if (result.targetId) setPendingSearchTargetId(result.targetId);
+      selectSection(result.section);
     }
     setGlobalSearch("");
   };
   const globalSearchControl = (
-    <div className="codexHubGlobalSearch">
+    <div
+      className="codexHubGlobalSearch"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setGlobalSearch("");
+      }}
+    >
       <SearchBox
         id="codexhub-global-search"
         clearLabel={copy.common.clearSearch}
@@ -4844,10 +4889,11 @@ function App() {
       {globalSearch ? (
         <div className="codexHubSearchResults" role="listbox" aria-label={copy.common.searchPlaceholder}>
           {globalSearchMatches.map((result) => (
-            <button key={result.id} role="option" type="button" onClick={() => chooseGlobalSearchResult(result)}>
+            <button aria-selected="false" key={result.id} role="option" type="button" onClick={() => chooseGlobalSearchResult(result)}>
               <strong>{result.label}</strong><small>{result.detail}</small>
             </button>
           ))}
+          {globalSearchMatches.length === 0 ? <p className="codexHubSearchEmpty" role="status">{copy.common.noSearchResults}</p> : null}
         </div>
       ) : null}
     </div>
@@ -9923,15 +9969,15 @@ function TaskLogModal({
   );
 }
 
-function SettingsPanelSection({ children, title }: { children: ReactNode; title: string }) {
+function SettingsPanelSection({ children, id, title }: { children: ReactNode; id?: string; title: string }) {
   return (
-    <section aria-label={title} className="settingsPanelSection">{children}</section>
+    <section aria-label={title} className="settingsPanelSection" id={id} tabIndex={id ? -1 : undefined}>{children}</section>
   );
 }
 
-function SettingsChoiceCard({ children, label }: { children: ReactNode; label: string }) {
+function SettingsChoiceCard({ children, id, label }: { children: ReactNode; id?: string; label: string }) {
   return (
-    <div className="settingsChoiceCard">
+    <div className="settingsChoiceCard" id={id} tabIndex={id ? -1 : undefined}>
       <span>{label}</span>
       {children}
     </div>
@@ -9943,6 +9989,7 @@ function SettingsToggleRow({
   checked,
   description,
   disabled,
+  id,
   label,
   onChange,
   title
@@ -9951,12 +9998,13 @@ function SettingsToggleRow({
   checked: boolean;
   description?: string;
   disabled: boolean;
+  id?: string;
   label: string;
   onChange: (enabled: boolean) => void;
   title?: string;
 }) {
   return (
-    <div className="settingsToggleRow">
+    <div className="settingsToggleRow" id={id} tabIndex={id ? -1 : undefined}>
       <div>
         <strong>{label}</strong>
         {description ? <span>{description}</span> : null}
@@ -10091,7 +10139,7 @@ function SettingsView({
           </div>
         </section>
       ) : null}
-      <section className="panel spanWide settingsSurfacePanel appearanceSettingsPanel">
+      <section className="panel spanWide settingsSurfacePanel appearanceSettingsPanel" id="settings-appearance" tabIndex={-1}>
         <div className="panelHeader compact">
           <div>
             <TitleWithIcon icon="settings" level={2}>{copy.settings.appearance}</TitleWithIcon>
@@ -10100,7 +10148,7 @@ function SettingsView({
         <div className="settingsPanelLayout">
           <SettingsPanelSection title={copy.settings.settingsInterface}>
             <div className="settingsChoiceCardGrid settingsAppearanceChoiceGrid">
-              <SettingsChoiceCard label={copy.settings.theme}>
+              <SettingsChoiceCard id="settings-theme" label={copy.settings.theme}>
                 <div className="segmentedControl" role="group" aria-label={copy.settings.theme}>
                   {(["system", "light", "dark"] as ThemeChoice[]).map((choice) => (
                     <button data-active={settings.theme === choice} disabled={settingsSaving} key={choice} onClick={() => onThemeChange(choice)} type="button">
@@ -10110,7 +10158,7 @@ function SettingsView({
                 </div>
               </SettingsChoiceCard>
 
-              <SettingsChoiceCard label={copy.settings.platformAppearance}>
+              <SettingsChoiceCard id="settings-platform" label={copy.settings.platformAppearance}>
                 <div className="segmentedControl" role="group" aria-label={copy.settings.platformAppearance}>
                   {(["auto", "windows", "macos"] as PlatformAppearance[]).map((choice) => (
                     <button data-active={settings.platformAppearance === choice} disabled={settingsSaving} key={choice} onClick={() => onPlatformAppearanceChange(choice)} type="button">
@@ -10120,7 +10168,7 @@ function SettingsView({
                 </div>
               </SettingsChoiceCard>
 
-              <SettingsChoiceCard label={copy.settings.font}>
+              <SettingsChoiceCard id="settings-font" label={copy.settings.font}>
                 <div className="segmentedControl" data-options="2" role="group" aria-label={copy.settings.font}>
                   {(Object.keys(fontPresets) as FontPreset[]).map((preset) => (
                     <button data-active={settings.fontPreset === preset} disabled={settingsSaving} key={preset} onClick={() => onFontPresetChange(preset)} type="button">
@@ -10132,24 +10180,24 @@ function SettingsView({
             </div>
           </SettingsPanelSection>
 
-          <SettingsPanelSection title={copy.settings.settingsBehavior}>
+          <SettingsPanelSection id="settings-application-behavior" title={copy.settings.settingsBehavior}>
             <div className="settingsToggleList">
-              <SettingsToggleRow checked={settings.sidebarCompletionIndicators} disabled={settingsSaving} label={copy.settings.sidebarCompletionIndicators} onChange={onSidebarCompletionIndicatorsChange} />
-              <SettingsToggleRow checked={settings.hostOperationLogPopups} disabled={settingsSaving} label={copy.settings.hostOperationLogPopups} onChange={onHostOperationLogPopupsChange} />
-              <SettingsToggleRow checked={settings.personalInfoMasking} disabled={settingsSaving} label={copy.settings.personalInfoMasking} onChange={onPersonalInfoMaskingChange} />
+              <SettingsToggleRow checked={settings.sidebarCompletionIndicators} disabled={settingsSaving} id="settings-sidebar-indicators" label={copy.settings.sidebarCompletionIndicators} onChange={onSidebarCompletionIndicatorsChange} />
+              <SettingsToggleRow checked={settings.hostOperationLogPopups} disabled={settingsSaving} id="settings-log-popups" label={copy.settings.hostOperationLogPopups} onChange={onHostOperationLogPopupsChange} />
+              <SettingsToggleRow checked={settings.personalInfoMasking} disabled={settingsSaving} id="settings-privacy" label={copy.settings.personalInfoMasking} onChange={onPersonalInfoMaskingChange} />
             </div>
           </SettingsPanelSection>
         </div>
       </section>
 
-      <section className="panel spanWide terminalPreferencesPanel">
+      <section className="panel spanWide terminalPreferencesPanel" id="settings-terminal" tabIndex={-1}>
         <div className="panelHeader compact">
           <div><TitleWithIcon icon="terminal" level={2}>{copy.settings.workspaceTerminal}</TitleWithIcon></div>
         </div>
         <div className="terminalPreferencesLayout">
           <section aria-label={copy.settings.terminalAppearance} className="terminalPreferencesSection terminalPreferencesAppearance">
             <div className="terminalPreferencesAppearanceGrid">
-              <fieldset className="terminalPreferenceField terminalFontPicker">
+              <fieldset className="terminalPreferenceField terminalFontPicker" id="settings-terminal-font" tabIndex={-1}>
                 <legend>{copy.settings.terminalFontFamily}</legend>
                 <div className="terminalFontChoiceGrid" role="group" aria-label={copy.settings.terminalFontFamily}>
                   {(Object.keys(copy.settings.terminalFontOptions) as Array<AppSettings["workspaceTerminalPreferences"]["fontFamily"]>).map((choice) => (
@@ -10170,7 +10218,7 @@ function SettingsView({
                 </div>
               </fieldset>
 
-              <fieldset className="terminalPreferenceField terminalColorPicker">
+              <fieldset className="terminalPreferenceField terminalColorPicker" id="settings-terminal-colors" tabIndex={-1}>
                 <legend>{copy.settings.terminalColorScheme}</legend>
                 <div className="terminalColorChoiceGrid" role="group" aria-label={copy.settings.terminalColorScheme}>
                   {(["dark", "light", "high-contrast"] as const).map((choice) => (
@@ -10199,7 +10247,7 @@ function SettingsView({
 
           <section aria-label={copy.settings.terminalTypography} className="terminalPreferencesSection">
             <div className="terminalTypographyGrid">
-              <div className="terminalNumericSetting terminalTypographyCard">
+              <div className="terminalNumericSetting terminalTypographyCard" id="settings-terminal-font-size" tabIndex={-1}>
                 <label className="terminalTypographyCardLabel" htmlFor="terminal-font-size">{copy.settings.terminalFontSize}</label>
                 <div className="terminalStepper terminalTypographyCardControl">
                   <button aria-label={`${copy.settings.terminalFontSize} −`} disabled={settingsSaving || terminalPreferences.fontSize <= 12} type="button" onClick={() => updateTerminalFontSize(terminalPreferences.fontSize - 1)}>−</button>
@@ -10209,7 +10257,7 @@ function SettingsView({
                 </div>
               </div>
 
-              <div className="terminalNumericSetting terminalTypographyCard">
+              <div className="terminalNumericSetting terminalTypographyCard" id="settings-terminal-line-height" tabIndex={-1}>
                 <label className="terminalTypographyCardLabel" htmlFor="terminal-line-height">{copy.settings.terminalLineHeight}</label>
                 <div className="terminalStepper terminalTypographyCardControl">
                   <button aria-label={`${copy.settings.terminalLineHeight} −`} disabled={settingsSaving || Number(terminalPreferences.lineHeight) <= 1} type="button" onClick={() => updateTerminalLineHeight(Number(terminalPreferences.lineHeight) - 0.05)}>−</button>
@@ -10219,7 +10267,7 @@ function SettingsView({
                 </div>
               </div>
 
-              <div aria-label={copy.settings.terminalScrollback} className="terminalCompactChoice terminalTypographyCard" role="group">
+              <div aria-label={copy.settings.terminalScrollback} className="terminalCompactChoice terminalTypographyCard" id="settings-terminal-scrollback" role="group" tabIndex={-1}>
                 <span className="terminalTypographyCardLabel">{copy.settings.terminalScrollback}</span>
                 <div className="terminalCompactChoiceList terminalTypographyCardControl" role="group" aria-label={copy.settings.terminalScrollback}>
                   {[1000, 5000, 10000].map((value) => (
@@ -10228,7 +10276,7 @@ function SettingsView({
                 </div>
               </div>
 
-              <div aria-label={copy.settings.terminalCursor} className="terminalCompactChoice terminalTypographyCard" role="group">
+              <div aria-label={copy.settings.terminalCursor} className="terminalCompactChoice terminalTypographyCard" id="settings-terminal-cursor" role="group" tabIndex={-1}>
                 <span className="terminalTypographyCardLabel">{copy.settings.terminalCursor}</span>
                 <div className="terminalCompactChoiceList terminalCursorChoiceList terminalTypographyCardControl" role="group" aria-label={copy.settings.terminalCursor}>
                   {(Object.keys(copy.settings.terminalCursorOptions) as Array<AppSettings["workspaceTerminalPreferences"]["cursorStyle"]>).map((choice) => (
@@ -10244,14 +10292,14 @@ function SettingsView({
 
           <section aria-label={copy.settings.terminalBehavior} className="terminalPreferencesSection terminalBehaviorSection">
             <div className="terminalBehaviorList">
-              <div className="terminalBehaviorRow">
+              <div className="terminalBehaviorRow" id="settings-terminal-screen-reader" tabIndex={-1}>
                 <div>
                   <strong>{copy.settings.terminalScreenReader}</strong>
                   <span>{copy.settings.terminalScreenReaderHint}</span>
                 </div>
                 <button aria-checked={terminalPreferences.screenReaderMode} aria-label={copy.settings.terminalScreenReader} className="pillToggle" data-enabled={terminalPreferences.screenReaderMode} disabled={settingsSaving} role="switch" type="button" onClick={() => updateTerminalPreferences({ screenReaderMode: !terminalPreferences.screenReaderMode })}><span className="pillToggleThumb" aria-hidden="true" /></button>
               </div>
-              <div className="terminalBehaviorRow">
+              <div className="terminalBehaviorRow" id="settings-terminal-paste" tabIndex={-1}>
                 <div>
                   <strong>{copy.settings.terminalConfirmLargePaste}</strong>
                   <span>{copy.settings.terminalConfirmLargePasteHint}</span>
@@ -10263,7 +10311,7 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="panel spanWide settingsSurfacePanel settingsSshPanel">
+      <section className="panel spanWide settingsSurfacePanel settingsSshPanel" id="settings-ssh" tabIndex={-1}>
         <div className="panelHeader compact">
           <div>
             <TitleWithIcon icon="key" level={2}>{copy.settings.localSsh}</TitleWithIcon>
@@ -10285,7 +10333,7 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="panel spanWide appUpdatePanel settingsSurfacePanel settingsUpdatePanel">
+      <section className="panel spanWide appUpdatePanel settingsSurfacePanel settingsUpdatePanel" id="settings-updates" tabIndex={-1}>
         <div className="panelHeader compact">
           <div>
             <TitleWithIcon icon="update" level={2}>{copy.settings.appUpdates}</TitleWithIcon>
@@ -10335,7 +10383,7 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="panel spanWide settingsSurfacePanel settingsOtherPanel">
+      <section className="panel spanWide settingsSurfacePanel settingsOtherPanel" id="settings-other" tabIndex={-1}>
         <div className="panelHeader compact">
           <div>
             <TitleWithIcon icon="close" level={2}>{copy.settings.closeButton}</TitleWithIcon>
@@ -10344,7 +10392,7 @@ function SettingsView({
         <div className="settingsPanelLayout">
           <SettingsPanelSection title={copy.settings.settingsBehavior}>
             <div className="settingsChoiceCardGrid settingsSystemChoiceGrid">
-              <SettingsChoiceCard label={copy.settings.closeButtonBehavior}>
+              <SettingsChoiceCard id="settings-close-behavior" label={copy.settings.closeButtonBehavior}>
                 <div className="segmentedControl" role="group" aria-label={copy.settings.closeButtonBehavior}>
                   {(["ask", "exit", "minimize-to-tray"] as CloseButtonBehavior[]).map((choice) => (
                     <button
@@ -10360,7 +10408,7 @@ function SettingsView({
                 </div>
               </SettingsChoiceCard>
 
-              <SettingsChoiceCard label={copy.settings.networkProxy}>
+              <SettingsChoiceCard id="settings-proxy" label={copy.settings.networkProxy}>
                 <div className="segmentedControl networkProxyControl" role="group" aria-label={copy.settings.networkProxy}>
                   {(["auto", "direct", "manual"] as NetworkProxyMode[]).map((choice) => (
                     <button
@@ -10378,7 +10426,7 @@ function SettingsView({
             </div>
           </SettingsPanelSection>
 
-          <SettingsPanelSection title={copy.settings.settingsSystemIntegration}>
+          <SettingsPanelSection id="settings-launch-at-login" title={copy.settings.settingsSystemIntegration}>
             <div className="settingsToggleList">
               <SettingsToggleRow
                 ariaLabel={launchAtLoginAvailable

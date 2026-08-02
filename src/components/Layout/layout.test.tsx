@@ -67,7 +67,7 @@ test("layout keeps navigation and collapse state controlled", async () => {
 test("sidebar keeps settings and update before the trailing collapse control", () => {
   const { container } = render(<LayoutHarness />);
   const labels = Array.from(container.querySelectorAll(".ch-sidebar__bottom button"))
-    .map((button) => button.textContent?.trim());
+    .map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim());
 
   expect(labels).toEqual(["Settings", "Update", "Collapse sidebar"]);
 });

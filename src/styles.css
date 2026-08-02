@@ -2837,6 +2837,21 @@ tr:last-child td {
   min-height: 0;
 }
 
+.settingsGrid [id^="settings-"] {
+  scroll-margin-block: 24px;
+}
+
+.settingsGrid [data-search-highlight="true"] {
+  outline: 2px solid color-mix(in srgb, var(--blue) 72%, transparent);
+  outline-offset: 3px;
+  animation: settings-search-highlight 1.6s ease-out;
+}
+
+@keyframes settings-search-highlight {
+  0%, 38% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--blue) 16%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
 .settingsRows {
   display: grid;
   gap: 12px;
