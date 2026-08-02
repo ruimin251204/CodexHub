@@ -5589,10 +5589,10 @@ function DashboardView({
   return (
     <div className="pageGrid">
       <section className="summaryStrip" aria-label={copy.dashboard.summaryLabel}>
-        <MetricCard label={labelFor("hosts")} value={String(hosts.length)} detailLabel={copy.dashboard.online} detailValue={String(onlineCount)} />
-        <MetricCard label={labelFor("profiles")} value={String(profiles.length)} detailLabel={copy.dashboard.applied} detailValue={String(appliedProfileCount)} />
-        <MetricCard label={labelFor("skills")} value={String(skillPacks.length)} detailLabel={copy.dashboard.enabled} detailValue={String(skillPacks.filter((pack) => pack.enabled).length)} />
-        <MetricCard label={labelFor("tasks")} value={String(tasks.length)} detailLabel={copy.dashboard.success} detailValue={String(successfulTaskCount)} />
+        <MetricCard icon="hosts" label={labelFor("hosts")} tone="blue" value={String(hosts.length)} detailLabel={copy.dashboard.online} detailValue={String(onlineCount)} />
+        <MetricCard icon="profiles" label={labelFor("profiles")} tone="green" value={String(profiles.length)} detailLabel={copy.dashboard.applied} detailValue={String(appliedProfileCount)} />
+        <MetricCard icon="skills" label={labelFor("skills")} tone="orange" value={String(skillPacks.length)} detailLabel={copy.dashboard.enabled} detailValue={String(skillPacks.filter((pack) => pack.enabled).length)} />
+        <MetricCard icon="tasks" label={labelFor("tasks")} tone="blue" value={String(tasks.length)} detailLabel={copy.dashboard.success} detailValue={String(successfulTaskCount)} />
       </section>
 
       <ServerMatrix
@@ -5611,25 +5611,32 @@ function DashboardView({
 }
 
 function MetricCard({
+  icon,
   label,
+  tone,
   value,
   detailLabel,
   detailValue
 }: {
+  icon: NavIconId;
   label: string;
+  tone: "blue" | "green" | "orange";
   value: string;
   detailLabel: string;
   detailValue: string;
 }) {
   return (
-    <article className="metricCard">
+    <article className="metricCard" data-tone={tone}>
       <div className="metricPrimary">
         <span>{label}</span>
         <strong>{value}</strong>
+        <div className="metricSecondary">
+          <span>{detailLabel}</span>
+          <b>{detailValue}</b>
+        </div>
       </div>
-      <div className="metricSecondary">
-        <span>{detailLabel}</span>
-        <b>{detailValue}</b>
+      <div className="metricIcon" aria-hidden="true">
+        <WindowsIcon id={icon} />
       </div>
     </article>
   );

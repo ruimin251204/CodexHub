@@ -955,48 +955,82 @@ dd {
 
 .metricCard {
   display: grid;
-  align-content: space-between;
-  gap: 14px;
-  min-height: 100px;
-  padding: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  min-height: 148px;
+  padding: 24px 26px;
+  --metric-accent: #2f80ed;
+  --metric-icon-bg: rgba(47, 128, 237, 0.1);
 }
 
-.metricPrimary,
-.metricSecondary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+.metricCard[data-tone="green"] {
+  --metric-accent: #22a06b;
+  --metric-icon-bg: rgba(34, 160, 107, 0.1);
+}
+
+.metricCard[data-tone="orange"] {
+  --metric-accent: #d97706;
+  --metric-icon-bg: rgba(217, 119, 6, 0.1);
+}
+
+.metricPrimary {
+  display: grid;
+  align-content: center;
   min-width: 0;
+  gap: 5px;
 }
 
-.metricPrimary span,
+.metricPrimary > span,
 .metricSecondary span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.metricPrimary span {
-  color: var(--text);
-  font-size: 1rem;
+.metricPrimary > span {
+  color: var(--text-muted);
+  font-size: 0.95rem;
   font-weight: 750;
+}
+
+.metricPrimary strong {
+  color: var(--text);
+  font-size: clamp(2.45rem, 3vw, 3rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.metricSecondary {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
 }
 
 .metricSecondary span,
 .metricSecondary b {
   color: var(--text-muted);
-  font-size: 0.86rem;
-}
-
-.metricPrimary strong {
-  color: var(--text);
-  font-size: 2.35rem;
-  line-height: 1;
-  letter-spacing: 0;
+  font-size: 0.84rem;
 }
 
 .metricSecondary b {
-  font-weight: 750;
+  font-weight: 500;
+}
+
+.metricIcon {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--metric-accent);
+  background: var(--metric-icon-bg);
+}
+
+.metricIcon .navGlyph {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.8;
 }
 
 .panelHeader h2,
@@ -3850,6 +3884,10 @@ tr:last-child td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .summaryStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pageGrid,
   .settingsGrid,
   .tasksGrid,
@@ -4200,6 +4238,16 @@ tr:last-child td {
   .metricCard,
   .hostCard {
     border-radius: 18px;
+  }
+
+  .metricCard {
+    min-height: 132px;
+    padding: 20px;
+  }
+
+  .metricIcon {
+    width: 60px;
+    height: 60px;
   }
 
   .hostMeta,
