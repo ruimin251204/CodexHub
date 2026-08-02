@@ -234,7 +234,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
   min-height: 44px;
   border: 1px solid transparent;
@@ -372,6 +372,21 @@
   stroke-width: 1.35;
 }
 
+.ch-sidebar__collapse-emoji { display: none; }
+
+/* macOS uses the same emoji language as its sidebar navigation. */
+:root[data-platform="macos"] .ch-sidebar__collapse-icon { display: none; }
+:root[data-platform="macos"] .ch-sidebar__collapse-emoji {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui, sans-serif;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .ch-sidebar__collapse-label {
   position: absolute;
   width: 1px;
@@ -414,11 +429,12 @@
 }
 
 .ch-sidebar[data-collapsed="true"] .ch-sidebar__item[data-active="true"] {
-  box-shadow: inset 0 -3px 0 var(--ch-accent);
+  /* Icon-only navigation keeps the same platform selection treatment as its expanded state. */
+  box-shadow: none;
 }
 
 /* Windows uses the compact accent marker rather than a coloured rounded selection. */
-:root[data-platform="windows"] .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__item[data-active="true"] {
+:root[data-platform="windows"] .ch-sidebar .ch-sidebar__item[data-active="true"] {
   border-color: transparent;
   color: var(--ch-text);
   /* Uses the shared surface token: white in light mode and readable in dark mode. */
@@ -426,7 +442,7 @@
   box-shadow: none;
 }
 
-:root[data-platform="windows"] .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__item[data-active="true"]::before {
+:root[data-platform="windows"] .ch-sidebar .ch-sidebar__item[data-active="true"]::before {
   position: absolute;
   top: 50%;
   left: 0;

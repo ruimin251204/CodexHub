@@ -142,6 +142,7 @@ export function Sidebar({
               <path d="M7.25 3v14" />
               <path d={collapsed ? "m10.25 7.25 2.75 2.75-2.75 2.75" : "m13 7.25-2.75 2.75L13 12.75"} />
             </svg>
+            <span className="ch-sidebar__collapse-emoji" aria-hidden="true">{collapsed ? "➡️" : "⬅️"}</span>
             <span className="ch-sidebar__collapse-label">{toggleLabel}</span>
           </button>
         ) : null}

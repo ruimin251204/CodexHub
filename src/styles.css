@@ -73,7 +73,7 @@
 
 :root[data-platform="macos"] {
   --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif;
-  --font-mono: "Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", monospace;
+  --font-mono: "Cascadia Mono", "Cascadia Code", "SF Mono", "Menlo", "Monaco", "Consolas", "PingFang SC", "Microsoft YaHei UI", monospace;
   --sidebar: rgba(246, 247, 250, 0.86);
   --surface: rgba(255, 255, 255, 0.82);
   --surface-muted: rgba(247, 248, 250, 0.76);
@@ -3038,8 +3038,8 @@ tr:last-child td {
   transform: translateX(22px);
 }
 
-.settingsSurfacePanel .panelHeader {
-  margin-bottom: 2px;
+.settingsGrid > .panel > .panelHeader.compact {
+  margin-bottom: 18px;
 }
 
 .settingsPanelLayout {
@@ -3243,10 +3243,6 @@ tr:last-child td {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.terminalPreferencesPanel .panelHeader {
-  margin-bottom: 2px;
 }
 
 .terminalPreferencesLayout {
@@ -3460,6 +3456,7 @@ tr:last-child td {
 
 .terminalTypographyGrid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 88px;
   align-items: stretch;
 }
 
@@ -3468,27 +3465,25 @@ tr:last-child td {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px;
+  padding: 10px 12px;
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface-solid));
 }
 
 .terminalTypographyCard {
   display: grid;
+  box-sizing: border-box;
   min-width: 0;
-  min-height: 132px;
+  min-height: 0;
   height: 100%;
-  grid-template-rows: auto minmax(38px, 1fr);
-  align-content: start;
+  grid-template-rows: 20px minmax(38px, 1fr);
+  gap: 8px;
+  align-items: start;
 }
 
-.terminalNumericSetting {
-  display: grid;
-  grid-template-rows: auto minmax(38px, 1fr);
-  gap: 9px;
-}
-
-.terminalNumericSetting > label,
-.terminalCompactChoice legend {
+.terminalTypographyCardLabel {
+  display: flex;
+  align-items: center;
+  min-height: 0;
   color: var(--text);
   font-size: 0.8rem;
   font-weight: 750;
@@ -3554,26 +3549,21 @@ tr:last-child td {
 }
 
 .terminalCompactChoice {
-  display: grid;
-  grid-template-rows: auto minmax(38px, 1fr);
-  gap: 9px;
-}
-
-.terminalCompactChoice legend {
   margin: 0;
-  padding: 0;
 }
 
 .terminalCompactChoiceList {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  min-height: 36px;
+  min-height: 38px;
+  height: 38px;
   gap: 4px;
 }
 
-.terminalTypographyCard > .terminalStepper,
-.terminalTypographyCard > .terminalCompactChoiceList {
+.terminalTypographyCardControl {
   align-self: end;
+  min-height: 38px;
+  height: 38px;
 }
 
 .terminalCompactChoiceList button {

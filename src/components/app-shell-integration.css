@@ -7,6 +7,12 @@
   min-height: 100vh;
 }
 
+/* Paint the chrome once so the rounded detail corner always reveals the same glass as the sidebar. */
+.codexHubAppShell {
+  background: var(--chrome-glass);
+  backdrop-filter: blur(28px) saturate(1.18);
+}
+
 .codexHubMain {
   /* This is the single owner of the detail-surface corner and background. */
   overflow: hidden;
@@ -25,7 +31,9 @@
 /* The glass chrome stays continuous around the detail-surface corner. */
 .codexHubAppShell .ch-sidebar {
   border-right: 0;
+  background: transparent;
   box-shadow: none;
+  backdrop-filter: none;
 }
 
 .desktopFrame[data-custom-titlebar="true"] .appTitleBar::after {
@@ -55,7 +63,7 @@
   flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   height: 36px;
   border: 1px solid transparent;
@@ -67,7 +75,7 @@
 .codexHubSidebarUtility:hover:not(:disabled),
 .codexHubSidebarUtility[data-active="true"] { border-color: var(--ch-border); color: var(--ch-text); background: color-mix(in srgb, var(--ch-text) 6%, transparent); }
 .codexHubSidebarUtility svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
-.codexHubSidebarUtility > span { min-width: 0; overflow: hidden; font-size: 0.75rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.codexHubSidebarUtility__label { min-width: 0; overflow: hidden; font-size: 0.75rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .codexHubSidebarUtility.sidebarUpdateButton { flex: 0 1 auto; margin: 0; border-color: color-mix(in srgb, var(--ch-accent) 24%, var(--ch-border)); padding-inline: 8px; color: var(--ch-accent-strong); background: var(--ch-accent-soft); }
 .codexHubSidebarUtility.sidebarUpdateButton:disabled { cursor: default; opacity: 0.68; }
 
@@ -77,13 +85,51 @@
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility,
 .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__collapse { min-height: 44px; height: 44px; border-radius: var(--ch-radius-md); }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) { justify-content: flex-start; padding-inline: 11px; }
-.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) > span { font-size: 0.92rem; }
+.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) .codexHubSidebarUtility__label { font-size: 0.92rem; }
+
+/* Align the glyphs and Chinese label optical centers without changing the navigation hit area. */
+.codexHubAppShell .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__label,
+.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility__label {
+  display: block;
+  line-height: 1.3;
+  transform: translateY(1px);
+}
+
+/* macOS font metrics need a one-pixel icon lift to match the CJK label optical center. */
+:root[data-platform="macos"] .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__icon,
+:root[data-platform="macos"] .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility > svg,
+:root[data-platform="macos"] .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility > .emojiIcon {
+  transform: translateY(-1px);
+}
+
 .codexHubSidebarUtility[data-active="true"] { position: relative; border-color: transparent; color: var(--ch-text); background: var(--ch-surface); }
 .codexHubSidebarUtility[data-active="true"]::before { position: absolute; top: 50%; left: 0; width: 3px; height: 20px; border-radius: 0 999px 999px 0; pointer-events: none; background: var(--ch-accent); content: ""; transform: translateY(-50%); }
+
+/* Mac uses a clean white selection surface instead of the left accent marker. */
+:root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"],
+:root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"] {
+  border-color: transparent;
+  color: var(--ch-text);
+  background: var(--surface-solid);
+  box-shadow: none;
+}
+
+:root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]::before,
+:root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"]::before {
+  display: none;
+}
+
 .ch-sidebar[data-collapsed="true"] .codexHubSidebarBrand strong,
-.ch-sidebar[data-collapsed="true"] .codexHubSidebarUtility > span { display: none; }
+.ch-sidebar[data-collapsed="true"] .codexHubSidebarUtility__label { display: none; }
 .ch-sidebar[data-collapsed="true"] .codexHubSidebarFooterActions { flex-direction: column; }
 .ch-sidebar[data-collapsed="true"] .codexHubSidebarUtility { flex: 0 0 36px; width: 36px; padding: 0; }
+
+/* Match the macOS icon card to its compact selection box so both share one center. */
+:root[data-platform="macos"] .ch-sidebar[data-collapsed="true"] .ch-sidebar__icon {
+  flex-basis: 28px;
+  width: 28px;
+  height: 28px;
+}
 
 .codexHubContent[data-section="terminal"],
 .codexHubContent[data-section="files"],
@@ -106,7 +152,7 @@
 .codexHubContent[data-section="terminal"] .workspacePageBody[data-mode="split"] .workspaceFilesRedesign { height: 100%; min-height: 0; }
 
 @media (max-width: 960px) {
-  .codexHubSidebarUtility > span { display: none; }
+  .codexHubSidebarUtility__label { display: none; }
   .codexHubSidebarUtility { flex: 0 0 36px; width: 36px; padding: 0; }
 }
 

@@ -479,6 +479,7 @@
 .chTerminalEmptyState .chTerminalPrimaryAction {
   border-color: #3b78ec;
   color: #fff;
+  font-family: var(--font-mono, "Cascadia Mono", "Cascadia Code", "SF Mono", "Menlo", "Consolas", "PingFang SC", "Microsoft YaHei UI", monospace);
   background: #2d69dc;
 }
 

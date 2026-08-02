@@ -371,7 +371,7 @@ const platformEmojiIcons = {
   dashboard: "🏠",
   hosts: "🖥️",
   files: "📁",
-  transfers: "⇅",
+  transfers: "🔄",
   profiles: "🧾",
   skills: "🧩",
   monitor: "📊",
@@ -4897,7 +4897,7 @@ function App() {
                     onClick={() => setActiveSection("settings")}
                   >
                     <NavIcon id="settings" />
-                    <span>{sectionById.get("settings")?.label}</span>
+                    <span className="codexHubSidebarUtility__label">{sectionById.get("settings")?.label}</span>
                   </button>
                   {showSidebarStableUpdateButton ? (
                     <button
@@ -4909,7 +4909,7 @@ function App() {
                       onClick={handleSidebarStableUpdate}
                     >
                       <PlatformIcon id="update" />
-                      <span>{appUpdateInstalling ? copy.settings.updateInstalling : copy.settings.sidebarInstallStableUpdate}</span>
+                      <span className="codexHubSidebarUtility__label">{appUpdateInstalling ? copy.settings.updateInstalling : copy.settings.sidebarInstallStableUpdate}</span>
                     </button>
                   ) : null}
                 </div>
@@ -10200,8 +10200,8 @@ function SettingsView({
           <section aria-label={copy.settings.terminalTypography} className="terminalPreferencesSection">
             <div className="terminalTypographyGrid">
               <div className="terminalNumericSetting terminalTypographyCard">
-                <label htmlFor="terminal-font-size">{copy.settings.terminalFontSize}</label>
-                <div className="terminalStepper">
+                <label className="terminalTypographyCardLabel" htmlFor="terminal-font-size">{copy.settings.terminalFontSize}</label>
+                <div className="terminalStepper terminalTypographyCardControl">
                   <button aria-label={`${copy.settings.terminalFontSize} −`} disabled={settingsSaving || terminalPreferences.fontSize <= 12} type="button" onClick={() => updateTerminalFontSize(terminalPreferences.fontSize - 1)}>−</button>
                   <input aria-label={copy.settings.terminalFontSize} disabled={settingsSaving} id="terminal-font-size" max={24} min={12} step={1} type="number" value={terminalPreferences.fontSize} onChange={(event) => updateTerminalFontSize(Number(event.target.value))} />
                   <span aria-hidden="true">px</span>
@@ -10210,8 +10210,8 @@ function SettingsView({
               </div>
 
               <div className="terminalNumericSetting terminalTypographyCard">
-                <label htmlFor="terminal-line-height">{copy.settings.terminalLineHeight}</label>
-                <div className="terminalStepper">
+                <label className="terminalTypographyCardLabel" htmlFor="terminal-line-height">{copy.settings.terminalLineHeight}</label>
+                <div className="terminalStepper terminalTypographyCardControl">
                   <button aria-label={`${copy.settings.terminalLineHeight} −`} disabled={settingsSaving || Number(terminalPreferences.lineHeight) <= 1} type="button" onClick={() => updateTerminalLineHeight(Number(terminalPreferences.lineHeight) - 0.05)}>−</button>
                   <input aria-label={copy.settings.terminalLineHeight} disabled={settingsSaving} id="terminal-line-height" max={1.6} min={1} step={0.05} type="number" value={terminalPreferences.lineHeight} onChange={(event) => updateTerminalLineHeight(Number(event.target.value))} />
                   <span aria-hidden="true">×</span>
@@ -10219,18 +10219,18 @@ function SettingsView({
                 </div>
               </div>
 
-              <fieldset className="terminalPreferenceField terminalCompactChoice terminalTypographyCard">
-                <legend>{copy.settings.terminalScrollback}</legend>
-                <div className="terminalCompactChoiceList" role="group" aria-label={copy.settings.terminalScrollback}>
+              <div aria-label={copy.settings.terminalScrollback} className="terminalCompactChoice terminalTypographyCard" role="group">
+                <span className="terminalTypographyCardLabel">{copy.settings.terminalScrollback}</span>
+                <div className="terminalCompactChoiceList terminalTypographyCardControl" role="group" aria-label={copy.settings.terminalScrollback}>
                   {[1000, 5000, 10000].map((value) => (
                     <button key={value} aria-pressed={terminalPreferences.scrollback === value} data-active={terminalPreferences.scrollback === value} disabled={settingsSaving} type="button" onClick={() => updateTerminalPreferences({ scrollback: value })}>{value.toLocaleString()}</button>
                   ))}
                 </div>
-              </fieldset>
+              </div>
 
-              <fieldset className="terminalPreferenceField terminalCompactChoice terminalTypographyCard">
-                <legend>{copy.settings.terminalCursor}</legend>
-                <div className="terminalCompactChoiceList terminalCursorChoiceList" role="group" aria-label={copy.settings.terminalCursor}>
+              <div aria-label={copy.settings.terminalCursor} className="terminalCompactChoice terminalTypographyCard" role="group">
+                <span className="terminalTypographyCardLabel">{copy.settings.terminalCursor}</span>
+                <div className="terminalCompactChoiceList terminalCursorChoiceList terminalTypographyCardControl" role="group" aria-label={copy.settings.terminalCursor}>
                   {(Object.keys(copy.settings.terminalCursorOptions) as Array<AppSettings["workspaceTerminalPreferences"]["cursorStyle"]>).map((choice) => (
                     <button key={choice} aria-pressed={terminalPreferences.cursorStyle === choice} data-active={terminalPreferences.cursorStyle === choice} data-cursor={choice} disabled={settingsSaving} type="button" onClick={() => updateTerminalPreferences({ cursorStyle: choice })}>
                       <span className="terminalCursorChoiceSample" aria-hidden="true" />
@@ -10238,7 +10238,7 @@ function SettingsView({
                     </button>
                   ))}
                 </div>
-              </fieldset>
+              </div>
             </div>
           </section>
 

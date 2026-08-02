@@ -1398,7 +1398,8 @@ for (const token of [
   'items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[])',
   'className="codexHubSidebarFooterActions"',
   'className="codexHubSidebarUtility"',
-  'className="codexHubSidebarUtility sidebarUpdateButton"'
+  'className="codexHubSidebarUtility sidebarUpdateButton"',
+  'className="codexHubSidebarUtility__label"'
 ]) {
   if (!app.includes(token)) fail(`missing integrated titlebar/sidebar shell token: ${token}`);
 }
@@ -2177,6 +2178,9 @@ for (const token of ["setupGuideDismissed", "setupGuideDismissed: false", "platf
 if (!settings.includes('isWindows(platform) ? "windows" : "macos"')) {
   fail("Platform auto appearance should resolve Linux to the macOS-style UI");
 }
+for (const token of ['const macosMonoFont', '"Cascadia Mono"', '"PingFang SC"', '"Microsoft YaHei UI"']) {
+  if (!settings.includes(token)) fail(`macOS terminal font stack must keep a cross-platform monospace and CJK fallback: ${token}`);
+}
 for (const token of ["resourceMonitorAutoRefresh", "resourceMonitorAutoRefresh: true", "resourceMonitorHostOrder", "resourceMonitorHostOrder: []", "resourceMonitorRefreshSeconds", "resourceMonitorRefreshSeconds: 60", "normalizeResourceMonitorRefreshSeconds"]) {
   if (!settings.includes(token)) fail(`missing resource monitor settings token: ${token}`);
 }
@@ -2239,7 +2243,7 @@ if (styles.includes("monitorBentoTile")) fail("resource monitor should use simpl
 for (const token of [".monitorTable", "min-width: 980px"]) {
   if (styles.includes(token)) fail(`resource monitor table style should be removed: ${token}`);
 }
-for (const token of ["appUpdatePanel", "appUpdateSchedule", "sidebarUpdateButton", "settingsSurfacePanel", "settingsPanelLayout", "settingsChoiceCard", "settingsToggleList", "settingsUpdateSummary", "settingsUpdateLead", "settingsUpdateFact", "taskLogModalHint", "networkProxyControl"]) {
+for (const token of ["appUpdatePanel", "appUpdateSchedule", "sidebarUpdateButton", ".settingsGrid > .panel > .panelHeader.compact", "settingsPanelLayout", "settingsChoiceCard", "settingsToggleList", "settingsUpdateSummary", "settingsUpdateLead", "settingsUpdateFact", "taskLogModalHint", "networkProxyControl"]) {
   if (!styles.includes(token)) fail(`missing stable updater Settings style token: ${token}`);
 }
 const updateSummaryStyle = styles.match(/\.settingsUpdateSummary\s*\{[^}]*\}/)?.[0] ?? "";
@@ -2297,29 +2301,89 @@ for (const token of [
   ".settingsToggleRow",
   ".settingsUpdateFact",
   ".terminalTypographyCard",
+  ".terminalTypographyCardLabel",
+  ".terminalTypographyCardControl",
   "grid-template-columns: repeat(4, minmax(0, 1fr))",
+  "grid-auto-rows: 88px",
+  "grid-template-rows: 20px minmax(38px, 1fr)",
   "container-type: inline-size",
   ".terminalPreferencesAppearanceGrid"
 ]) {
   if (!styles.includes(token)) fail(`missing unified Settings layout style token: ${token}`);
 }
+if (app.includes('<fieldset className="terminalPreferenceField terminalCompactChoice terminalTypographyCard">')) {
+  fail("Terminal typography cards must not use fieldset legends that break the shared card border and title baseline");
+}
+for (const token of [
+  'className="terminalTypographyCardLabel"',
+  'terminalStepper terminalTypographyCardControl',
+  'terminalCompactChoiceList terminalTypographyCardControl'
+]) {
+  if (!app.includes(token)) fail(`missing aligned terminal typography card markup: ${token}`);
+}
 if (app.includes('<h3 className="settingsPanelSectionTitle">') || app.includes('className="terminalPreferencesSectionTitle"')) {
   fail("Settings groups should not render redundant small section labels");
 }
 const appShellStyles = read("src/components/app-shell-integration.css");
-for (const token of [".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-lg)"]) {
+const designSystemStyles = read("src/components/design-system.css");
+if (!app.includes('transfers: "🔄"') || app.includes('transfers: "⇅"')) {
+  fail("macOS Transfers navigation must use the colored transfer emoji");
+}
+const sidebarItemStyle = designSystemStyles.match(/\.ch-sidebar__item\s*\{[^}]*\}/)?.[0] ?? "";
+const sidebarUtilityStyle = appShellStyles.match(/\.codexHubSidebarUtility\s*\{[^}]*\}/)?.[0] ?? "";
+if (!sidebarItemStyle.includes("gap: 14px") || !sidebarUtilityStyle.includes("gap: 8px")) {
+  fail("sidebar navigation and Settings utility rows must retain the widened icon-to-label spacing");
+}
+const collapsedSidebarActiveStyle = designSystemStyles.match(/\.ch-sidebar\[data-collapsed="true"\] \.ch-sidebar__item\[data-active="true"\]\s*\{[^}]*\}/)?.[0] ?? "";
+if (!collapsedSidebarActiveStyle.includes("box-shadow: none")) {
+  fail("collapsed sidebar items must not restore the curved bottom selection marker");
+}
+for (const token of [
+  ':root[data-platform="windows"] .ch-sidebar .ch-sidebar__item[data-active="true"]',
+  ':root[data-platform="windows"] .ch-sidebar .ch-sidebar__item[data-active="true"]::before'
+]) {
+  if (!designSystemStyles.includes(token)) fail(`Windows sidebar selection must be shared by expanded and collapsed states: ${token}`);
+}
+for (const token of [".codexHubAppShell", ".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-lg)"]) {
   if (!appShellStyles.includes(token)) fail(`missing rounded content-shell token: ${token}`);
 }
+const codexHubAppShellStyle = appShellStyles.match(/(?:^|\n)\.codexHubAppShell\s*\{[^}]*\}/)?.[0] ?? "";
 const codexHubMainStyle = appShellStyles.match(/\.codexHubMain\s*\{[^}]*\}/)?.[0] ?? "";
 const codexHubContentStyle = appShellStyles.match(/\.codexHubContent\s*\{[^}]*\}/)?.[0] ?? "";
+for (const token of ["background: var(--chrome-glass)", "backdrop-filter: blur(28px) saturate(1.18)"]) {
+  if (!codexHubAppShellStyle.includes(token)) fail(`app shell must provide the shared chrome behind the rounded detail corner: ${token}`);
+}
 for (const token of ["overflow: hidden", "border-top-left-radius: var(--radius-lg)", "background: var(--surface-solid)"]) {
   if (!codexHubMainStyle.includes(token)) fail(`main detail surface should own its rounded background: ${token}`);
 }
 for (const token of ["min-height: 0", "border-top-left-radius: inherit", "background: transparent"]) {
   if (!codexHubContentStyle.includes(token)) fail(`content shell should inherit the detail surface corner: ${token}`);
 }
-for (const token of [".codexHubAppShell .ch-sidebar", "border-right: 0", ".appTitleBar::after", "display: none"]) {
+for (const token of [".codexHubAppShell .ch-sidebar", "border-right: 0", "background: transparent", "backdrop-filter: none", ".appTitleBar::after", "display: none"]) {
   if (!appShellStyles.includes(token)) fail(`glass chrome must not leave a square corner divider: ${token}`);
+}
+for (const token of ['.codexHubAppShell .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__label', '.ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility__label', 'line-height: 1.3', 'transform: translateY(1px)']) {
+  if (!appShellStyles.includes(token)) fail(`sidebar icons and labels must share an optical baseline: ${token}`);
+}
+for (const token of [':root[data-platform="macos"] .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__icon', ':root[data-platform="macos"] .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility > .emojiIcon', 'transform: translateY(-1px)']) {
+  if (!appShellStyles.includes(token)) fail(`macOS sidebar icons must receive the optical baseline correction: ${token}`);
+}
+for (const token of ['.ch-sidebar[data-collapsed="true"] .codexHubSidebarUtility__label', ':root[data-platform="macos"] .ch-sidebar[data-collapsed="true"] .ch-sidebar__icon', 'flex-basis: 28px']) {
+  if (!appShellStyles.includes(token)) fail(`macOS compact sidebar must retain a centered Settings icon: ${token}`);
+}
+for (const token of ['className="ch-sidebar__collapse-emoji"', 'collapsed ? "➡️" : "⬅️"']) {
+  if (!sidebarComponent.includes(token)) fail(`sidebar collapse control must provide the macOS emoji toggle: ${token}`);
+}
+for (const token of [':root[data-platform="macos"] .ch-sidebar__collapse-icon { display: none; }', ':root[data-platform="macos"] .ch-sidebar__collapse-emoji', 'font-family: "Apple Color Emoji"']) {
+  if (!designSystemStyles.includes(token)) fail(`macOS sidebar collapse control must render an emoji instead of the line icon: ${token}`);
+}
+for (const token of [':root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]', ':root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]::before', ':root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"]', 'background: var(--surface-solid)', 'box-shadow: none']) {
+  if (!appShellStyles.includes(token)) fail(`macOS sidebar selection must use the clean surface treatment: ${token}`);
+}
+const terminalRedesignStyles = read("src/workspace/terminal-redesign.css");
+const terminalPrimaryActionStyle = terminalRedesignStyles.match(/\.chTerminalEmptyState \.chTerminalPrimaryAction\s*\{[^}]*\}/)?.[0] ?? "";
+if (!terminalPrimaryActionStyle.includes("font-family: var(--font-mono")) {
+  fail("Terminal empty-state primary action must use the cross-platform monospace font stack");
 }
 const desktopRootStyle = styles.match(/html,\s*body,\s*#root\s*\{[^}]*\}/)?.[0] ?? "";
 for (const token of ["height: 100%", "overflow: hidden"]) {

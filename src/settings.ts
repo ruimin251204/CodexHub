@@ -58,7 +58,7 @@ export const defaultSettings: AppSettings = {
 const windowsUiFont = '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI Variable", "Segoe UI", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif';
 const windowsMonoFont = '"Cascadia Mono", "Cascadia Code", "Consolas", "Microsoft YaHei UI", monospace';
 const macosUiFont = 'system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif';
-const macosMonoFont = '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", monospace';
+const macosMonoFont = '"Cascadia Mono", "Cascadia Code", "SF Mono", "Menlo", "Monaco", "Consolas", "PingFang SC", "Microsoft YaHei UI", monospace';
 
 export const fontPresets: Record<FontPreset, FontPresetDefinition> = {
   english: {
