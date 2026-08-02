@@ -8,14 +8,14 @@ const appStyles = readFileSync(`${projectRoot}/src/styles.css`, "utf8");
 const shellStyles = readFileSync(`${projectRoot}/src/components/app-shell-integration.css`, "utf8");
 
 describe("page title hierarchy", () => {
-  test("keeps management pages compact and consistent", () => {
-    expect(appStyles).toContain("--page-title-size: 1.55rem");
+  test("keeps management and Monitor page titles consistent", () => {
+    expect(appStyles).toContain("--page-title-size: 1.8rem");
     expect(appStyles).toMatch(/\.topBar h1\s*\{[^}]*font-size:\s*var\(--page-title-size\);[^}]*line-height:\s*1\.2;/su);
     expect(appStyles).toMatch(/\.monitorHeroHeader \.titleWithIcon\s*\{[^}]*font-size:\s*var\(--page-title-size\);[^}]*line-height:\s*1\.2;/su);
   });
 
-  test("gives Terminal, Files, and Transfers the larger workspace title", () => {
-    expect(appStyles).toContain("--workspace-title-size: 1.8rem");
+  test("makes Terminal, Files, and Transfers inherit the same title size", () => {
+    expect(appStyles).toContain("--workspace-title-size: var(--page-title-size)");
     for (const section of ["terminal", "files", "transfers"]) {
       expect(shellStyles).toContain(`.codexHubContent[data-section="${section}"] > .topBar h1`);
     }

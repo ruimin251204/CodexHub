@@ -24,8 +24,8 @@
   --gray: #687083;
   --app-content-max: 1220px;
   --content-max: var(--app-content-max);
-  --page-title-size: 1.55rem;
-  --workspace-title-size: 1.8rem;
+  --page-title-size: 1.8rem;
+  --workspace-title-size: var(--page-title-size);
   --titlebar-height: 44px;
   --caption-button-width: 46px;
   --caption-controls-width: calc(var(--caption-button-width) + var(--caption-button-width) + var(--caption-button-width));
