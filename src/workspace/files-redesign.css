@@ -370,10 +370,21 @@
 .workspaceFilesQuickAccess button:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
 
 .workspaceFilesTablePane {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--surface);
+}
+
+.workspaceFilesRedesign .workspaceFileEmpty {
+  position: absolute;
+  z-index: 2;
+  top: 42%;
+  left: 50%;
+  width: min(480px, calc(100% - 48px));
+  margin: 0;
+  transform: translate(-50%, -50%);
 }
 
 .workspaceFilesRedesign .workspaceFileGrid {
