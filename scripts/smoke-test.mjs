@@ -1923,7 +1923,7 @@ if (app.includes("window.setTimeout(onClose")) fail("SSH Host modal should stay 
 if (!app.includes('placeholder="127.0.0.1"') || !app.includes('placeholder="Username"')) fail("SSH Host modal should use generic placeholders");
 if (!app.includes("id_ed25519 detected") || app.includes("value={hasIdentityFile ? defaultIdentityFile")) fail("SSH Host modal must not display full IdentityFile paths");
 if (app.includes("<p>输入一次远端密码") || app.includes("<span>{message}</span>")) fail("SSH Host modal should not show intro or bottom helper copy");
-for (const token of ["TaskLogModal", "taskLogDetailModal", "taskDetailsCol", "copy.tasks.details", "copy.tasks.logs"]) {
+for (const token of ["TaskLogModal", "taskLogDetailModal", "taskTimeline", "taskTimelineLogButton", "copy.tasks.logs"]) {
   if (!app.includes(token)) fail(`missing task-history log modal token: ${token}`);
 }
 for (const token of [
@@ -2522,7 +2522,7 @@ const operationHeaderCloseStyle = styles.match(/\.operationProgressHeaderActions
 if (!operationHeaderCloseStyle.includes("position: static")) {
   fail("operation progress close button must stay inset inside the header action group");
 }
-for (const token of ["taskLogModal", "taskLogModalMeta", "taskDetailsCol", "taskTableWrap", "tasksTable", "copyPublicKeyButton", 'data-success="true"', "max-width: var(--app-content-max)"]) {
+for (const token of ["taskLogModal", "taskLogModalMeta", "taskTimeline", "taskTimelineItem", "taskTimelineLogButton", "copyPublicKeyButton", 'data-success="true"', "max-width: var(--app-content-max)"]) {
   if (!styles.includes(token)) fail(`missing simplified UI style token: ${token}`);
 }
 

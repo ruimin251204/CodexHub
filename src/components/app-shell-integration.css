@@ -84,7 +84,7 @@
 .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__bottom { align-items: stretch; min-height: 44px; }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarFooterActions,
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility,
-.ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__collapse { min-height: 44px; height: 44px; border-radius: var(--ch-radius-md); }
+.ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__collapse { min-height: 44px; height: 44px; border-radius: var(--radius-control); }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) { justify-content: flex-start; padding-inline: 11px; }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) .codexHubSidebarUtility__label { font-size: 0.92rem; }
 

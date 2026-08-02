@@ -12,7 +12,7 @@ function sourceFiles(root) {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = path.join(root, entry.name);
     if (entry.isDirectory()) return sourceFiles(fullPath);
-    return /\.tsx?$/u.test(entry.name) && !fullPath.includes(`${path.sep}generated${path.sep}`)
+    return /\.tsx?$/u.test(entry.name) && !/\.test\.tsx?$/u.test(entry.name) && !fullPath.includes(`${path.sep}generated${path.sep}`)
       ? [fullPath]
       : [];
   });

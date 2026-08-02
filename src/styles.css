@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -128,7 +128,7 @@
 :root[data-platform="macos"] .modalCloseButton {
   width: 30px;
   height: 30px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface);
 }
 
@@ -385,7 +385,7 @@ dd {
 .titleBarIcon {
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-control-sm);
 }
 
 .captionControls {
@@ -536,7 +536,7 @@ dd {
   width: 36px;
   height: 36px;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   object-fit: cover;
   background: var(--surface-solid);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -566,7 +566,7 @@ dd {
   gap: 12px;
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 9px 10px 9px 13px;
   color: var(--text-muted);
   text-align: left;
@@ -615,7 +615,7 @@ dd {
   flex-basis: 28px;
   width: 28px;
   height: 28px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
@@ -638,7 +638,7 @@ dd {
   width: 8px;
   height: 8px;
   margin-left: auto;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--blue);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent);
 }
@@ -669,7 +669,7 @@ dd {
   margin-top: auto;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-surface);
   background: var(--surface);
 }
 
@@ -683,7 +683,7 @@ dd {
   flex: 0 0 auto;
   margin-left: auto;
   border: 1px solid color-mix(in srgb, var(--blue) 70%, var(--border));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 4px 7px;
   color: #ffffff;
   font-size: 0.72rem;
@@ -701,7 +701,7 @@ dd {
 .statusDot {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--gray);
 }
 
@@ -875,7 +875,7 @@ dd {
   min-width: 0;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--surface-muted);
 }
 
@@ -974,7 +974,7 @@ dd {
 .panel,
 .metricCard {
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-surface);
   background: var(--surface);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(14px) saturate(1.04);
@@ -1079,7 +1079,7 @@ dd {
   gap: 14px;
   min-height: 228px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   padding: 16px;
   background: var(--surface-solid);
 }
@@ -1147,7 +1147,7 @@ dd {
   align-items: center;
   width: fit-content;
   border: 1px solid currentColor;
-  border-radius: 4px;
+  border-radius: var(--radius-control-sm);
   padding: 3px 7px;
   font-size: 0.73rem;
   font-weight: 750;
@@ -1174,7 +1174,7 @@ dd {
 .miniButton,
 .segmentedControl button {
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text);
   font-weight: 700;
   background: var(--surface-solid);
@@ -1241,7 +1241,7 @@ dd {
   gap: 10px;
   padding: 40px 20px;
   border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-surface);
   text-align: center;
   background: var(--surface-muted);
 }
@@ -1250,7 +1250,7 @@ dd {
   width: 48px;
   height: 48px;
   border: 2px solid var(--border-strong);
-  border-radius: 16px;
+  border-radius: var(--radius-surface);
   background:
     linear-gradient(90deg, transparent 47%, var(--border-strong) 48%, var(--border-strong) 52%, transparent 53%),
     linear-gradient(0deg, transparent 47%, var(--border-strong) 48%, var(--border-strong) 52%, transparent 53%);
@@ -1275,7 +1275,7 @@ dd {
   height: 58px;
   place-items: center;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: var(--text);
   line-height: 1;
   background: var(--surface-solid);
@@ -1305,7 +1305,7 @@ dd {
   height: 70px;
   place-items: center;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: var(--text);
   line-height: 1;
   background: var(--surface-solid);
@@ -1317,7 +1317,7 @@ dd {
   min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-surface);
   background: var(--surface-solid);
 }
 
@@ -1451,7 +1451,7 @@ tr:last-child td {
 }
 
 .monitorRefreshButton {
-  border-radius: var(--monitor-control-radius);
+  border-radius: var(--radius-control);
 }
 
 .monitorAutoRefreshControl {
@@ -1459,7 +1459,7 @@ tr:last-child td {
   align-items: center;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: var(--monitor-control-radius);
+  border-radius: var(--radius-control);
   padding: 1px 8px 1px 10px;
   color: var(--text-muted);
   background: var(--surface-solid);
@@ -1494,7 +1494,7 @@ tr:last-child td {
   width: 58px;
   height: 28px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   padding: 0 7px;
   color: var(--text);
   background: var(--surface-muted);
@@ -1505,7 +1505,7 @@ tr:last-child td {
   margin: 10px 0 0;
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--red) 28%, var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: var(--red);
   background: color-mix(in srgb, var(--red) 9%, transparent);
   overflow-wrap: anywhere;
@@ -1528,7 +1528,7 @@ tr:last-child td {
   margin: 0 0 6px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, var(--surface-muted));
 }
 
@@ -1559,15 +1559,15 @@ tr:last-child td {
 }
 
 .monitorSegmentedMeter span:first-child {
-  border-radius: 999px 0 0 999px;
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
 }
 
 .monitorSegmentedMeter span:last-child {
-  border-radius: 0 999px 999px 0;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
 }
 
 .monitorSegmentedMeter span:only-child {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .monitorBentoGrid {
@@ -1636,7 +1636,7 @@ tr:last-child td {
   display: block;
   width: 52px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text-muted) 34%, transparent);
 }
 
@@ -1648,7 +1648,7 @@ tr:last-child td {
   min-width: 0;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--blue) 64%, var(--border));
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   padding: 9px 12px 12px;
   pointer-events: none;
   background: var(--surface-solid);
@@ -1660,7 +1660,7 @@ tr:last-child td {
   justify-self: center;
   width: 52px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text-muted) 34%, transparent);
 }
 
@@ -1678,7 +1678,7 @@ tr:last-child td {
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #ffffff;
   background: var(--gray);
 }
@@ -1728,7 +1728,7 @@ tr:last-child td {
   min-height: 58px;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   padding: 8px 9px;
   background: var(--surface-muted);
 }
@@ -1869,7 +1869,7 @@ tr:last-child td {
   width: 100%;
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--monitor-user-color) 30%, var(--border));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 6px 8px;
   background: color-mix(in srgb, var(--monitor-user-color) 10%, var(--surface-muted));
   color: inherit;
@@ -1905,7 +1905,7 @@ tr:last-child td {
   width: 7px;
   height: 7px;
   margin-right: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--monitor-user-color);
   vertical-align: 1px;
 }
@@ -1936,7 +1936,7 @@ tr:last-child td {
   min-width: 0;
   margin: 0 2px;
   border: 1px solid color-mix(in srgb, var(--monitor-user-color) 22%, var(--border));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   background: color-mix(in srgb, var(--monitor-user-color) 4%, var(--surface));
   overflow: hidden;
 }
@@ -2435,7 +2435,7 @@ tr:last-child td {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   color: var(--text);
   background: var(--surface-solid);
@@ -2478,7 +2478,7 @@ tr:last-child td {
   display: grid;
   gap: 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   padding: 12px;
   background: var(--surface-muted);
 }
@@ -2503,7 +2503,7 @@ tr:last-child td {
   min-height: 180px;
   resize: vertical;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   color: var(--text);
   line-height: 1.5;
@@ -2523,7 +2523,7 @@ tr:last-child td {
   gap: 10px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   padding: 10px;
   background: var(--surface-muted);
 }
@@ -2634,7 +2634,7 @@ tr:last-child td {
   appearance: none;
   cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--skill-color) 70%, var(--border));
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   padding: 3px 7px;
   color: color-mix(in srgb, var(--skill-color) 76%, var(--text));
   font: inherit;
@@ -2663,6 +2663,159 @@ tr:last-child td {
   display: flex;
   justify-content: center;
   padding-top: 14px;
+}
+
+.taskTimeline {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+}
+
+.taskTimelineItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  min-height: 92px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  transition: background 140ms ease;
+}
+
+.taskTimelineItem + .taskTimelineItem {
+  border-top: 1px solid var(--border);
+}
+
+.taskTimelineItem:hover {
+  background: color-mix(in srgb, var(--blue) 4%, var(--surface-solid));
+}
+
+.taskTimelineRail {
+  position: relative;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+}
+
+.taskTimelineRail::before {
+  position: absolute;
+  top: -15px;
+  bottom: -15px;
+  left: 50%;
+  width: 1px;
+  background: var(--border-strong);
+  content: "";
+}
+
+.taskTimelineItem:first-child .taskTimelineRail::before { top: 50%; }
+.taskTimelineItem:last-child .taskTimelineRail::before { bottom: 50%; }
+.taskTimelineItem:only-child .taskTimelineRail::before { display: none; }
+
+.taskTimelineDot {
+  position: relative;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface-solid);
+  border-radius: var(--radius-pill);
+  background: var(--text-faint);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.taskTimelineItem[data-status="success"] .taskTimelineDot { background: var(--green); }
+.taskTimelineItem[data-status="failed"] .taskTimelineDot { background: var(--red); }
+.taskTimelineItem[data-status="running"] .taskTimelineDot { background: var(--blue); }
+.taskTimelineItem[data-status="queued"] .taskTimelineDot { background: var(--yellow); }
+
+.taskTimelineBody {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.taskTimelineHeading {
+  display: flex;
+  min-width: 0;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.taskTimelineHeading > div {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.taskTimelineHeading strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskTimelineHeading span,
+.taskTimelineBody time {
+  color: var(--text-faint);
+  font-size: 0.75rem;
+}
+
+.taskTimelineBody p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskTimelineLogButton {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--surface-solid);
+}
+
+.taskTimelineLogButton:hover {
+  border-color: var(--border-strong);
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.taskTimelineLogButton .navGlyph {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 720px) {
+  .taskTimelineItem {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px 10px;
+  }
+
+  .taskTimelineHeading {
+    align-items: flex-start;
+  }
+
+  .taskTimelineHeading > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  .taskTimelineBody p {
+    white-space: normal;
+  }
 }
 
 .tasksTable {
@@ -2726,7 +2879,7 @@ tr:last-child td {
   display: block;
   border: 1px solid var(--border);
   border-left: 4px solid var(--gray);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 10px;
   background: var(--surface-solid);
 }
@@ -2800,7 +2953,7 @@ tr:last-child td {
   overflow: auto;
   margin: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 10px;
   color: var(--text-muted);
   white-space: pre-wrap;
@@ -2816,7 +2969,7 @@ tr:last-child td {
   max-height: calc(100vh - 48px);
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-dialog);
   padding: 20px;
   background: var(--surface);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
@@ -2909,7 +3062,7 @@ tr:last-child td {
   display: grid;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 10px;
   background: var(--surface-muted);
 }
@@ -2938,7 +3091,7 @@ tr:last-child td {
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   background: var(--surface-muted);
   line-height: 1.5;
 }
@@ -3032,7 +3185,7 @@ tr:last-child td {
 .settingSelectRow select {
   width: 100%;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   color: var(--text);
   background: var(--surface-solid);
@@ -3050,7 +3203,7 @@ tr:last-child td {
   margin: 6px 0 14px;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--surface-muted);
 }
 
@@ -3165,7 +3318,7 @@ tr:last-child td {
   width: 52px;
   height: 30px;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 3px;
   background: rgba(104, 112, 131, 0.24);
   transition: background 160ms ease, border-color 160ms ease;
@@ -3179,7 +3332,7 @@ tr:last-child td {
 .pillToggleThumb {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--surface-solid);
   box-shadow: var(--shadow-soft);
   transform: translateX(0);
@@ -3230,7 +3383,7 @@ tr:last-child td {
   min-height: 104px;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   padding: 12px;
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface-solid));
 }
@@ -3262,7 +3415,7 @@ tr:last-child td {
   display: grid;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--surface-muted) 54%, var(--surface-solid));
 }
 
@@ -3313,7 +3466,7 @@ tr:last-child td {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   min-height: 92px;
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   padding: 16px;
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface-solid));
 }
@@ -3339,7 +3492,7 @@ tr:last-child td {
   align-items: center;
   gap: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   padding: 14px;
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface-solid));
 }
@@ -3382,7 +3535,7 @@ tr:last-child td {
   min-width: 0;
   gap: 7px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   padding: 12px;
   background: color-mix(in srgb, var(--surface-muted) 50%, var(--surface-solid));
 }
@@ -3462,7 +3615,7 @@ tr:last-child td {
   min-width: 0;
   min-height: 48px;
   gap: 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 8px 10px;
   text-align: left;
 }
@@ -3503,7 +3656,7 @@ tr:last-child td {
   display: grid;
   min-width: 0;
   gap: 7px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 7px;
   text-align: left;
 }
@@ -3525,7 +3678,7 @@ tr:last-child td {
   gap: 4px 6px;
   overflow: hidden;
   border: 1px solid var(--terminal-preview-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 7px;
   color: var(--terminal-preview-text);
   background: var(--terminal-preview-bg);
@@ -3616,7 +3769,7 @@ tr:last-child td {
 .terminalCompactChoice {
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   padding: 10px 12px;
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface-solid));
 }
@@ -3649,7 +3802,7 @@ tr:last-child td {
   min-height: 36px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--surface-solid);
 }
 
@@ -3721,7 +3874,7 @@ tr:last-child td {
 .terminalCompactChoiceList button {
   min-width: 0;
   min-height: 36px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   padding: 4px 5px;
   font-size: 0.72rem;
   font-weight: 750;
@@ -3785,7 +3938,7 @@ tr:last-child td {
   display: grid;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--surface-muted) 54%, var(--surface-solid));
 }
 
@@ -3928,7 +4081,7 @@ tr:last-child td {
 
 :root[data-platform="macos"] .dividedSettingsRows {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-surface);
   padding: 0 12px;
   background: color-mix(in srgb, var(--surface) 82%, transparent);
 }
@@ -3943,13 +4096,13 @@ tr:last-child td {
 
 :root[data-platform="macos"] .segmentedControl {
   gap: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 8%, transparent);
   backdrop-filter: blur(18px) saturate(1.1);
 }
 
 :root[data-platform="macos"] .segmentedControl button {
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   font-weight: 650;
 }
 
@@ -3960,7 +4113,7 @@ tr:last-child td {
 }
 
 :root[data-platform="macos"] .pillToggle {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .commandGrid {
@@ -3971,7 +4124,7 @@ tr:last-child td {
 
 .commandGrid code {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control-sm);
   padding: 7px 10px;
   color: var(--text);
   background: var(--surface-muted);
@@ -4336,7 +4489,7 @@ tr:last-child td {
   .panel,
   .metricCard,
   .hostCard {
-    border-radius: 18px;
+    border-radius: var(--radius-surface);
   }
 
   .hostMeta,
@@ -4465,7 +4618,7 @@ tr:last-child td {
   gap: 10px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-surface);
   padding: 12px;
   margin-top: 12px;
   background: var(--surface-muted);
@@ -4484,7 +4637,7 @@ tr:last-child td {
 .inlineSetup input {
   width: 100%;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   color: var(--text);
   background: var(--surface-solid);
@@ -4501,7 +4654,7 @@ tr:last-child td {
   width: 30px;
   height: 30px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   background: transparent;
   opacity: 1;
@@ -4531,7 +4684,7 @@ tr:last-child td {
 .fieldGroup textarea {
   width: 100%;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   color: var(--text);
   background: var(--surface-solid);
@@ -4602,7 +4755,7 @@ tr:last-child td {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 10px 42px 10px 12px;
   color: var(--text);
   background: var(--surface-solid);
@@ -4664,7 +4817,7 @@ tr:last-child td {
   align-items: start;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   padding: 11px;
   background: var(--surface-solid);
   cursor: pointer;
@@ -4824,7 +4977,7 @@ tr:last-child td {
 }
 
 .hostsGrid .detailGrid > div {
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--ch-surface-soft) 84%, var(--ch-surface));
 }
 
@@ -4861,7 +5014,7 @@ tr:last-child td {
 .batchProcessDeclinedHint {
   margin: 0;
   border: 1px solid color-mix(in srgb, var(--yellow) 42%, var(--border));
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 9px 10px;
   color: var(--text-muted);
   background: color-mix(in srgb, var(--yellow) 8%, var(--surface-solid));
@@ -4897,7 +5050,7 @@ tr:last-child td {
   align-items: start;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 11px;
   background: var(--surface-solid);
   cursor: pointer;
@@ -4937,7 +5090,7 @@ tr:last-child td {
   display: grid;
   gap: 10px;
   border: 1px solid color-mix(in srgb, var(--red) 48%, var(--border));
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 11px;
   color: var(--text);
   background: color-mix(in srgb, var(--red) 9%, var(--surface-solid));
@@ -5003,7 +5156,7 @@ tr:last-child td {
   max-height: 190px;
   overflow: auto;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 4px;
   background: var(--surface);
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
@@ -5012,7 +5165,7 @@ tr:last-child td {
 .profileModelOption {
   min-height: 32px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   padding: 7px 9px;
   color: var(--text);
   text-align: left;
@@ -5029,7 +5182,7 @@ tr:last-child td {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   padding: 3px;
   background: var(--surface-solid);
 }
@@ -5037,7 +5190,7 @@ tr:last-child td {
 .profileFastModeOption {
   min-height: 32px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-control-sm);
   color: var(--text-muted);
   background: transparent;
 }
@@ -5051,7 +5204,7 @@ tr:last-child td {
   display: grid;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   padding: 11px;
   background: var(--surface-muted);
 }
@@ -5102,7 +5255,7 @@ tr:last-child td {
   align-items: center;
   gap: 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 9px;
   background: var(--surface-solid);
 }
@@ -5146,7 +5299,7 @@ tr:last-child td {
   align-items: center;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 9px;
   background: var(--surface-solid);
   cursor: pointer;
@@ -5172,7 +5325,7 @@ tr:last-child td {
   display: grid;
   gap: 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 10px;
   background: var(--surface-solid);
 }
@@ -5207,7 +5360,7 @@ tr:last-child td {
   display: grid;
   gap: 4px;
   border: 1px solid color-mix(in srgb, var(--yellow) 46%, var(--border));
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   padding: 11px;
   color: var(--text);
   background: color-mix(in srgb, var(--yellow) 10%, var(--surface-solid));
@@ -5261,7 +5414,7 @@ tr:last-child td {
   display: grid;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   background: var(--surface-muted);
 }
 
@@ -5316,7 +5469,7 @@ tr:last-child td {
   overflow: auto;
   margin: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 12px;
   color: var(--text-muted);
   font-family: var(--font-mono);
@@ -5360,7 +5513,7 @@ button:disabled {
   max-height: calc(100vh - 48px);
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-dialog);
   padding: 20px;
   background: var(--surface);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
@@ -5378,7 +5531,7 @@ button:disabled {
   max-height: calc(100vh - 48px);
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-dialog);
   padding: 22px;
   background: var(--surface);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
@@ -5403,7 +5556,7 @@ button:disabled {
   width: fit-content;
   max-width: 100%;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   padding: 5px 8px;
   color: var(--text-muted);
   white-space: normal;
@@ -5422,7 +5575,7 @@ button:disabled {
   gap: 5px;
   min-width: 0;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 14px;
   color: var(--text);
   text-align: left;
@@ -5478,7 +5631,7 @@ button:disabled {
   gap: 14px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 12px 14px;
   background: var(--surface-solid);
 }
@@ -5495,7 +5648,7 @@ button:disabled {
   max-height: min(360px, 46vh);
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   background: var(--surface-solid);
 }
 
@@ -5564,7 +5717,7 @@ button:disabled {
   width: 32px;
   height: 32px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   background: var(--surface);
 }
@@ -5705,7 +5858,7 @@ button:disabled {
   max-height: calc(100vh - 48px);
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-dialog);
   padding: 20px;
   background: var(--surface);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
@@ -5750,7 +5903,7 @@ button:disabled {
   display: grid;
   gap: 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   padding: 12px;
   background: var(--surface-muted);
 }
@@ -5795,7 +5948,7 @@ button:disabled {
   height: 18px;
   border: 3px solid color-mix(in srgb, var(--blue) 18%, transparent);
   border-top-color: var(--blue);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   animation: spin 0.9s linear infinite;
 }
 
@@ -5804,7 +5957,7 @@ button:disabled {
   max-height: 260px;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   background: var(--surface-muted);
 }
 
@@ -5955,7 +6108,7 @@ button:disabled {
   overflow: auto;
   margin: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 10px;
   color: var(--text);
   font-size: 0.78rem;
@@ -6015,7 +6168,7 @@ button:disabled {
 
 .operationOverallStatus {
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 3px 9px;
   color: var(--text-muted);
   font-size: 0.74rem;
@@ -6075,7 +6228,7 @@ button:disabled {
   min-width: 132px;
   max-width: 220px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 8px 10px;
   color: var(--text-muted);
   background: var(--surface-muted);
@@ -6104,7 +6257,7 @@ button:disabled {
 .operationHostStatusDot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--gray);
 }
 
@@ -6129,7 +6282,7 @@ button:disabled {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: var(--surface-muted);
 }
 
@@ -6191,7 +6344,7 @@ button:disabled {
   width: 28px;
   height: 28px;
   border: 2px solid color-mix(in srgb, var(--gray) 45%, var(--border));
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--gray);
   font-size: 1rem;
   font-weight: 900;
@@ -6218,7 +6371,7 @@ button:disabled {
   height: 18px;
   border: 3px solid color-mix(in srgb, var(--blue) 20%, transparent);
   border-top-color: var(--blue);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   animation: spin 0.9s linear infinite;
 }
 
@@ -6232,7 +6385,7 @@ button:disabled {
 .operationStatusDots i {
   width: 3px;
   height: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: currentColor;
 }
 
@@ -6327,7 +6480,7 @@ button:disabled {
 .operationStepStreamGrid pre {
   max-height: 180px;
   overflow: auto;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   padding: 8px;
   background: color-mix(in srgb, var(--bg-strong) 82%, black 6%);
 }
@@ -6336,7 +6489,7 @@ button:disabled {
   display: grid;
   gap: 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   padding: 14px;
   background: var(--surface-muted);
 }
@@ -6360,7 +6513,7 @@ button:disabled {
 
 .bootstrapStep {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 10px;
   background: var(--surface-solid);
 }
@@ -6392,7 +6545,7 @@ button:disabled {
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-weight: 800;
 }
 
@@ -6428,7 +6581,7 @@ button:disabled {
   margin: 0;
   max-height: 160px;
   overflow: auto;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   padding: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -6463,7 +6616,7 @@ button:disabled {
   align-items: center;
   gap: 10px;
   border: 1px solid color-mix(in srgb, var(--blue) 58%, var(--border));
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--blue) 9%, var(--surface-solid));
   box-shadow: 0 18px 44px rgb(15 23 42 / 22%), 0 4px 12px rgb(15 23 42 / 12%);
   color: var(--text);
@@ -6542,7 +6695,7 @@ button:disabled {
 
 .sshHostMessage {
   margin: 0 24px 4px;
-  border-radius: 9px;
+  border-radius: var(--radius-surface);
   background: var(--surface-muted);
   color: var(--text-secondary);
   padding: 9px 12px;
@@ -6577,7 +6730,7 @@ button:disabled {
   gap: 12px;
   margin: 0 auto 16px;
   border: 1px solid color-mix(in srgb, var(--yellow) 64%, var(--border));
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--yellow) 9%, var(--surface));
   padding: 14px;
 }
@@ -6623,7 +6776,7 @@ button:disabled {
   min-width: 0;
   gap: 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   padding: 16px;
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
   box-shadow: var(--shadow-soft);
@@ -6670,7 +6823,7 @@ button:disabled {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: var(--yellow);
   background: color-mix(in srgb, var(--yellow) 12%, transparent);
 }
@@ -6691,7 +6844,7 @@ button:disabled {
   display: block;
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--border-strong) 72%, var(--border));
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   padding: 9px 10px;
   color: var(--text);
   font-family: "Consolas", "Cascadia Mono", "SFMono-Regular", "Menlo", monospace;
@@ -6741,7 +6894,7 @@ button:disabled {
   display: grid;
   gap: 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   padding: 16px;
   background: var(--surface-solid);
 }

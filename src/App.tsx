@@ -87,7 +87,7 @@ import { ActionButton, Card, DataTable, MetricCard as SharedMetricCard, SearchBo
 import type { DataTableColumn, StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
 import { searchGlobalEntries } from "./search/globalSearch";
-import { createGlobalSearchCatalog } from "./search/globalSearchCatalog";
+import { createGlobalSearchCatalog, hostSearchKeywordsCopy } from "./search/globalSearchCatalog";
 import type { CodexHubSearchEntry, SearchSectionId } from "./search/globalSearchCatalog";
 import "./components/design-system.css";
 import "./components/app-shell-integration.css";
@@ -4872,7 +4872,7 @@ function App() {
       detail: personalInfoMasker.maskText(host.name),
       section: "terminal" as const,
       hostAlias: host.hostAlias,
-      keywords: [host.hostAlias, host.name, "host", "server", "ssh", "主机", "服务器"],
+      keywords: [host.hostAlias, host.name, ...hostSearchKeywordsCopy],
       priority: 15
     }))
   ], [copy, hosts, personalInfoMasker]);
@@ -9880,36 +9880,37 @@ export function TasksView({
         {tasks.length === 0 ? (
           <EmptyListState copy={copy} message={copy.emptyLists.tasks} variant="tasks" />
         ) : (
-          <div className="tableWrap taskTableWrap">
-            <table className="tasksTable">
-              <thead>
-                <tr>
-                  <th>{copy.tasks.action}</th>
-                  <th>{copy.tasks.host}</th>
-                  <th>{copy.tasks.status}</th>
-                  <th>{copy.tasks.started}</th>
-                  <th>{copy.tasks.summary}</th>
-                  <th className="taskDetailsCol">{copy.tasks.details}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => (
-                  <tr key={task.id}>
-                    <td><strong>{localizeTaskAction(task.action, copy)}</strong></td>
-                    <td>{personalInfo.maskText(task.hostName)}</td>
-                    <td><TaskStatusBadge copy={copy} status={task.status} /></td>
-                    <td>{formatTaskTimestamp(task, copy, nowTick)}</td>
-                    <td>{personalInfo.maskText(localizeTaskSummary(task, copy))}</td>
-                    <td className="taskDetailsCol">
-                      <button className="miniButton" type="button" onClick={() => {
-                        setSelectedTaskId(task.id);
-                        onTaskViewed(task.id);
-                      }}>{copy.tasks.logs}</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div aria-label={copy.tasks.taskHistory} className="taskTimeline" role="list">
+            {tasks.map((task) => (
+              <article className="taskTimelineItem" data-status={task.status} key={task.id} role="listitem">
+                <span className="taskTimelineRail" aria-hidden="true">
+                  <span className="taskTimelineDot" />
+                </span>
+                <div className="taskTimelineBody">
+                  <div className="taskTimelineHeading">
+                    <div>
+                      <strong>{localizeTaskAction(task.action, copy)}</strong>
+                      <span>{personalInfo.maskText(task.hostName)}</span>
+                    </div>
+                    <TaskStatusBadge copy={copy} status={task.status} />
+                  </div>
+                  <p>{personalInfo.maskText(localizeTaskSummary(task, copy))}</p>
+                  <time dateTime={task.startedAt}>{formatTaskTimestamp(task, copy, nowTick)}</time>
+                </div>
+                <button
+                  aria-label={`${copy.tasks.logs}: ${localizeTaskAction(task.action, copy)}`}
+                  className="taskTimelineLogButton"
+                  title={copy.tasks.logs}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTaskId(task.id);
+                    onTaskViewed(task.id);
+                  }}
+                >
+                  <NavIcon id="tasks" />
+                </button>
+              </article>
+            ))}
           </div>
         )}
         {hasMore ? (
