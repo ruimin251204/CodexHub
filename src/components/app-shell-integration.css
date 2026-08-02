@@ -140,7 +140,7 @@
 .codexHubContent[data-section="transfers"] > .topBar { flex: 0 0 auto; width: min(100%, var(--app-content-max)); max-width: var(--app-content-max); min-height: 58px; margin: 0 auto; padding: 0 4px 12px; align-items: center; }
 .codexHubContent[data-section="terminal"] > .topBar h1,
 .codexHubContent[data-section="files"] > .topBar h1,
-.codexHubContent[data-section="transfers"] > .topBar h1 { font-size: 1.3rem; line-height: 1.2; }
+.codexHubContent[data-section="transfers"] > .topBar h1 { font-size: var(--workspace-title-size); line-height: 1.2; }
 .codexHubContent[data-section="terminal"] > .workspacePage,
 .codexHubContent[data-section="files"] > .workspacePage,
 .codexHubContent[data-section="transfers"] > .workspacePage { flex: 1 1 0; width: min(100%, var(--app-content-max)); max-width: var(--app-content-max); min-height: 0; margin: 0 auto; overflow: hidden; }
