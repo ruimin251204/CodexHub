@@ -4,7 +4,7 @@
 }
 
 .desktopFrame:not([data-custom-titlebar="true"]) > .codexHubAppShell {
-  min-height: 0;
+  min-height: 100vh;
 }
 
 /* Paint the chrome once so the rounded detail corner always reveals the same glass as the sidebar. */
@@ -16,7 +16,7 @@
 .codexHubMain {
   /* This is the single owner of the detail-surface corner and background. */
   overflow: hidden;
-  border-top-left-radius: var(--radius-main-corner);
+  border-top-left-radius: var(--radius-lg);
   background: var(--surface-solid);
 }
 
@@ -46,13 +46,13 @@
   gap: 10px;
   min-width: 0;
 }
-.codexHubSidebarBrand img { width: 30px; height: 30px; border-radius: var(--radius-control); }
+.codexHubSidebarBrand img { width: 30px; height: 30px; border-radius: 8px; }
 .codexHubSidebarBrand strong { overflow: hidden; font-size: 1.08rem; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
 
 .codexHubGlobalSearch { position: relative; }
-.codexHubSearchResults { position: absolute; z-index: 80; top: calc(100% + 8px); right: 0; left: 0; display: grid; max-height: 320px; overflow: auto; padding: 6px; border: 1px solid var(--ch-border); border-radius: var(--radius-dialog); background: var(--ch-surface); box-shadow: var(--ch-shadow-md); }
+.codexHubSearchResults { position: absolute; z-index: 80; top: calc(100% + 8px); right: 0; left: 0; display: grid; max-height: 320px; overflow: auto; padding: 6px; border: 1px solid var(--ch-border); border-radius: 11px; background: var(--ch-surface); box-shadow: var(--ch-shadow-md); }
 .codexHubSearchResults:empty::before { content: "—"; padding: 12px; color: var(--ch-text-faint); text-align: center; }
-.codexHubSearchResults button { display: grid; gap: 2px; padding: 9px 10px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--ch-text); text-align: left; }
+.codexHubSearchResults button { display: grid; gap: 2px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ch-text); text-align: left; }
 .codexHubSearchResults button:hover { background: var(--ch-accent-soft); }
 .codexHubSearchResults strong { font-size: 0.78rem; }
 .codexHubSearchResults small { overflow: hidden; color: var(--ch-text-muted); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -68,7 +68,7 @@
   min-width: 0;
   height: 36px;
   border: 1px solid transparent;
-  border-radius: var(--radius-control);
+  border-radius: 9px;
   padding: 0 8px;
   color: var(--ch-text-muted);
   background: transparent;
@@ -84,7 +84,7 @@
 .ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__bottom { align-items: stretch; min-height: 44px; }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarFooterActions,
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility,
-.ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__collapse { min-height: 44px; height: 44px; border-radius: var(--radius-control); }
+.ch-sidebar:not([data-collapsed="true"]) .ch-sidebar__collapse { min-height: 44px; height: 44px; border-radius: var(--ch-radius-md); }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) { justify-content: flex-start; padding-inline: 11px; }
 .ch-sidebar:not([data-collapsed="true"]) .codexHubSidebarUtility:not(.sidebarUpdateButton) .codexHubSidebarUtility__label { font-size: 0.92rem; }
 
@@ -104,7 +104,7 @@
 }
 
 .codexHubSidebarUtility[data-active="true"] { position: relative; border-color: transparent; color: var(--ch-text); background: var(--ch-surface); }
-.codexHubSidebarUtility[data-active="true"]::before { position: absolute; top: 50%; left: 0; width: 3px; height: 20px; border-radius: 0 var(--radius-pill) var(--radius-pill) 0; pointer-events: none; background: var(--ch-accent); content: ""; transform: translateY(-50%); }
+.codexHubSidebarUtility[data-active="true"]::before { position: absolute; top: 50%; left: 0; width: 3px; height: 20px; border-radius: 0 999px 999px 0; pointer-events: none; background: var(--ch-accent); content: ""; transform: translateY(-50%); }
 
 /* Mac uses a clean white selection surface instead of the left accent marker. */
 :root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"],

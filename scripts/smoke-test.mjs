@@ -1267,7 +1267,7 @@ const alertModalFrameSource = read("src/ui/AlertModalFrame.tsx");
 for (const token of ["MonitorView", "MonitorHostCard", "MonitorHostStatusIndicator", "CircularStatusIndicator", "HostStatusIndicator", "resolveMonitorHostIndicatorState", "resolveHostStatusIndicatorState", "applyRemoteProbeResultToHosts", "applyRemoteProbeBatchResultsToHosts", "resourcePendingHostAliases", "monitorBentoGrid", "ResizeObserver", "resourceMonitorAutoRefresh", "resourceMonitorRefreshSeconds", "resourceMonitorHostOrder", "monitorAutoRefreshControl", "pillToggle", "monitorDragHandle", "monitorSegmentedMeter", "aggregateGpuProcessUsers", "sortMonitorGpuProcesses", "expandedUsers", "aria-expanded={expanded}", "sampledAt={snapshot?.sampledAt", "elapsedSeconds", "copy.monitor.refreshNow", "copy.monitor.autoRefresh", "copy.monitor.gpuProcesses", "copy.monitor.unifiedMemory", "resolveMonitorGpuMemoryUsage", "hostMemoryTotalBytes", "sampleHostResources", "mergeHostResourceSnapshot", "resource-monitor-${Date.now()}", "监控", "onPointerDown", "previewMonitorHostOrder", "monitorDragGhost", "data-placeholder", "requestAnimationFrame", "stopMonitorAutoScroll", "MonitorMeterTone", "host.hostAlias", "formatCpuLoadSummary", "pendingReorderTimerRef", "monitorCpuPercent", "summarizeGpuMemory", 'aria-label={label}', 'role="img"', 'stroke="currentColor"']) {
   if (!app.includes(token)) fail(`missing resource monitor UI token: ${token}`);
 }
-if (!/id: "alias"[\s\S]*?id: "status"[\s\S]*?id: "source"/.test(app)) {
+if (!/<th className="sshHostsAliasCol">[\s\S]*?<th className="sshHostsOnlineCol">[\s\S]*?<th className="sshHostsSourceCol">/.test(app)) {
   fail("Host list columns should keep Alias -> Online -> Source order");
 }
 if ((app.match(/<HostStatusIndicator/g) ?? []).length < 3) fail("Host list, matrix, and details should share the circular Host status indicator");
@@ -1329,7 +1329,7 @@ if (!app.includes('const canCheckStableUpdate = appUpdateStatus.channel === "sta
 if (app.includes('const canCheckStableUpdate = appUpdateStatus.channel === "stable" && appUpdateStatus.configured')) {
   fail("Stable update Check button must not be disabled solely because updater feed/signing is pending");
 }
-for (const token of ["type NavIconId = SectionId", "type PlatformIconId", "type TitleBarAction", "function AppTitleBar(", "startDragging()", 'data-action="minimize"', 'data-action="maximize"', 'data-action="close"', "function PlatformIcon(", "function ModalFrame(", "function ModalHeader(", "function ModalActions(", "function NavIcon(", 'className="navIcon"', 'className="navGlyph"', "<NavIcon id={item.id}", "function CommandBar(", "function CommandGroup(", "SharedMetricCard", "appliedProfileCount", "new Set(hosts.map((host) => host.profileId)", "successfulTaskCount", "matrixHeader", "matrixEmptyIcon", "onAddServer", "onTestAllSshHosts"]) {
+for (const token of ["type NavIconId = SectionId", "type PlatformIconId", "type TitleBarAction", "function AppTitleBar(", "startDragging()", 'data-action="minimize"', 'data-action="maximize"', 'data-action="close"', "function PlatformIcon(", "function ModalFrame(", "function ModalHeader(", "function ModalActions(", "function NavIcon(", 'className="navIcon"', 'className="navGlyph"', "<NavIcon id={item.id}", "function CommandBar(", "function CommandGroup(", "metricPrimary", "metricSecondary", "appliedProfileCount", "new Set(hosts.map((host) => host.profileId)", "successfulTaskCount", "matrixHeader", "matrixEmptyIcon", "onAddServer", "onTestAllSshHosts"]) {
   if (!`${app}\n${modalFrameSource}`.includes(token)) fail(`missing dashboard home polish token: ${token}`);
 }
 for (const token of [
@@ -1393,9 +1393,7 @@ for (const token of ['new URL("../src-tauri/icons/128x128.png", import.meta.url)
   if (!app.includes(token)) fail(`missing app logo UI token: ${token}`);
 }
 for (const token of [
-  '<AppTitleBar',
-  'search={globalSearchControl}',
-  'notificationCount={unacknowledgedTaskIds.size}',
+  '<AppTitleBar copy={copy} search={globalSearchControl}',
   'items: (["dashboard", "terminal", "files", "transfers"] as SectionId[])',
   'items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[])',
   'className="codexHubSidebarFooterActions"',
@@ -1433,8 +1431,7 @@ for (const token of [
   'sourceTone: "green"',
   "unknownSkillCount",
   "installedSkillTagStyle",
-  "installedSkillHostGrid",
-  "installedSkillHostCard",
+  "installedSkillsTable",
   "installedSkillTag",
   "InstalledSkillPreviewModal",
   "InstalledSkillOperationModal",
@@ -1769,7 +1766,7 @@ for (const token of [
 for (const token of [
   "latestCodexVersion",
   "copy.hosts.latestCodexVersion",
-  'id: "latest-version"',
+  "sshHostsLatestVersionCol",
   "latestCodexStatus",
   "formatCodexVersionLabel",
   "parseCodexVersion",
@@ -1868,7 +1865,7 @@ for (const [action, token] of [
 ]) {
   if (!app.includes(token)) fail(`missing profile apply ${action} action token: ${token}`);
 }
-if (!app.includes('className="profilesStack"') || !app.includes("profileLibraryActions") || !app.includes("profilesDataTable") || !app.includes("profileRowActions") || !app.includes("profileApplyPanel") || !app.includes("profileApplyTable") || !app.includes("profileApplyOperationModal")) {
+if (!app.includes('className="profilesStack"') || !app.includes("profileLibraryActions") || !app.includes("profileTable") || !app.includes("profileRowActions") || !app.includes("profileApplyPanel") || !app.includes("profileApplyTable") || !app.includes("profileApplyOperationModal")) {
   fail("Profiles page should use compact stack, library actions, row actions, table, apply panel, and operation-log tokens");
 }
 const profileApplyTableStart = app.indexOf('className="sshHostsTable profileApplyTable"');
@@ -1905,9 +1902,9 @@ if (!app.includes('installCodex: "安装"') || !app.includes('updateCodex: "更�
 for (const token of ["onUpdateOutdatedCodexHosts", "handleUpdateOutdatedCodexHosts", "api.previewBatchRemoteCodexUpdate", "api.batchRemoteUpdateCodex", "BatchCodexProcessConfirmModal", "outdatedCodexAliases", "copy.hosts.updateOutdatedCodex", "copy.codexOperation.batchUpdateStarted"]) {
   if (!app.includes(token)) fail(`missing one-click outdated Codex update token: ${token}`);
 }
-if (!app.includes('className="hostsDataTable"') || !app.includes('id: "actions"') || !app.includes('className="hostRowActions"')) fail("SSH Hosts table should use the shared responsive table layout");
+if (!app.includes('className="sshHostsTable"') || !app.includes("sshHostsActionsCol") || !app.includes("sshHostsCodexCol")) fail("SSH Hosts table should use the compact responsive table layout");
 if (app.includes('<td className="tableActions')) fail("SSH Hosts action cells must remain table cells; put flex on an inner button group");
-if (!app.includes('className="hostRowPrimaryActions"')) fail("SSH Hosts primary action buttons should be wrapped in an inner flex group");
+if (!app.includes('className="tableActions sshHostsActionGroup"')) fail("SSH Hosts action buttons should be wrapped in an inner flex group");
 if (app.includes("HostDetailsPanel copy={copy} host={selectedHost} hostBusy")) fail("Host details should not own remote Codex maintenance actions");
 if (app.includes("onAddHost={")) fail("Dashboard or non-Hosts Add Server handler should not remain");
 if (app.includes("<th>{copy.hosts.identityFile}</th>")) fail("SSH Hosts table should not show IdentityFile as a column");
@@ -1923,7 +1920,7 @@ if (app.includes("window.setTimeout(onClose")) fail("SSH Host modal should stay 
 if (!app.includes('placeholder="127.0.0.1"') || !app.includes('placeholder="Username"')) fail("SSH Host modal should use generic placeholders");
 if (!app.includes("id_ed25519 detected") || app.includes("value={hasIdentityFile ? defaultIdentityFile")) fail("SSH Host modal must not display full IdentityFile paths");
 if (app.includes("<p>输入一次远端密码") || app.includes("<span>{message}</span>")) fail("SSH Host modal should not show intro or bottom helper copy");
-for (const token of ["TaskLogModal", "taskLogDetailModal", "taskTimeline", "taskTimelineLogButton", "copy.tasks.logs"]) {
+for (const token of ["TaskLogModal", "taskLogDetailModal", "taskDetailsCol", "copy.tasks.details", "copy.tasks.logs"]) {
   if (!app.includes(token)) fail(`missing task-history log modal token: ${token}`);
 }
 for (const token of [
@@ -2347,7 +2344,7 @@ for (const token of [
 ]) {
   if (!designSystemStyles.includes(token)) fail(`Windows sidebar selection must be shared by expanded and collapsed states: ${token}`);
 }
-for (const token of [".codexHubAppShell", ".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-main-corner)"]) {
+for (const token of [".codexHubAppShell", ".codexHubMain", ".codexHubContent", "border-top-left-radius: var(--radius-lg)"]) {
   if (!appShellStyles.includes(token)) fail(`missing rounded content-shell token: ${token}`);
 }
 const codexHubAppShellStyle = appShellStyles.match(/(?:^|\n)\.codexHubAppShell\s*\{[^}]*\}/)?.[0] ?? "";
@@ -2356,7 +2353,7 @@ const codexHubContentStyle = appShellStyles.match(/\.codexHubContent\s*\{[^}]*\}
 for (const token of ["background: var(--chrome-glass)", "backdrop-filter: blur(28px) saturate(1.18)"]) {
   if (!codexHubAppShellStyle.includes(token)) fail(`app shell must provide the shared chrome behind the rounded detail corner: ${token}`);
 }
-for (const token of ["overflow: hidden", "border-top-left-radius: var(--radius-main-corner)", "background: var(--surface-solid)"]) {
+for (const token of ["overflow: hidden", "border-top-left-radius: var(--radius-lg)", "background: var(--surface-solid)"]) {
   if (!codexHubMainStyle.includes(token)) fail(`main detail surface should own its rounded background: ${token}`);
 }
 for (const token of ["min-height: 0", "border-top-left-radius: inherit", "background: transparent"]) {
@@ -2414,14 +2411,8 @@ for (const token of ["flex: 1 1 auto", "min-height: 0", "overflow-y: auto"]) {
 for (const token of ['.workspacePageBody[data-mode="transfers"]', ".workspacePageBody[data-mode=\"transfers\"] > .workspaceTransfersPanel"]) {
   if (!styles.includes(token)) fail(`missing bounded Transfers workspace token: ${token}`);
 }
-for (const token of ["titleBarSearchRegion", "captionGlyph::before", "appTitleBar", "captionButton", "modalHeader", "modalTitleIcon", "emojiIcon", "navIcon", "navGlyph", "navLabel", "navCompletionDot", "navCompletionDot[data-tone=\"error\"]", "commandBar", "commandGroup", "pillToggle", "pillToggleThumb", "translateX(22px)", "matrixHeader", "matrixEmptyState", "matrixEmptyIcon", ".hostMeta .badge"]) {
+for (const token of ["titleBarSearchRegion", "captionGlyph::before", "appTitleBar", "captionButton", "modalHeader", "modalTitleIcon", "emojiIcon", "navIcon", "navGlyph", "navLabel", "navCompletionDot", "navCompletionDot[data-tone=\"error\"]", "commandBar", "commandGroup", "pillToggle", "pillToggleThumb", "translateX(22px)", "metricPrimary", "metricSecondary", "matrixHeader", "matrixEmptyState", "matrixEmptyIcon", ".hostMeta .badge"]) {
   if (!styles.includes(token)) fail(`missing dashboard home polish style token: ${token}`);
-}
-for (const token of ["SharedMetricCard", 'className="hostsDataTable"', "hostRowMore", "hostsDataTableRowSelected"]) {
-  if (!app.includes(token)) fail(`missing redesigned Dashboard or Hosts component token: ${token}`);
-}
-for (const token of [".dashboardMetrics", ".hostsDataTable", ".hostRowMoreMenu", "border-radius: var(--radius-dialog)"]) {
-  if (!styles.includes(token)) fail(`missing redesigned Dashboard or Hosts style token: ${token}`);
 }
 for (const token of ["setupGuideModal", "setupGuideLanguage", "setupGuideLanguageOption", "setupGuideHostList", "setupGuideHostHeader", "setupGuideActions", "emptyListState", "emptyListIcon", "emptyListActions"]) {
   if (!styles.includes(token)) fail(`missing setup guide or empty-state style token: ${token}`);
@@ -2435,10 +2426,10 @@ for (const token of ["calloutPanel", "hostCardActions", "tagRow", "skillLine", "
 for (const token of ["modalBackdrop", "bootstrapLogCard", "stepIcon.success", "stepIcon.failed"]) {
   if (!styles.includes(token)) fail(`missing SSH modal style token: ${token}`);
 }
-for (const token of ["hostsDataTable", "min-width: 1080px", ".hostRowPrimaryActions", ".hostRowMoreMenu"]) {
+for (const token of ["sshHostsTable", "table-layout: auto", "flex-wrap: nowrap", ".sshHostsCodexCol", ".sshHostsLatestVersionCol"]) {
   if (!styles.includes(token)) fail(`missing SSH Hosts responsive table style token: ${token}`);
 }
-for (const token of ["profilesStack", "profileSectionCard", "profileLibraryActions", "ccSwitchActionButton", "profileCcSwitchStatus", "profilesDataTable", "profileRowActions", "profileApplyPanel", "profileApplyTable", "profileApplyOperationModal", "profileHostSelectModal", "profileHostSelectList", "profileHostSelectStatus", "profileModelCombobox", "profileModelOptions", "profileModelOption", "profileFastModeSegment", "profileFastModeOption"]) {
+for (const token of ["profilesStack", "profileLibraryActions", "ccSwitchActionButton", "profileCcSwitchStatus", "profileTable", "profileRowActions", "profileApplyPanel", "profileApplyTable", "profileApplyOperationModal", "profileHostSelectModal", "profileHostSelectList", "profileHostSelectStatus", "profileModelCombobox", "profileModelOptions", "profileModelOption", "profileFastModeSegment", "profileFastModeOption"]) {
   if (!styles.includes(token)) fail(`missing compact Profiles style token: ${token}`);
 }
 for (const token of ["simpleDeleteModal", ".sshHostModal.ProfileEditModal .fieldGroup", ".sshHostModal:not(.ProfileEditModal) .fieldGroup input", "::-ms-reveal", ".passwordInputWrap"]) {
@@ -2447,12 +2438,12 @@ for (const token of ["simpleDeleteModal", ".sshHostModal.ProfileEditModal .field
 for (const token of ["credentialVisibilityButton", "credentialEyeIcon"]) {
   if (!styles.includes(token)) fail(`secret visibility style is missing: ${token}`);
 }
-for (const token of ["min-width: 0", ".skillsDataTable table", ".skillRowActions", "flex-wrap: wrap"]) {
+for (const token of ["min-width: 0", ".skillsTable td:nth-child(5)", ".skillRowActions", "flex-wrap: wrap"]) {
   if (!styles.includes(token)) fail(`missing responsive Skills table style token: ${token}`);
 }
 for (const token of [
   "skillsStack",
-  "skillsDataTable",
+  "skillsTable",
   "skillLibraryActions",
   "skillApplicationTags",
   "skillRowActions",
@@ -2464,8 +2455,7 @@ for (const token of [
   "skillTargetRow",
   "skillDeleteActions",
   "skillMessage",
-  "installedSkillHostGrid",
-  "installedSkillHostCard",
+  "installedSkillsTable",
   "installedSkillTags",
   "installedSkillTag",
   "--skill-color"
@@ -2522,7 +2512,7 @@ const operationHeaderCloseStyle = styles.match(/\.operationProgressHeaderActions
 if (!operationHeaderCloseStyle.includes("position: static")) {
   fail("operation progress close button must stay inset inside the header action group");
 }
-for (const token of ["taskLogModal", "taskLogModalMeta", "taskTimeline", "taskTimelineItem", "taskTimelineLogButton", "copyPublicKeyButton", 'data-success="true"', "max-width: var(--app-content-max)"]) {
+for (const token of ["taskLogModal", "taskLogModalMeta", "taskDetailsCol", "taskTableWrap", "tasksTable", "copyPublicKeyButton", 'data-success="true"', "max-width: var(--app-content-max)"]) {
   if (!styles.includes(token)) fail(`missing simplified UI style token: ${token}`);
 }
 

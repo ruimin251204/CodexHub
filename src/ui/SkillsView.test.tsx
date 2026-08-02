@@ -135,16 +135,6 @@ test("skill download and delete buttons open usable dialogs", async () => {
   expect(onDeleteLibrarySkill).toHaveBeenCalledWith(librarySkill.id, false);
 });
 
-test("renders the local library as a shared table and installed inventory as host cards", () => {
-  const view = renderSkills();
-
-  expect(screen.getByRole("table", { name: "Local skill library" }).closest(".ch-data-table")).toHaveClass("skillsDataTable");
-  const installedCard = document.querySelector(".installedSkillHostCard");
-  expect(installedCard).toHaveClass("installedSkillHostCard");
-  expect(within(installedCard as HTMLElement).getByRole("button", { name: "Remote only" })).toBeVisible();
-  expect(view.onDownloadInstalledSkill).not.toHaveBeenCalled();
-});
-
 test("library uninstall confirmation executes the selected target operation", async () => {
   const user = userEvent.setup();
   const { onUninstallSkillTargets } = renderSkills();

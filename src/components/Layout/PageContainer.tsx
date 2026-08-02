@@ -1,7 +1,6 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 import { mergeClassNames } from "../UI/classNames";
-import { PageHeader } from "./PageHeader";
 
 export type PageContainerWidth = "contained" | "wide" | "full";
 
@@ -38,7 +37,19 @@ export function PageContainer({
       data-width={width}
       aria-labelledby={titleId}
     >
-      <PageHeader title={title} titleId={titleId} description={description} icon={icon} actions={actions} status={status} />
+      <div className="ch-page__header">
+        <div className="ch-page__heading">
+          {icon ? <div className="ch-page__icon" aria-hidden="true">{icon}</div> : null}
+          <div className="ch-page__heading-copy">
+            <h1 id={titleId}>{title}</h1>
+            {description ? <p>{description}</p> : null}
+          </div>
+        </div>
+        <div className="ch-page__controls">
+          {status ? <div className="ch-page__status">{status}</div> : null}
+          {actions ? <div className="ch-page__actions">{actions}</div> : null}
+        </div>
+      </div>
       {navigation ? <div className="ch-page__navigation">{navigation}</div> : null}
       <div className={mergeClassNames("ch-page__body", bodyClassName)}>{children}</div>
     </section>

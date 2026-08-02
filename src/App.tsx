@@ -81,13 +81,13 @@ import { useFeedback } from "./ui/feedback";
 import type { FeedbackPlacement, FeedbackTone } from "./ui/feedback";
 import { ModalFrame } from "./ui/ModalFrame";
 import { PersonalInfoMaskingProvider, usePersonalInfoMasking } from "./ui/PersonalInfoMasking";
-import { AppLayout, PageHeader, Sidebar, TopBar } from "./components/Layout";
+import { AppShell, Sidebar } from "./components/Layout";
 import type { SidebarGroup } from "./components/Layout";
-import { ActionButton, Card, DataTable, MetricCard as SharedMetricCard, SearchBox } from "./components/UI";
-import type { DataTableColumn, StatusTone } from "./components/UI";
+import { SearchBox } from "./components/UI";
+import type { StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
 import { searchGlobalEntries } from "./search/globalSearch";
-import { createGlobalSearchCatalog, hostSearchKeywordsCopy } from "./search/globalSearchCatalog";
+import { createGlobalSearchCatalog } from "./search/globalSearchCatalog";
 import type { CodexHubSearchEntry, SearchSectionId } from "./search/globalSearchCatalog";
 import "./components/design-system.css";
 import "./components/app-shell-integration.css";
@@ -568,8 +568,6 @@ export const uiCopy = {
       driver: "Driver",
       utilization: "Util",
       gpuProcesses: "GPU processes",
-      showGpuList: "Show GPU list",
-      hideGpuList: "Hide GPU list",
       noGpuProcesses: "No GPU processes",
       processCount: "Processes",
       processCountShort: (count: number) => `${count} proc`,
@@ -738,7 +736,6 @@ export const uiCopy = {
       skills: "Skills",
       lastSeen: "Last seen",
       actions: "Actions",
-      moreActions: "More actions",
       edit: "Edit",
       delete: "Delete",
       test: "Test",
@@ -1459,8 +1456,6 @@ export const uiCopy = {
       driver: "驱动",
       utilization: "占用率",
       gpuProcesses: "GPU 进程",
-      showGpuList: "展开 GPU 列表",
-      hideGpuList: "收起 GPU 列表",
       noGpuProcesses: "无 GPU 进程",
       processCount: "进程数",
       processCountShort: (count: number) => `${count} 进程`,
@@ -1629,7 +1624,6 @@ export const uiCopy = {
       skills: "技能",
       lastSeen: "上次在线",
       actions: "操作",
-      moreActions: "更多操作",
       edit: "编辑",
       delete: "删除",
       test: "测试",
@@ -2274,16 +2268,10 @@ function usePlatformAppearance() {
 function AppTitleBar({
   copy,
   search,
-  notificationCount,
-  onOpenTasks,
-  showWindowControls,
   onCloseRequest
 }: {
   copy: UICopy;
   search: ReactNode;
-  notificationCount: number;
-  onOpenTasks: () => void;
-  showWindowControls: boolean;
   onCloseRequest: () => Promise<void> | void;
 }) {
   const [title, setTitle] = useState("CodexHub");
@@ -2327,40 +2315,32 @@ function AppTitleBar({
     }
   };
 
-  const windowControls = showWindowControls ? (
-    <div className="captionControls" role="group" aria-label={title}>
-      <button className="captionButton" data-action="minimize" type="button" aria-label={copy.windowControls.minimize} onClick={() => void runAction("minimize")}><span className="captionGlyph" aria-hidden="true" /></button>
-      <button className="captionButton" data-action="maximize" type="button" aria-label={copy.windowControls.maximize} onClick={() => void runAction("maximize")}><span className="captionGlyph" aria-hidden="true" /></button>
-      <button className="captionButton closeCaptionButton" data-action="close" type="button" aria-label={copy.windowControls.close} onClick={() => void runAction("close")}><span className="captionGlyph" aria-hidden="true" /></button>
-    </div>
-  ) : null;
-
   return (
-    <TopBar
-      className="appTitleBar"
-      ariaLabel={copy.common.topHeader}
-      leading={<div className="titleBarLeadingDragRegion" data-tauri-drag-region={showWindowControls || undefined} onMouseDown={showWindowControls ? handleDragMouseDown : undefined}>
+    <header className="appTitleBar">
+      <div className="titleBarLeadingDragRegion" data-tauri-drag-region onMouseDown={handleDragMouseDown}>
         <div className="appTitle" data-tauri-drag-region>
           <img className="titleBarIcon" src={appLogoUrl} alt="" aria-hidden="true" />
           <span data-tauri-drag-region>{title}</span>
         </div>
-      </div>}
-      search={<div className="titleBarSearch">{search}</div>}
-      trailing={<>
-        <button
-          className="titleBarNotification"
-          type="button"
-          aria-label={`${copy.common.notifications}: ${notificationCount}`}
-          title={copy.common.notifications}
-          onClick={onOpenTasks}
-        >
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 8a4.5 4.5 0 0 1 9 0c0 5 2 5 2 6H3.5c0-1 2-1 2-6Z" /><path d="M8 16a2 2 0 0 0 4 0" /></svg>
-          {notificationCount > 0 ? <span>{notificationCount > 99 ? "99+" : notificationCount}</span> : null}
+      </div>
+      <div className="titleBarSearchRegion">
+        <div className="titleBarSearch">
+          {search}
+        </div>
+      </div>
+      <div className="titleBarTrailingDragRegion" data-tauri-drag-region onMouseDown={handleDragMouseDown} />
+      <div className="captionControls" role="group" aria-label={title}>
+        <button className="captionButton" data-action="minimize" type="button" aria-label={copy.windowControls.minimize} onClick={() => void runAction("minimize")}>
+          <span className="captionGlyph" aria-hidden="true" />
         </button>
-        <div className="titleBarTrailingDragRegion" data-tauri-drag-region={showWindowControls || undefined} onMouseDown={showWindowControls ? handleDragMouseDown : undefined} />
-      </>}
-      windowControls={windowControls}
-    />
+        <button className="captionButton" data-action="maximize" type="button" aria-label={copy.windowControls.maximize} onClick={() => void runAction("maximize")}>
+          <span className="captionGlyph" aria-hidden="true" />
+        </button>
+        <button className="captionButton closeCaptionButton" data-action="close" type="button" aria-label={copy.windowControls.close} onClick={() => void runAction("close")}>
+          <span className="captionGlyph" aria-hidden="true" />
+        </button>
+      </div>
+    </header>
   );
 }
 
@@ -4872,7 +4852,7 @@ function App() {
       detail: personalInfoMasker.maskText(host.name),
       section: "terminal" as const,
       hostAlias: host.hostAlias,
-      keywords: [host.hostAlias, host.name, ...hostSearchKeywordsCopy],
+      keywords: [host.hostAlias, host.name, "host", "server", "ssh", "主机", "服务器"],
       priority: 15
     }))
   ], [copy, hosts, personalInfoMasker]);
@@ -4928,15 +4908,10 @@ function App() {
         data-custom-titlebar={usesCustomTitleBar}
         data-sidebar-collapsed={sidebarCollapsed || undefined}
       >
-        <AppTitleBar
-          copy={copy}
-          search={globalSearchControl}
-          notificationCount={unacknowledgedTaskIds.size}
-          onOpenTasks={() => selectSection("tasks")}
-          showWindowControls={usesCustomTitleBar}
-          onCloseRequest={handleTitleBarCloseRequest}
-        />
-        <AppLayout
+        {usesCustomTitleBar ? (
+          <AppTitleBar copy={copy} search={globalSearchControl} onCloseRequest={handleTitleBarCloseRequest} />
+        ) : null}
+        <AppShell
           className="codexHubAppShell"
           mainClassName="codexHubMain"
           mainLabel={selectedCopy.title}
@@ -5000,13 +4975,14 @@ function App() {
       >
         <StorageHealthCenter copy={copy} health={storageHealth} onChanged={refreshStorageHealth} />
         {activeSection !== "monitor" ? (
-          <PageHeader
-            className="topBar codexHubPageHeader"
-            title={selectedCopy.title}
-            description={selectedCopy.body}
-            icon={<NavIcon id={activeSection} />}
-            actions={pageActions.length > 0 ? <CommandBarActions ariaLabel={selectedCopy.title} className="topActions" actions={pageActions} /> : null}
-          />
+          <header className="topBar">
+            <div>
+              <TitleWithIcon icon={activeSection} level={1}>{selectedCopy.title}</TitleWithIcon>
+            </div>
+            {pageActions.length > 0 ? (
+              <CommandBarActions ariaLabel={selectedCopy.title} className="topActions" actions={pageActions} />
+            ) : null}
+          </header>
         ) : null}
 
         {bootstrapError ? (
@@ -5017,7 +4993,7 @@ function App() {
           </section>
         ) : renderContent()}
       </div>
-      </AppLayout>
+      </AppShell>
       {batchCodexUpdateConfirm ? (
         <BatchCodexProcessConfirmModal
           copy={copy}
@@ -5611,12 +5587,12 @@ function DashboardView({
 }) {
   const labelFor = (id: SectionId) => copy.navItems.find((item) => item.id === id)?.label ?? id;
   return (
-    <div className="pageGrid dashboardPage">
-      <section className="summaryStrip dashboardMetrics" aria-label={copy.dashboard.summaryLabel}>
-        <SharedMetricCard icon={<NavIcon id="hosts" />} label={labelFor("hosts")} value={String(hosts.length)} description={`${copy.dashboard.online} ${onlineCount}`} tone="info" />
-        <SharedMetricCard icon={<NavIcon id="profiles" />} label={labelFor("profiles")} value={String(profiles.length)} description={`${copy.dashboard.applied} ${appliedProfileCount}`} tone="success" />
-        <SharedMetricCard icon={<NavIcon id="skills" />} label={labelFor("skills")} value={String(skillPacks.length)} description={`${copy.dashboard.enabled} ${skillPacks.filter((pack) => pack.enabled).length}`} tone="warning" />
-        <SharedMetricCard icon={<NavIcon id="tasks" />} label={labelFor("tasks")} value={String(tasks.length)} description={`${copy.dashboard.success} ${successfulTaskCount}`} tone="info" />
+    <div className="pageGrid">
+      <section className="summaryStrip" aria-label={copy.dashboard.summaryLabel}>
+        <MetricCard label={labelFor("hosts")} value={String(hosts.length)} detailLabel={copy.dashboard.online} detailValue={String(onlineCount)} />
+        <MetricCard label={labelFor("profiles")} value={String(profiles.length)} detailLabel={copy.dashboard.applied} detailValue={String(appliedProfileCount)} />
+        <MetricCard label={labelFor("skills")} value={String(skillPacks.length)} detailLabel={copy.dashboard.enabled} detailValue={String(skillPacks.filter((pack) => pack.enabled).length)} />
+        <MetricCard label={labelFor("tasks")} value={String(tasks.length)} detailLabel={copy.dashboard.success} detailValue={String(successfulTaskCount)} />
       </section>
 
       <ServerMatrix
@@ -5631,6 +5607,31 @@ function DashboardView({
         onTestAllSshHosts={onTestAllSshHosts}
       />
     </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  detailLabel,
+  detailValue
+}: {
+  label: string;
+  value: string;
+  detailLabel: string;
+  detailValue: string;
+}) {
+  return (
+    <article className="metricCard">
+      <div className="metricPrimary">
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="metricSecondary">
+        <span>{detailLabel}</span>
+        <b>{detailValue}</b>
+      </div>
+    </article>
   );
 }
 
@@ -6035,7 +6036,6 @@ function MonitorHostCard({
   const personalInfo = usePersonalInfoMasking();
   const cardRef = useRef<HTMLElement | null>(null);
   const [rowSpan, setRowSpan] = useState(44);
-  const [gpuExpanded, setGpuExpanded] = useState(true);
   const cpuPercent = monitorCpuPercent(snapshot?.cpu);
   const memoryPercent = snapshot?.memory?.usedPercent ?? null;
   const hostMemoryTotalBytes = snapshot?.memory?.totalBytes ?? null;
@@ -6123,21 +6123,7 @@ function MonitorHostCard({
         />
       </div>
 
-      {gpus.length > 0 ? (
-        <button
-          aria-expanded={gpuExpanded}
-          className="monitorGpuDisclosure"
-          type="button"
-          onClick={() => setGpuExpanded((current) => !current)}
-        >
-          <span>{copy.monitor.gpu}</span>
-          <small>{gpuExpanded ? copy.monitor.hideGpuList : copy.monitor.showGpuList}</small>
-          <svg className="monitorGpuDisclosureIcon" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="m4 6 4 4 4-4" />
-          </svg>
-        </button>
-      ) : null}
-      <section className="monitorGpuStack" aria-label={copy.monitor.gpu} hidden={!gpuExpanded}>
+      <section className="monitorGpuStack" aria-label={copy.monitor.gpu}>
         {gpus.length > 0 ? (
           gpus.map((gpu, index) => (
             <MonitorGpuBlock
@@ -6477,6 +6463,7 @@ function ServerMatrix({
         <div className="matrixGrid">
           {hosts.map((host) => {
             const codexStatus = hostCodexStatus(copy, host, undefined, hosts, latestCodexVersion);
+            const systemLabel = hostSystemLabel(host, copy);
             const inventory = hostInventoryByAlias.get(host.hostAlias.toLowerCase());
             const skillCount = dashboardHostSkillCount(host, inventory);
             const skillCountLabel = typeof skillCount === "number" ? String(skillCount) : copy.hosts.unknown;
@@ -6498,11 +6485,7 @@ function ServerMatrix({
                 </div>
                 <div>
                   <dt>{copy.dashboard.system}</dt>
-                  <dd><Badge tone={knownValueTone(host.os, copy)}>{knownHostValue(host.os, copy)}</Badge></dd>
-                </div>
-                <div>
-                  <dt>{copy.hosts.arch}</dt>
-                  <dd><Badge tone={archTone(host.arch, copy)}>{knownHostValue(host.arch, copy)}</Badge></dd>
+                  <dd><Badge tone={knownValueTone(host.os, copy)}>{systemLabel}</Badge></dd>
                 </div>
                 <div>
                   <dt>{copy.hosts.codex}</dt>
@@ -6640,107 +6623,6 @@ function HostsView({
     }
   };
 
-  // 表格只组合已有主机数据和业务回调，不改变操作门禁。
-  const hostColumns: DataTableColumn<SshConfigHost>[] = [
-    {
-      id: "alias",
-      header: copy.hosts.alias,
-      priority: "essential",
-      cellClassName: "hostsTableAlias",
-      render: (sshHost) => <strong>{personalInfo.maskText(sshHost.alias)}</strong>
-    },
-    {
-      id: "status",
-      header: copy.hosts.status,
-      priority: "essential",
-      render: (sshHost) => {
-        const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
-        return <HostStatusIndicator copy={copy} status={host?.status ?? (hostBusy[sshHost.alias] === "test" ? "testing" : "unknown")} />;
-      }
-    },
-    {
-      id: "source",
-      header: copy.hosts.source,
-      priority: "normal",
-      render: (sshHost) => <Badge tone={sshHost.managed ? "blue" : "gray"}>{sshHostSourceLabel(copy, sshHost)}</Badge>
-    },
-    {
-      id: "address",
-      header: copy.hosts.hostName,
-      priority: "normal",
-      render: (sshHost) => personalInfo.maskHostAddress(sshHost.hostName)
-    },
-    { id: "port", header: copy.hosts.port, priority: "optional", render: (sshHost) => sshHost.port },
-    {
-      id: "user",
-      header: copy.hosts.user,
-      priority: "optional",
-      render: (sshHost) => personalInfo.maskUsername(sshHost.user)
-    },
-    {
-      id: "codex-version",
-      header: copy.hosts.codexVersion,
-      priority: "normal",
-      render: (sshHost) => {
-        const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
-        const status = hostCodexStatus(copy, host, hostBusy[sshHost.alias], hosts, latestCodexVersion);
-        return <Badge tone={status.tone}>{status.label}</Badge>;
-      }
-    },
-    {
-      id: "latest-version",
-      header: copy.hosts.latestCodexVersion,
-      priority: "optional",
-      render: () => {
-        const status = latestCodexStatus(copy, latestCodexVersion);
-        return <Badge tone={status.tone} title={status.title}>{status.label}</Badge>;
-      }
-    },
-    {
-      id: "actions",
-      header: copy.hosts.actions,
-      priority: "essential",
-      cellClassName: "hostsTableActions",
-      render: (sshHost) => {
-        const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
-        const busy = hostBusy[sshHost.alias];
-        const codexTested = isHostCodexTested(host);
-        const installDisabled = Boolean(busy) || !codexTested || Boolean(host?.codexInstalled);
-        const updateDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled || !isCodexVersionBehind(host.codexVersion, latestCodexVersion?.version);
-        const uninstallDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled;
-        return (
-          <div className="hostRowActions" onClick={(event) => event.stopPropagation()}>
-            <div className="hostRowPrimaryActions">
-              <ActionButton size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => onTestHost(sshHost.alias)}>
-                {busy === "test" ? copy.hosts.testing : copy.hosts.test}
-              </ActionButton>
-              <ActionButton size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => handleEdit(sshHost)}>
-                {copy.hosts.edit}
-              </ActionButton>
-            </div>
-            <details className="hostRowMore">
-              <summary aria-label={`${copy.hosts.moreActions}: ${personalInfo.maskText(sshHost.alias)}`} title={copy.hosts.moreActions}>•••</summary>
-              <div className="hostRowMoreMenu">
-                <ActionButton size="sm" variant="ghost" disabled={installDisabled} onClick={() => onManageCodex(sshHost.alias, "install")}>
-                  {remoteCodexButtonLabel(copy, busy, "install")}
-                </ActionButton>
-                <ActionButton size="sm" variant="ghost" disabled={updateDisabled} onClick={() => onManageCodex(sshHost.alias, "update")}>
-                  {remoteCodexButtonLabel(copy, busy, "update")}
-                </ActionButton>
-                <ActionButton size="sm" variant="danger" disabled={uninstallDisabled} onClick={() => onManageCodex(sshHost.alias, "uninstall")}>
-                  {remoteCodexButtonLabel(copy, busy, "uninstall")}
-                </ActionButton>
-                <ActionButton size="sm" variant="danger" disabled={Boolean(busy)} onClick={() => setDeleteHostAlias(sshHost.alias)}>
-                  {copy.hosts.delete}
-                </ActionButton>
-              </div>
-            </details>
-          </div>
-        );
-      }
-    }
-  ];
-
   return (
     <div className="hostsGrid">
       <SshHostModal
@@ -6781,15 +6663,72 @@ function HostsView({
             variant="hosts"
           />
         ) : (
-          <DataTable
-            ariaLabel={copy.hosts.detectedSshHosts}
-            className="hostsDataTable"
-            columns={hostColumns}
-            rows={sshConfigHosts}
-            getRowKey={(sshHost) => sshHost.alias}
-            getRowClassName={(sshHost) => selectedHostAlias === sshHost.alias ? "hostsDataTableRowSelected" : undefined}
-            onRowActivate={(sshHost) => setSelectedHostAlias(sshHost.alias)}
-          />
+          <div className="tableWrap">
+            <table className="sshHostsTable">
+              <thead>
+                <tr>
+                  <th className="sshHostsAliasCol">{copy.hosts.alias}</th>
+                  <th className="sshHostsOnlineCol">{copy.status.host.online}</th>
+                  <th className="sshHostsSourceCol">{copy.hosts.source}</th>
+                  <th className="sshHostsAddressCol">{copy.hosts.hostName}</th>
+                  <th className="sshHostsPortCol">{copy.hosts.port}</th>
+                  <th className="sshHostsUserCol">{copy.hosts.user}</th>
+                  <th className="sshHostsVersionCol">{copy.hosts.codexVersion}</th>
+                  <th className="sshHostsLatestVersionCol">{copy.hosts.latestCodexVersion}</th>
+                  <th className="sshHostsActionsCol">{copy.hosts.actions}</th>
+                  <th className="sshHostsCodexCol">{copy.hosts.codex}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sshConfigHosts.map((sshHost) => {
+                  const host = hostByAlias.get(sshHost.alias.toLowerCase()) ?? null;
+                  const busy = hostBusy[sshHost.alias];
+                  const hostStatus = host?.status ?? (busy === "test" ? "testing" : "unknown");
+                  const codexStatus = hostCodexStatus(copy, host, busy, hosts, latestCodexVersion);
+                  const latestStatus = latestCodexStatus(copy, latestCodexVersion);
+                  const codexTested = isHostCodexTested(host);
+                  const installDisabled = Boolean(busy) || !codexTested || Boolean(host?.codexInstalled);
+                  const updateDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled || !isCodexVersionBehind(host.codexVersion, latestCodexVersion?.version);
+                  const uninstallDisabled = Boolean(busy) || !codexTested || !host?.codexInstalled;
+
+                  return (
+                    <tr className="selectableRow" data-selected={selectedHostAlias === sshHost.alias} key={sshHost.alias} onClick={() => setSelectedHostAlias(sshHost.alias)}>
+                      <td className="sshHostsAliasCol"><strong>{personalInfo.maskText(sshHost.alias)}</strong></td>
+                      <td className="sshHostsOnlineCol"><HostStatusIndicator copy={copy} status={hostStatus} /></td>
+                      <td className="sshHostsSourceCol"><Badge tone={sshHost.managed ? "blue" : "gray"}>{sshHostSourceLabel(copy, sshHost)}</Badge></td>
+                      <td className="sshHostsAddressCol">{personalInfo.maskHostAddress(sshHost.hostName)}</td>
+                      <td className="sshHostsPortCol">{sshHost.port}</td>
+                      <td className="sshHostsUserCol">{personalInfo.maskUsername(sshHost.user)}</td>
+                      <td className="sshHostsVersionCol"><Badge tone={codexStatus.tone}>{codexStatus.label}</Badge></td>
+                      <td className="sshHostsLatestVersionCol"><Badge tone={latestStatus.tone} title={latestStatus.title}>{latestStatus.label}</Badge></td>
+                      <td className="sshHostsActionsCol">
+                        <CommandGroup className="tableActions sshHostsActionGroup">
+                          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={(event) => { event.stopPropagation(); onTestHost(sshHost.alias); }}>
+                            {busy === "test" ? copy.hosts.testing : copy.hosts.test}
+                          </button>
+                          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={(event) => { event.stopPropagation(); handleEdit(sshHost); }}>{copy.hosts.edit}</button>
+                          <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={(event) => { event.stopPropagation(); setDeleteHostAlias(sshHost.alias); }}>{copy.hosts.delete}</button>
+                        </CommandGroup>
+                      </td>
+                      <td className="sshHostsCodexCol">
+                        <CommandGroup className="tableActions sshHostsActionGroup">
+                          <button className="miniButton" disabled={installDisabled} type="button" onClick={(event) => { event.stopPropagation(); onManageCodex(sshHost.alias, "install"); }}>
+                            {remoteCodexButtonLabel(copy, busy, "install")}
+                          </button>
+                          <button className="miniButton" disabled={updateDisabled} type="button" onClick={(event) => { event.stopPropagation(); onManageCodex(sshHost.alias, "update"); }}>
+                            {remoteCodexButtonLabel(copy, busy, "update")}
+                          </button>
+                          <button className="miniButton danger" disabled={uninstallDisabled} type="button" onClick={(event) => { event.stopPropagation(); onManageCodex(sshHost.alias, "uninstall"); }}>
+                            {remoteCodexButtonLabel(copy, busy, "uninstall")}
+                          </button>
+                        </CommandGroup>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -7523,41 +7462,10 @@ export function ProfilesView({
         : copy.profiles.ccSwitchNone
       : "");
   const canImportCcSwitchDetection = Boolean(ccDetection?.detected);
-  const profileColumns: DataTableColumn<Profile>[] = [
-    { id: "name", header: copy.profiles.name, priority: "essential", render: (profile) => <strong>{profile.name}</strong> },
-    { id: "model", header: copy.profiles.model, priority: "essential", render: (profile) => profile.model },
-    { id: "provider", header: copy.profiles.provider, render: (profile) => profile.provider },
-    { id: "apiKey", header: copy.profiles.apiKey, render: (profile) => <ProfileStorageBadge copy={copy} profile={profile} /> },
-    { id: "hosts", header: copy.profiles.hosts, align: "center", priority: "optional", render: (profile) => appliedHostCountByProfileId.get(profile.id) ?? 0 },
-    {
-      id: "actions",
-      header: copy.profiles.actions,
-      priority: "essential",
-      render: (profile) => (
-        <CommandGroup className="profileRowActions" onClick={(event) => event.stopPropagation()}>
-          <button className="miniButton" type="button" onClick={() => { setEditingProfileId(profile.id); setProfileEditorOpen(true); }}>{copy.profiles.edit}</button>
-          <button className="miniButton" disabled={busy === "duplicate"} type="button" onClick={() => void handleDuplicate(profile)}>{copy.profiles.duplicate}</button>
-          <button className="miniButton danger" disabled={busy === "delete"} type="button" onClick={() => setDeleteProfileId(profile.id)}>{copy.profiles.delete}</button>
-        </CommandGroup>
-      )
-    },
-    {
-      id: "apply",
-      header: copy.profiles.applyColumn,
-      priority: "essential",
-      render: (profile) => (
-        <button className="miniButton" disabled={hosts.length === 0} type="button" onClick={(event) => {
-          event.stopPropagation();
-          setSelectedProfileId(profile.id);
-          setHostPickerProfileId(profile.id);
-        }}>{copy.profiles.selectHosts}</button>
-      )
-    }
-  ];
 
   return (
     <div className="profilesStack">
-      <Card className="profileSectionCard spanWide" padding="none">
+      <section className="panel spanWide">
         <div className="panelHeader">
           <div>
             <TitleWithIcon icon="profiles" level={2}>{copy.profiles.library}</TitleWithIcon>
@@ -7595,19 +7503,65 @@ export function ProfilesView({
         {profiles.length === 0 ? (
           <EmptyListState copy={copy} message={copy.emptyLists.profiles} variant="profiles" />
         ) : (
-          <DataTable
-            ariaLabel={copy.profiles.library}
-            className="profilesDataTable"
-            columns={profileColumns}
-            rows={profiles}
-            getRowKey={(profile) => profile.id}
-            getRowClassName={(profile) => selectedProfile?.id === profile.id ? "is-selected" : undefined}
-            onRowActivate={(profile) => setSelectedProfileId(profile.id)}
-          />
+          <div className="tableWrap">
+            <table className="profilesTable profileTable">
+              <thead>
+                <tr>
+                  <th>{copy.profiles.name}</th>
+                  <th>{copy.profiles.model}</th>
+                  <th>{copy.profiles.provider}</th>
+                  <th>{copy.profiles.apiKey}</th>
+                  <th>{copy.profiles.hosts}</th>
+                  <th>{copy.profiles.actions}</th>
+                  <th>{copy.profiles.applyColumn}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profiles.map((profile) => (
+                  <tr
+                    className="selectableRow"
+                    data-selected={selectedProfile?.id === profile.id}
+                    key={profile.id}
+                    onClick={() => setSelectedProfileId(profile.id)}
+                  >
+                    <td><strong>{profile.name}</strong></td>
+                    <td>{profile.model}</td>
+                    <td>{profile.provider}</td>
+                    <td><ProfileStorageBadge copy={copy} profile={profile} /></td>
+                    <td>{appliedHostCountByProfileId.get(profile.id) ?? 0}</td>
+                    <td>
+                      <CommandGroup className="profileRowActions" onClick={(event) => event.stopPropagation()}>
+                        <button className="miniButton" type="button" onClick={() => {
+                          setEditingProfileId(profile.id);
+                          setProfileEditorOpen(true);
+                        }}>{copy.profiles.edit}</button>
+                        <button className="miniButton" disabled={busy === "duplicate"} type="button" onClick={() => void handleDuplicate(profile)}>{copy.profiles.duplicate}</button>
+                        <button className="miniButton danger" disabled={busy === "delete"} type="button" onClick={() => setDeleteProfileId(profile.id)}>{copy.profiles.delete}</button>
+                      </CommandGroup>
+                    </td>
+                    <td>
+                      <button
+                        className="miniButton"
+                        disabled={hosts.length === 0}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedProfileId(profile.id);
+                          setHostPickerProfileId(profile.id);
+                        }}
+                      >
+                        {copy.profiles.selectHosts}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </Card>
+      </section>
 
-      <Card className="profileSectionCard spanWide profileApplyPanel" padding="none">
+      <section className="panel spanWide profileApplyPanel">
         <div className="panelHeader compact">
           <div>
             <TitleWithIcon icon="profiles" level={2}>{copy.profiles.applyConfig}</TitleWithIcon>
@@ -7660,7 +7614,7 @@ export function ProfilesView({
             </table>
           </div>
         )}
-      </Card>
+      </section>
 
       <ProfileEditModal
         busy={busy}
@@ -8756,49 +8710,10 @@ export function SkillsView({
       current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
     );
   };
-  const skillColumns: DataTableColumn<SkillPack>[] = [
-    { id: "skill", header: copy.skills.skill, priority: "essential", render: (skill) => <strong>{skill.name}</strong> },
-    {
-      id: "source",
-      header: copy.skills.source,
-      render: (skill) => <Badge tone={skill.sourceType === "github" ? "blue" : "gray"}>{skill.sourceType === "github" ? copy.skills.sourceGithub : copy.skills.sourceLocal}</Badge>
-    },
-    { id: "date", header: copy.skills.addedAt, priority: "optional", render: (skill) => skill.addedAt || "-" },
-    {
-      id: "applications",
-      header: copy.skills.applications,
-      render: (skill) => (
-        <div className="skillApplicationTags">
-          {skill.applications.length > 0 ? skill.applications.map((application) => (
-            <Badge
-              key={`${application.targetType}-${application.hostAlias ?? "local"}`}
-              tone={application.hasSkillMd ? "green" : "yellow"}
-              title={personalInfo.maskText(application.path)}
-            >
-              {personalInfo.maskText(skillApplicationLabel(application, copy))}
-            </Badge>
-          )) : <Badge tone="gray">{copy.skills.unapplied}</Badge>}
-        </div>
-      )
-    },
-    {
-      id: "actions",
-      header: copy.skills.actions,
-      priority: "essential",
-      render: (skill) => (
-        <CommandGroup className="skillRowActions">
-          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => setPreviewSkill(skill)}>{copy.skills.preview}</button>
-          <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => void openTargets(skill, "install")}>{copy.skills.install}</button>
-          <button className="miniButton" disabled={Boolean(busy) || skill.applications.length === 0} type="button" onClick={() => void openTargets(skill, "uninstall")}>{copy.skills.uninstall}</button>
-          <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={() => setDeleteSkill(skill)}>{copy.skills.delete}</button>
-        </CommandGroup>
-      )
-    }
-  ];
 
   return (
     <div className="skillsStack">
-      <Card className="skillsSectionCard spanWide" padding="none">
+      <section className="panel spanWide">
         <div className="panelHeader compact">
           <TitleWithIcon icon="skills" level={2}>{copy.skills.library}</TitleWithIcon>
           <CommandBar ariaLabel={copy.skills.library} className="skillLibraryActions">
@@ -8820,53 +8735,119 @@ export function SkillsView({
         {skillPacks.length === 0 ? (
           <EmptyListState copy={copy} message={copy.emptyLists.skills} variant="skills" />
         ) : (
-          <DataTable
-            ariaLabel={copy.skills.library}
-            className="skillsDataTable"
-            columns={skillColumns}
-            rows={skillPacks}
-            getRowKey={(skill) => skill.id}
-          />
+          <div className="tableWrap">
+            <table className="skillsTable">
+              <thead>
+                <tr>
+                  <th>{copy.skills.skill}</th>
+                  <th>{copy.skills.source}</th>
+                  <th>{copy.skills.addedAt}</th>
+                  <th>{copy.skills.applications}</th>
+                  <th>{copy.skills.actions}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {skillPacks.map((skill) => (
+                  <tr key={skill.id}>
+                    <td>
+                      <strong>{skill.name}</strong>
+                    </td>
+                    <td>
+                      <Badge tone={skill.sourceType === "github" ? "blue" : "gray"}>
+                        {skill.sourceType === "github" ? copy.skills.sourceGithub : copy.skills.sourceLocal}
+                      </Badge>
+                    </td>
+                    <td>{skill.addedAt || "-"}</td>
+                    <td>
+                      <div className="skillApplicationTags">
+                        {skill.applications.length > 0 ? (
+                          skill.applications.map((application) => (
+                            <Badge
+                              key={`${application.targetType}-${application.hostAlias ?? "local"}`}
+                              tone={application.hasSkillMd ? "green" : "yellow"}
+                              title={personalInfo.maskText(application.path)}
+                            >
+                              {personalInfo.maskText(skillApplicationLabel(application, copy))}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge tone="gray">{copy.skills.unapplied}</Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <CommandGroup className="skillRowActions">
+                        <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => setPreviewSkill(skill)}>
+                          {copy.skills.preview}
+                        </button>
+                        <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => void openTargets(skill, "install")}>
+                          {copy.skills.install}
+                        </button>
+                        <button className="miniButton" disabled={Boolean(busy) || skill.applications.length === 0} type="button" onClick={() => void openTargets(skill, "uninstall")}>
+                          {copy.skills.uninstall}
+                        </button>
+                        <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={() => setDeleteSkill(skill)}>
+                          {copy.skills.delete}
+                        </button>
+                      </CommandGroup>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {message ? <p className="skillMessage" data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{personalInfo.maskText(message.text)}</p> : null}
-      </Card>
+      </section>
 
-      <Card className="skillsSectionCard spanWide" padding="none">
+      <section className="panel spanWide">
         <div className="panelHeader compact">
           <TitleWithIcon icon="install" level={2}>{copy.skills.installedLibrary}</TitleWithIcon>
         </div>
-        <div className="installedSkillHostGrid">
-          {installedSkillRows.map((row) => (
-            <article className="installedSkillHostCard" key={row.key}>
-              <header>
-                <div>
-                  <strong>{personalInfo.maskText(row.alias)}</strong>
-                  <span>{personalInfo.maskHostAddress(row.hostIp)}</span>
-                </div>
-                <Badge tone={row.sourceTone}>{row.source}</Badge>
-              </header>
-              <div className="installedSkillTags">
-                {row.skills.length > 0 ? row.skills.map((skill) => (
-                  <button
-                    className="installedSkillTag"
-                    key={skill.key}
-                    style={installedSkillTagStyle(skill.skillName, installedSkillNames)}
-                    title={personalInfo.maskText(skill.path)}
-                    type="button"
-                    onClick={() => openInstalledPreview(row, skill)}
-                  >
-                    {skill.skillName}
-                  </button>
-                )) : row.unknownSkillCount ? (
-                  <Badge tone="blue">{`${copy.hosts.skillsCount}: ${row.unknownSkillCount}`}</Badge>
-                ) : (
-                  <Badge tone="gray">{copy.skills.noInstalledSkills}</Badge>
-                )}
-              </div>
-            </article>
-          ))}
+        <div className="tableWrap">
+          <table className="installedSkillsTable">
+            <thead>
+              <tr>
+                <th>{copy.hosts.alias}</th>
+                <th>{copy.hosts.source}</th>
+                <th>{copy.skills.hostIp}</th>
+                <th>{copy.skills.installedSkills}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {installedSkillRows.map((row) => (
+                <tr key={row.key}>
+                  <td><strong>{personalInfo.maskText(row.alias)}</strong></td>
+                  <td><Badge tone={row.sourceTone}>{row.source}</Badge></td>
+                  <td>{personalInfo.maskHostAddress(row.hostIp)}</td>
+                  <td>
+                    <div className="installedSkillTags">
+                      {row.skills.length > 0 ? (
+                        row.skills.map((skill) => (
+                          <button
+                            className="installedSkillTag"
+                            key={skill.key}
+                            style={installedSkillTagStyle(skill.skillName, installedSkillNames)}
+                            title={personalInfo.maskText(skill.path)}
+                            type="button"
+                            onClick={() => openInstalledPreview(row, skill)}
+                          >
+                            {skill.skillName}
+                          </button>
+                        ))
+                      ) : row.unknownSkillCount ? (
+                        <Badge tone="blue">{`${copy.hosts.skillsCount}: ${row.unknownSkillCount}`}</Badge>
+                      ) : (
+                        <Badge tone="gray">{copy.skills.noInstalledSkills}</Badge>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </Card>
+      </section>
 
       {firstScanOpen ? (
         <SkillFirstScanModal
@@ -9880,37 +9861,36 @@ export function TasksView({
         {tasks.length === 0 ? (
           <EmptyListState copy={copy} message={copy.emptyLists.tasks} variant="tasks" />
         ) : (
-          <div aria-label={copy.tasks.taskHistory} className="taskTimeline" role="list">
-            {tasks.map((task) => (
-              <article className="taskTimelineItem" data-status={task.status} key={task.id} role="listitem">
-                <span className="taskTimelineRail" aria-hidden="true">
-                  <span className="taskTimelineDot" />
-                </span>
-                <div className="taskTimelineBody">
-                  <div className="taskTimelineHeading">
-                    <div>
-                      <strong>{localizeTaskAction(task.action, copy)}</strong>
-                      <span>{personalInfo.maskText(task.hostName)}</span>
-                    </div>
-                    <TaskStatusBadge copy={copy} status={task.status} />
-                  </div>
-                  <p>{personalInfo.maskText(localizeTaskSummary(task, copy))}</p>
-                  <time dateTime={task.startedAt}>{formatTaskTimestamp(task, copy, nowTick)}</time>
-                </div>
-                <button
-                  aria-label={`${copy.tasks.logs}: ${localizeTaskAction(task.action, copy)}`}
-                  className="taskTimelineLogButton"
-                  title={copy.tasks.logs}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTaskId(task.id);
-                    onTaskViewed(task.id);
-                  }}
-                >
-                  <NavIcon id="tasks" />
-                </button>
-              </article>
-            ))}
+          <div className="tableWrap taskTableWrap">
+            <table className="tasksTable">
+              <thead>
+                <tr>
+                  <th>{copy.tasks.action}</th>
+                  <th>{copy.tasks.host}</th>
+                  <th>{copy.tasks.status}</th>
+                  <th>{copy.tasks.started}</th>
+                  <th>{copy.tasks.summary}</th>
+                  <th className="taskDetailsCol">{copy.tasks.details}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((task) => (
+                  <tr key={task.id}>
+                    <td><strong>{localizeTaskAction(task.action, copy)}</strong></td>
+                    <td>{personalInfo.maskText(task.hostName)}</td>
+                    <td><TaskStatusBadge copy={copy} status={task.status} /></td>
+                    <td>{formatTaskTimestamp(task, copy, nowTick)}</td>
+                    <td>{personalInfo.maskText(localizeTaskSummary(task, copy))}</td>
+                    <td className="taskDetailsCol">
+                      <button className="miniButton" type="button" onClick={() => {
+                        setSelectedTaskId(task.id);
+                        onTaskViewed(task.id);
+                      }}>{copy.tasks.logs}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         {hasMore ? (
@@ -10789,6 +10769,14 @@ function sshHostSourceLabel(copy: UICopy, host: SshConfigHost) {
 function knownHostValue(value: string | null | undefined, copy: UICopy) {
   const normalized = value?.trim();
   return normalized && normalized.toLowerCase() !== "unknown" ? normalized : copy.hosts.unknown;
+}
+
+function hostSystemLabel(host: Host, copy: UICopy) {
+  const os = knownHostValue(host.os, copy);
+  const arch = knownHostValue(host.arch, copy);
+  if (arch === copy.hosts.unknown) return os;
+  if (os === copy.hosts.unknown) return arch;
+  return `${os} / ${arch}`;
 }
 
 function knownValueTone(value: string | null | undefined, copy: UICopy): BadgeTone {

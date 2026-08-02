@@ -208,15 +208,6 @@ function renderProfilesView({
   return { apply, onOpenTask, previewApply };
 }
 
-test("renders local profiles through the responsive shared data table", () => {
-  renderProfilesView();
-
-  const table = screen.getByRole("table", { name: "Local config" });
-  expect(table.closest(".ch-data-table")).toHaveClass("profilesDataTable");
-  expect(within(table).getByText(testProfile.name)).toBeVisible();
-  expect(within(table).getByRole("button", { name: "Select hosts" })).toBeEnabled();
-});
-
 test("single-host apply resets to App services and gates all-session termination", async () => {
   const user = userEvent.setup();
   const { apply } = renderProfilesView();

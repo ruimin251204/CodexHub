@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { mergeClassNames } from "../UI/classNames";
 
-export interface AppLayoutProps {
+export interface AppShellProps {
   header?: ReactNode;
   sidebar: ReactNode;
   children: ReactNode;
@@ -12,7 +12,7 @@ export interface AppLayoutProps {
 }
 
 /** 统一承载顶栏、侧栏和主内容区，不持有任何路由或业务状态。 */
-export function AppLayout({
+export function AppShell({
   header,
   sidebar,
   children,
@@ -20,7 +20,7 @@ export function AppLayout({
   mainLabel,
   className,
   mainClassName
-}: AppLayoutProps) {
+}: AppShellProps) {
   return (
     <div
       className={mergeClassNames("ch-app-shell", className)}
@@ -35,7 +35,3 @@ export function AppLayout({
     </div>
   );
 }
-
-/** @deprecated 新代码统一使用 AppLayout；保留别名避免破坏现有调用。 */
-export const AppShell = AppLayout;
-export type AppShellProps = AppLayoutProps;

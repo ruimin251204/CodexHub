@@ -2,11 +2,10 @@ import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test } from "vitest";
-import { AppLayout, AppShell } from "./AppShell";
+import { AppShell } from "./AppShell";
 import { Header } from "./Header";
 import { PageContainer } from "./PageContainer";
 import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
 
 function LayoutHarness() {
   const [collapsed, setCollapsed] = useState(false);
@@ -113,20 +112,4 @@ test("responsive icon sidebar keeps its navigation names and tooltips aligned", 
 test("page container creates a labelled section", () => {
   render(<PageContainer title="Transfers"><div>Queue</div></PageContainer>);
   expect(screen.getByRole("region", { name: "Transfers" })).toBeVisible();
-});
-
-test("AppLayout and TopBar expose the unified desktop landmarks", () => {
-  render(
-    <AppLayout
-      sidebar={<aside>Navigation</aside>}
-      header={<TopBar ariaLabel="Global toolbar" search={<input aria-label="Search" />} trailing={<button>Notifications</button>} />}
-      mainLabel="Content"
-    >
-      <div>Dashboard</div>
-    </AppLayout>
-  );
-
-  expect(screen.getByRole("banner", { name: "Global toolbar" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Notifications" })).toBeVisible();
-  expect(screen.getByRole("main", { name: "Content" })).toBeVisible();
 });

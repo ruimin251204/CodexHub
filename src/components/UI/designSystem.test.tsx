@@ -8,7 +8,6 @@ import type { DataTableColumn, DataTableSort } from "./DataTable";
 import { HostSelector } from "./HostSelector";
 import { SearchBox } from "./SearchBox";
 import { Tabs } from "./Tabs";
-import { Chip, MetricCard, StatusDot, Toggle } from "./Primitives";
 
 interface Row {
   id: string;
@@ -123,23 +122,4 @@ test("action button exposes loading state and disables repeated actions", () => 
   const button = screen.getByRole("button", { name: "Working" });
   expect(button).toBeDisabled();
   expect(button).toHaveAttribute("aria-busy", "true");
-});
-
-test("shared status, metric, chip and toggle primitives keep accessible semantics", async () => {
-  const user = userEvent.setup();
-  const onCheckedChange = vi.fn<(checked: boolean) => void>();
-  render(
-    <>
-      <MetricCard label="Hosts" value="6" description="Online" />
-      <Chip>Spark-3</Chip>
-      <StatusDot tone="success" label="Online" />
-      <Toggle checked={false} label="Auto refresh" onCheckedChange={onCheckedChange} />
-    </>
-  );
-
-  expect(screen.getByText("Hosts")).toBeVisible();
-  expect(screen.getByText("Spark-3")).toBeVisible();
-  expect(screen.getByRole("img", { name: "Online" })).toBeVisible();
-  await user.click(screen.getByRole("switch", { name: "Auto refresh" }));
-  expect(onCheckedChange).toHaveBeenCalledWith(true);
 });
