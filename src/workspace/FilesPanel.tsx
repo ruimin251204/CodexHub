@@ -817,14 +817,17 @@ export function FilesPanel({
       data-tree-resizing={treeResizing}
     >
       <div className="workspacePaneToolbar workspaceFilesCommandBar">
-        <label className="workspaceFilesHostPicker">
-          <span>{copy.host}</span>
+        <label className="workspaceFilesHostPicker" data-connected={fileSession?.state === "connected"}>
+          {fileSession?.state === "connected" ? (
+            <span aria-label={ui.sftpConnected} className="workspaceFilesHostStatus" title={ui.sftpConnected}>
+              <i aria-hidden="true" />
+            </span>
+          ) : null}
           <select aria-label={copy.host} value={selectedHostAlias} onChange={(event) => onHostSelected(event.target.value)}>
             <option value="">{copy.localFiles}</option>
             {hosts.map((host) => <option key={host.id} value={host.hostAlias}>{personalInfo.maskText(workspaceHostLabel(host))}</option>)}
           </select>
         </label>
-        {fileSession?.state === "connected" ? <span aria-label={ui.sftpConnected} className="workspaceFilesConnection" title={ui.sftpConnected}><i aria-hidden="true" />{ui.sftpConnected}</span> : null}
         <div aria-label={copy.location} className="workspaceButtonGroup workspaceFilesPathActions" role="group">
           <button aria-label={copy.back} disabled={!fileSession || historyIndex <= 0} title={copy.back} type="button" onClick={() => {
             if (!fileSession || historyIndex <= 0) return;

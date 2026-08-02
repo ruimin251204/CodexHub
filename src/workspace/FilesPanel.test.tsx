@@ -164,6 +164,19 @@ test("quick access stays outside the scrollable directory tree at the card botto
   expect(quickAccess?.previousElementSibling).toBe(treeScroll);
 });
 
+test("connected Files host keeps status inside the compact host selector", async () => {
+  renderPanel();
+
+  const hostSelect = screen.getByRole("combobox", { name: workspaceCopy.en.host });
+  await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree });
+  const hostPicker = hostSelect.closest<HTMLElement>(".workspaceFilesHostPicker");
+
+  expect(hostPicker).toHaveAttribute("data-connected", "true");
+  expect(hostPicker?.querySelector(".workspaceFilesHostStatus")).toHaveAttribute("aria-label", filesUiCopy.en.sftpConnected);
+  expect(hostPicker?.textContent).not.toContain(workspaceCopy.en.host);
+  expect(screen.queryByText(filesUiCopy.en.sftpConnected)).not.toBeInTheDocument();
+});
+
 test("the local Files landing does not open an SSH file session", async () => {
   const stop = () => undefined;
   const api = {
