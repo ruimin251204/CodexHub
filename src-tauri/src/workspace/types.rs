@@ -139,6 +139,8 @@ pub struct TerminalIdentityRequest {
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "WorkspaceOpenFilesRequestDto")]
 pub struct OpenFilesRequest {
+    #[serde(default)]
+    pub local: bool,
     pub host_id: String,
     pub host_name: String,
     pub host_alias: String,
@@ -158,6 +160,15 @@ pub struct FileSessionDto {
     /// publish path. Workspace refuses a claimed no-replace move without it.
     pub supports_hardlink: bool,
     pub supports_posix_rename: bool,
+    pub target_kind: FileTargetKind,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename = "WorkspaceFileTargetKindDto")]
+pub enum FileTargetKind {
+    Local,
+    Remote,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -302,6 +313,15 @@ pub struct CreateDirectoryRequest {
     pub file_session_id: String,
     pub parent_path: String,
     pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "WorkspaceCopyFileEntryRequestDto")]
+pub struct CopyFileEntryRequest {
+    pub file_session_id: String,
+    pub source_entry_ref: String,
+    pub destination_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize, TS)]

@@ -11,6 +11,7 @@ import type {
 } from "./types";
 
 export type WorkspaceState = {
+  sessionsLoaded: boolean;
   sessions: WorkspaceTerminalSession[];
   transfers: WorkspaceTransfer[];
   recoveries: WorkspaceRecovery[];
@@ -34,6 +35,7 @@ export type WorkspaceStateAction =
   | { type: "local-recovery-removed"; recoveryId: string };
 
 export const initialWorkspaceState: WorkspaceState = {
+  sessionsLoaded: false,
   sessions: [],
   transfers: [],
   recoveries: [],
@@ -129,6 +131,7 @@ export function workspaceStateReducer(state: WorkspaceState, action: WorkspaceSt
       // by generation/revision so an older snapshot can never roll state back.
       return {
         ...state,
+        sessionsLoaded: true,
         sessions: action.sessions.reduce(
           (current, session) => upsertSession(current, session),
           state.sessions

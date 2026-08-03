@@ -590,10 +590,10 @@ fn assert_recovery_session(
 }
 
 fn normalize_destination(source: &str, destination: &str) -> WorkspaceResult<String> {
-    if destination.trim().is_empty() || !destination.starts_with('/') {
+    if destination.trim().is_empty() || remote_path::validate_absolute(destination).is_err() {
         return Err(WorkspaceError::new(
             "invalid-destination",
-            "Destination must be an absolute remote path.",
+            "Destination must be an absolute normalized Workspace path.",
         ));
     }
     if destination.contains('\0') || protected(destination) {
@@ -657,6 +657,11 @@ mod tests {
             normalize_destination("/srv/source.txt", "/srv/renamed.txt")
                 .expect("safe absolute destination"),
             "/srv/renamed.txt"
+        );
+        assert_eq!(
+            normalize_destination("C:/source.txt", "C:/renamed.txt")
+                .expect("safe absolute Windows destination"),
+            "C:/renamed.txt"
         );
     }
 

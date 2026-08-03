@@ -1,5 +1,6 @@
 use super::background_process::configure_tokio_command;
 use super::error::{WorkspaceError, WorkspaceResult};
+use super::local_files::LocalFileSessions;
 use super::events::{
     emit, FileSearchState, FileSearchUpdatedEvent, WorkspaceEventSink, FILE_SEARCH_UPDATED_EVENT,
 };
@@ -87,6 +88,7 @@ pub struct FileSessions {
     opening: AsyncMutex<()>,
     searches: Mutex<HashMap<String, CancellationToken>>,
     event_sink: Option<WorkspaceEventSink>,
+    local: LocalFileSessions,
 }
 
 impl FileSessions {
@@ -95,12 +97,16 @@ impl FileSessions {
             values: Mutex::new(HashMap::new()),
             opening: AsyncMutex::new(()),
             searches: Mutex::new(HashMap::new()),
+            local: LocalFileSessions::new(event_sink.clone()),
             event_sink,
         }
     }
     /// Uses `ssh -s sftp`; OpenSSH therefore applies Include, Match, agent,
     /// ProxyJump and known_hosts exactly as it does in the user's terminal.
     pub async fn open(&self, request: OpenFilesRequest) -> WorkspaceResult<OpenFileSession> {
+        if request.local {
+            return Ok(OpenFileSession { session: self.local.open()?, reused: true });
+        }
         let _opening = self.opening.lock().await;
         if let Some(existing) = self
             .values
@@ -138,6 +144,7 @@ impl FileSessions {
             supports_fsync: connection.sftp.support_fsync(),
             supports_hardlink: connection.sftp.support_hardlink(),
             supports_posix_rename: connection.sftp.support_posix_rename(),
+            target_kind: FileTargetKind::Remote,
         };
         self.values.lock().map_err(lock_error)?.insert(
             dto.file_session_id.clone(),
@@ -154,6 +161,9 @@ impl FileSessions {
         })
     }
     pub async fn close(&self, file_session_id: &str) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) {
+            return Ok(());
+        }
         let session = self
             .values
             .lock()
@@ -183,6 +193,9 @@ impl FileSessions {
     /// Recreate a broken subsystem process only after the caller classified a
     /// transport failure. Permission and path errors retain the live session.
     pub(crate) async fn reconnect(&self, file_session_id: &str) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) {
+            return Ok(());
+        }
         let session = self.get(file_session_id)?;
         let replacement = connect_sftp(&session.dto.host_alias).await?;
         let mut previous = {
@@ -196,6 +209,9 @@ impl FileSessions {
         &self,
         request: ListDirectoryRequest,
     ) -> WorkspaceResult<ListDirectoryResult> {
+        if LocalFileSessions::owns(&request.file_session_id) {
+            return self.local.list_directory(request).await;
+        }
         let session = self.get(&request.file_session_id)?;
         let canonical = canonicalize(&session, &request.path).await?;
         let canonical_path = path_string(&canonical)?;
@@ -303,6 +319,9 @@ impl FileSessions {
         })
     }
     pub async fn preview(&self, request: PreviewFileRequest) -> WorkspaceResult<FilePreview> {
+        if LocalFileSessions::owns(&request.file_session_id) {
+            return self.local.preview(request).await;
+        }
         let session = self.get(&request.file_session_id)?;
         let entry = self.resolve_entry(&session, &request.entry_ref).await?;
         if entry.kind != RemoteFileKind::File {
@@ -377,6 +396,9 @@ impl FileSessions {
         file_session_id: &str,
         candidate_path: &str,
     ) -> WorkspaceResult<String> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.canonicalize(candidate_path).await;
+        }
         let session = self.get(file_session_id)?;
         let canonical = canonicalize(&session, candidate_path).await?;
         path_string(&canonical)
@@ -389,6 +411,9 @@ impl FileSessions {
         file_session_id: &str,
         expected_host_id: &str,
     ) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) {
+            return if expected_host_id == "local" { Ok(()) } else { Err(WorkspaceError::new("file-session-host-mismatch", "The Files session belongs to the local computer.")) };
+        }
         let session = self.get(file_session_id)?;
         if session.dto.host_id == expected_host_id {
             return Ok(());
@@ -407,6 +432,9 @@ impl FileSessions {
         expected_host_id: &str,
         candidate_path: &str,
     ) -> WorkspaceResult<String> {
+        if LocalFileSessions::owns(file_session_id) {
+            return Err(WorkspaceError::new("terminal-directory-local", "A remote terminal cannot start in a local directory."));
+        }
         let session = self.get(file_session_id)?;
         self.assert_host(file_session_id, expected_host_id)
             .map_err(|_| {
@@ -429,6 +457,9 @@ impl FileSessions {
         &self,
         request: StartFileSearchRequest,
     ) -> WorkspaceResult<FileSearchStarted> {
+        if LocalFileSessions::owns(&request.file_session_id) {
+            return self.local.start_search(request).await;
+        }
         let session = self.get(&request.file_session_id)?;
         let start = path_string(&canonicalize(&session, &request.path).await?)?;
         if request.query.trim().is_empty() {
@@ -455,6 +486,9 @@ impl FileSessions {
         Ok(FileSearchStarted { search_id: id })
     }
     pub fn cancel_search(&self, request: CancelFileSearchRequest) -> WorkspaceResult<()> {
+        if request.search_id.starts_with("local-search-") {
+            return self.local.cancel_search(request);
+        }
         self.searches
             .lock()
             .map_err(lock_error)?
@@ -470,6 +504,9 @@ impl FileSessions {
         file_session_id: &str,
         entry_ref: &str,
     ) -> WorkspaceResult<RemoteFileEntry> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.operation_stat(entry_ref).await;
+        }
         self.resolve_entry(&self.get(file_session_id)?, entry_ref)
             .await
     }
@@ -479,6 +516,9 @@ impl FileSessions {
         &self,
         request: CreateDirectoryRequest,
     ) -> WorkspaceResult<RemoteFileEntry> {
+        if LocalFileSessions::owns(&request.file_session_id) {
+            return self.local.create_directory(request).await;
+        }
         if !safe_child_name(&request.name) {
             return Err(WorkspaceError::new(
                 "invalid-directory-name",
@@ -520,7 +560,61 @@ impl FileSessions {
             None,
         )
     }
+    pub async fn copy_entry(&self, request: CopyFileEntryRequest) -> WorkspaceResult<RemoteFileEntry> {
+        if LocalFileSessions::owns(&request.file_session_id) {
+            return self.local.copy_entry(&request.source_entry_ref, &request.destination_path).await;
+        }
+        let session = self.get(&request.file_session_id)?;
+        let source = self.resolve_entry(&session, &request.source_entry_ref).await?;
+        if !matches!(source.kind, RemoteFileKind::File | RemoteFileKind::Directory) || !source.writable_name {
+            return Err(WorkspaceError::new("copy-source-unsupported", "Remote copy requires a regular file or plain directory with a UTF-8 name."));
+        }
+        let name = remote_path::file_name(&request.destination_path)?;
+        if !safe_child_name(name) {
+            return Err(WorkspaceError::new("invalid-destination", "The copy destination name is invalid."));
+        }
+        let parent = remote_path::parent(&request.destination_path)?;
+        let connection = session.connection.lock().await;
+        let mut fs = connection.sftp.fs();
+        let canonical_parent = fs.canonicalize(Path::new(parent)).await.map_err(sftp_error("destination-parent-stale"))?;
+        let parent_meta = fs.symlink_metadata(&canonical_parent).await.map_err(sftp_error("destination-parent-stale"))?;
+        ensure_plain_directory(&parent_meta, "destination-parent-unsafe")?;
+        let destination = remote_path::join(&path_string(&canonical_parent)?, name)?;
+        if fs.symlink_metadata(Path::new(&destination)).await.is_ok() {
+            return Err(WorkspaceError::new("destination-exists", "The copy destination already exists."));
+        }
+        if source.kind == RemoteFileKind::File {
+            copy_remote_regular_file(&connection.sftp, &source.path, &destination).await?;
+        } else {
+            fs.create_dir(Path::new(&destination)).await.map_err(sftp_error("copy-destination-create-failed"))?;
+            let mut stack = vec![(source.path.clone(), destination.clone())];
+            while let Some((source_dir, destination_dir)) = stack.pop() {
+                let directory = fs.open_dir(Path::new(&source_dir)).await.map_err(sftp_error("copy-source-open-failed"))?;
+                let stream = directory.read_dir();
+                tokio::pin!(stream);
+                while let Some(item) = stream.as_mut().next().await {
+                    let item = item.map_err(sftp_error("copy-source-read-failed"))?;
+                    let name = item.filename().to_str().filter(|name| safe_child_name(name)).ok_or_else(|| WorkspaceError::new("unsupported-path-encoding", "A directory entry cannot be copied safely."))?;
+                    let child_source = remote_path::join(&source_dir, name)?;
+                    let child_destination = remote_path::join(&destination_dir, name)?;
+                    match item.metadata().file_type() {
+                        Some(kind) if kind.is_dir() => {
+                            fs.create_dir(Path::new(&child_destination)).await.map_err(sftp_error("copy-destination-create-failed"))?;
+                            stack.push((child_source, child_destination));
+                        }
+                        Some(kind) if kind.is_file() => copy_remote_regular_file(&connection.sftp, &child_source, &child_destination).await?,
+                        _ => return Err(WorkspaceError::new("copy-source-unsupported", "Folders containing links or special files cannot be copied safely.")),
+                    }
+                }
+            }
+        }
+        let metadata = fs.symlink_metadata(Path::new(&destination)).await.map_err(sftp_error("copy-destination-stale"))?;
+        let entry = entry_from_metadata(destination, std::ffi::OsString::from(name), metadata, None)?;
+        session.entries.write().await.insert(entry.entry_ref.clone(), entry.clone());
+        Ok(entry)
+    }
     pub(crate) fn operation_host_alias(&self, file_session_id: &str) -> WorkspaceResult<String> {
+        if LocalFileSessions::owns(file_session_id) { return Ok(String::new()); }
         Ok(self.get(file_session_id)?.dto.host_alias.clone())
     }
     pub(crate) async fn operation_stat(
@@ -528,6 +622,9 @@ impl FileSessions {
         file_session_id: &str,
         entry_ref: &str,
     ) -> WorkspaceResult<RemoteFileEntry> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.operation_stat(entry_ref).await;
+        }
         let session = self.get(file_session_id)?;
         let entry = self.resolve_entry(&session, entry_ref).await?;
         let connection = session.connection.lock().await;
@@ -557,6 +654,9 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<RemoteFileEntry> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.operation_internal_entry(path).await;
+        }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
@@ -581,6 +681,9 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<OperationPathSnapshot> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.operation_snapshot_overwrite_destination(path).await;
+        }
         let name = remote_path::file_name(path)?;
         if !safe_child_name(name) {
             return Err(WorkspaceError::new(
@@ -632,6 +735,7 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<bool> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.operation_exists(path).await; }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
@@ -645,6 +749,7 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.operation_mkdir(path).await; }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
@@ -660,6 +765,7 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.operation_create_recovery_dir(path).await; }
         let recovery = path;
         let backup_root = remote_path::parent(recovery)?;
         let parent = remote_path::parent(backup_root)?;
@@ -724,6 +830,7 @@ impl FileSessions {
         from: &str,
         to: &str,
     ) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.operation_rename(from, to).await; }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
@@ -739,6 +846,7 @@ impl FileSessions {
         from: &str,
         to: &str,
     ) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.operation_rename_no_replace(from, to).await; }
         let session = self.get(file_session_id)?;
         let parent = remote_path::parent(to)?;
         let connection = session.connection.lock().await;
@@ -782,6 +890,7 @@ impl FileSessions {
         root: &str,
         recovery_id: &str,
     ) -> WorkspaceResult<()> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.operation_purge_recovery(root, recovery_id).await; }
         let backup_root = remote_path::parent(root)?;
         let target_parent = remote_path::parent(backup_root)?;
         if !is_managed_recovery_root(root, recovery_id) {
@@ -863,6 +972,9 @@ impl FileSessions {
         cancel: &CancellationToken,
         progress: &mut (dyn FnMut(u64) -> WorkspaceResult<()> + Send),
     ) -> WorkspaceResult<TransferStreamStop> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.transfer_upload(local_path, remote_staging, offset, cancel, progress).await;
+        }
         let session = self.get(file_session_id)?;
         let local_meta = tokio::fs::metadata(local_path)
             .await
@@ -935,6 +1047,9 @@ impl FileSessions {
         cancel: &CancellationToken,
         progress: &mut (dyn FnMut(u64) -> WorkspaceResult<()> + Send),
     ) -> WorkspaceResult<TransferStreamStop> {
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.transfer_download(remote_source, local_partial, offset, cancel, progress).await;
+        }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
@@ -1011,6 +1126,7 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<TransferFingerprint> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.transfer_fingerprint(path).await; }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut fs = connection.sftp.fs();
@@ -1033,6 +1149,7 @@ impl FileSessions {
         file_session_id: &str,
         path: &str,
     ) -> WorkspaceResult<String> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.transfer_sha256(path).await; }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut remote = connection
@@ -1058,6 +1175,7 @@ impl FileSessions {
         path: &str,
         length: u64,
     ) -> WorkspaceResult<String> {
+        if LocalFileSessions::owns(file_session_id) { return self.local.transfer_prefix_sha256(path, length).await; }
         let session = self.get(file_session_id)?;
         let connection = session.connection.lock().await;
         let mut remote = connection
@@ -1093,6 +1211,7 @@ impl FileSessions {
     /// Returns the stable saved-host identity for a live SFTP handle. Recovery
     /// records persist this identity rather than this ephemeral session id.
     pub(crate) fn operation_host_id(&self, file_session_id: &str) -> WorkspaceResult<String> {
+        if LocalFileSessions::owns(file_session_id) { return Ok("local".into()); }
         Ok(self.get(file_session_id)?.dto.host_id.clone())
     }
 
@@ -1100,6 +1219,7 @@ impl FileSessions {
         &self,
         file_session_id: &str,
     ) -> WorkspaceResult<(String, String)> {
+        if LocalFileSessions::owns(file_session_id) { return Ok(("local".into(), "Local files".into())); }
         let session = self.get(file_session_id)?;
         Ok((session.dto.host_id.clone(), session.dto.host_name.clone()))
     }
@@ -1147,6 +1267,18 @@ async fn close_session(session: Arc<FileSession>) -> WorkspaceResult<()> {
 async fn stop_sftp_child(child: &mut Child) {
     let _ = child.kill().await;
     let _ = child.wait().await;
+}
+
+async fn copy_remote_regular_file(sftp: &Sftp, source: &str, destination: &str) -> WorkspaceResult<()> {
+    let mut input = sftp.open(Path::new(source)).await.map_err(sftp_error("copy-source-open-failed"))?;
+    let mut options = sftp.options();
+    options.create_new(true).write(true);
+    let mut output = options.open(Path::new(destination)).await.map_err(sftp_error("copy-destination-open-failed"))?;
+    while let Some(bytes) = input.read(TRANSFER_CHUNK_BYTES as u32, Default::default()).await.map_err(sftp_error("copy-source-read-failed"))? {
+        output.write_all(&bytes).await.map_err(sftp_error("copy-destination-write-failed"))?;
+    }
+    output.sync_all().await.map_err(sftp_error("sftp-fsync-required"))?;
+    output.close().await.map_err(sftp_error("copy-destination-close-failed"))
 }
 
 async fn connect_sftp(alias: &str) -> WorkspaceResult<ConnectedSftp> {

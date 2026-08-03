@@ -16,6 +16,7 @@ import { TransferStats } from "./transfers/TransferStats";
 import { TransferTable } from "./transfers/TransferTable";
 import "./transfers-redesign.css";
 import { usePersonalInfoMasking } from "../ui/PersonalInfoMasking";
+import { ActionIcon } from "../components/UI/ActionIcon";
 
 export function TransfersPanel({
   api,
@@ -155,8 +156,8 @@ export function TransfersPanel({
           <p id="transfer-page-description">{ui.description}</p>
         </div>
         <div className="transferPageActions">
-          {onRefresh ? <button disabled={busyId === "refresh"} type="button" onClick={refresh}><span aria-hidden="true">↻</span><span>{ui.refresh}</span></button> : null}
-          {onNewTransfer ? <button className="transferPrimaryAction" type="button" onClick={onNewTransfer}><span aria-hidden="true">＋</span><span>{ui.newTransfer}</span></button> : null}
+          {onRefresh ? <button className="pageActionButton" disabled={busyId === "refresh"} type="button" onClick={refresh}><ActionIcon name="refresh" /><span>{ui.refresh}</span></button> : null}
+          {onNewTransfer ? <button className="pageActionButton transferPrimaryAction" type="button" onClick={onNewTransfer}><ActionIcon name="add" /><span>{ui.newTransfer}</span></button> : null}
         </div>
       </header>
 

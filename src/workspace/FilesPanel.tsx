@@ -62,11 +62,13 @@ type FilesHostView = {
 };
 
 function pathAncestry(path: string) {
-  const ancestry = new Set<string>(["/"]);
+  const ancestry = new Set<string>();
   let cursor = path;
-  while (cursor !== "/") {
+  while (true) {
     ancestry.add(cursor);
-    cursor = parentPath(cursor);
+    const parent = parentPath(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
   }
   return ancestry;
 }
@@ -358,10 +360,6 @@ export function FilesPanel({
       }
       return;
     }
-    if (!selectedHostAlias) {
-      restoreHostView(null);
-      return;
-    }
     const retryRequest = retryRequestRef.current?.hostAlias === selectedHostAlias
       ? retryRequestRef.current
       : null;
@@ -390,7 +388,7 @@ export function FilesPanel({
       setFileSession(session);
       setHistory([]);
       setHistoryIndex(-1);
-      await navigate(session, retryRequest?.path ?? null, { manual: false });
+      await navigate(session, retryRequest?.path ?? session.homePath, { manual: false });
     })().catch((error) => {
       if (!disposed) {
         setFilesError(true);
@@ -681,13 +679,13 @@ export function FilesPanel({
       void prepareOperation(pending);
       return;
     }
-    setPendingOperation({ operation, entry, name: operation === "rename" ? entry?.name ?? "" : "", destinationPath });
+    setPendingOperation({ operation, entry, name: operation === "rename" ? entry?.name ?? "" : operation === "copy" ? `${entry?.name ?? ""} copy` : "", destinationPath });
   };
 
   const prepareOperation = async (pending = pendingOperation) => {
     if (!fileSession || !pending) return;
     const name = pending.name.trim();
-    if (["rename", "create-directory"].includes(pending.operation) && (!name || name.includes("/") || name.includes("\\"))) return;
+    if (["rename", "copy", "create-directory"].includes(pending.operation) && (!name || name.includes("/") || name.includes("\\"))) return;
     setOperationBusy(true);
     try {
       if (pending.operation === "create-directory") {
@@ -695,6 +693,17 @@ export function FilesPanel({
           fileSessionId: fileSession.fileSessionId,
           parentPath: pending.destinationPath ?? page?.canonicalPath ?? fileSession.homePath,
           name
+        });
+        setPendingOperation(null);
+        setOperationPreview(null);
+        await navigate(fileSession, page?.canonicalPath ?? null, { manual: false, replaceHistory: true });
+        return;
+      }
+      if (pending.operation === "copy" && pending.entry) {
+        await api.copyEntry({
+          fileSessionId: fileSession.fileSessionId,
+          sourceEntryRef: pending.entry.entryRef,
+          destinationPath: childPath(parentPath(pending.entry.canonicalPath), name)
         });
         setPendingOperation(null);
         setOperationPreview(null);
@@ -804,7 +813,7 @@ export function FilesPanel({
 
   const canLocate = Boolean(fileSession && activeTerminal && activeTerminal.hostAlias === selectedHostAlias);
   const operationNameValid = pendingOperation
-    ? !["rename", "create-directory"].includes(pendingOperation.operation)
+    ? !["rename", "copy", "create-directory"].includes(pendingOperation.operation)
       || Boolean(pendingOperation.name.trim() && !/[\\/]/.test(pendingOperation.name))
     : false;
 
@@ -819,7 +828,7 @@ export function FilesPanel({
       <div className="workspacePaneToolbar workspaceFilesCommandBar">
         <label className="workspaceFilesHostPicker" data-connected={fileSession?.state === "connected"}>
           {fileSession?.state === "connected" ? (
-            <span aria-label={ui.sftpConnected} className="workspaceFilesHostStatus" title={ui.sftpConnected}>
+            <span aria-label={fileSession.targetKind === "local" ? ui.localConnected : ui.sftpConnected} className="workspaceFilesHostStatus" title={fileSession.targetKind === "local" ? ui.localConnected : ui.sftpConnected}>
               <i aria-hidden="true" />
             </span>
           ) : null}
@@ -841,7 +850,7 @@ export function FilesPanel({
             setHistoryIndex(nextIndex);
             void navigate(fileSession, history[nextIndex], { manual: true, replaceHistory: true });
           }}><FilesIcon name="forward" /></button>
-          <button aria-label={copy.up} disabled={!fileSession || !page || page.canonicalPath === "/"} title={copy.up} type="button" onClick={() => {
+          <button aria-label={copy.up} disabled={!fileSession || !page || parentPath(page.canonicalPath) === page.canonicalPath} title={copy.up} type="button" onClick={() => {
             if (fileSession && page) void navigate(fileSession, parentPath(page.canonicalPath), { manual: true });
           }}><FilesIcon name="up" /></button>
           <button aria-label={copy.home} disabled={!fileSession} title={copy.home} type="button" onClick={() => {
@@ -983,12 +992,7 @@ export function FilesPanel({
             </div>
           ) : null}
           {!loading && !filesError && page !== null && entries.length === 0 ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.emptyDirectory}</div> : null}
-          {!loading && !filesError && page === null && !selectedHostAlias ? (
-            <div className="workspaceEmptyState workspaceFileEmpty">
-              <strong>{copy.localFiles}</strong>
-              <p>{hosts.length === 0 ? copy.noHosts : copy.localFilesHint}</p>
-            </div>
-          ) : null}
+          {!loading && !filesError && page === null ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.loading}</div> : null}
           {loading ? <div className="workspacePaneState">{copy.loading}</div> : null}
           {page && !filesError ? (
             <footer className="workspaceFilesPagination">
@@ -1018,12 +1022,13 @@ export function FilesPanel({
           <button role="menuitem" type="button" onClick={() => { void download([contextMenu.entry]); setContextMenu(null); }}>{copy.download}</button>
           {contextMenu.entry.kind === "directory" ? <button role="menuitem" type="button" onClick={() => { void upload(contextMenu.entry.canonicalPath); setContextMenu(null); }}>{copy.uploadHere}</button> : null}
           <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("rename", contextMenu.entry); setContextMenu(null); }}>{copy.rename}</button>
+          <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("copy", contextMenu.entry); setContextMenu(null); }}>{copy.copyEntry}</button>
           <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("delete", contextMenu.entry); setContextMenu(null); }}>{copy.delete}</button>
           <button role="menuitem" type="button" onClick={() => { void navigator.clipboard.writeText(contextMenu.entry.canonicalPath).catch(onError); setContextMenu(null); }}>{copy.copyPath}</button>
           <button
-            disabled={!fileSession}
+            disabled={!fileSession || fileSession.targetKind === "local"}
             role="menuitem"
-            title={!fileSession ? copy.terminalHereUnavailable : copy.openTerminalHere}
+            title={!fileSession || fileSession.targetKind === "local" ? copy.terminalHereUnavailable : copy.openTerminalHere}
             type="button"
             onClick={() => {
               if (fileSession) {

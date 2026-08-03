@@ -21,7 +21,7 @@ pub(crate) fn join(parent: &str, child: &str) -> WorkspaceResult<String> {
 pub(crate) fn parent(path: &str) -> WorkspaceResult<&str> {
     validate_absolute(path)?;
     let path = trim_trailing_slashes(path);
-    if path == "/" {
+    if path == "/" || is_drive_root(path) {
         return Err(WorkspaceError::new(
             "invalid-remote-path",
             "The remote root has no parent.",
@@ -32,6 +32,8 @@ pub(crate) fn parent(path: &str) -> WorkspaceResult<&str> {
         .ok_or_else(|| WorkspaceError::new("invalid-remote-path", "Remote path has no parent."))?;
     Ok(if separator == 0 {
         "/"
+    } else if separator == 2 && path.as_bytes().get(1) == Some(&b':') {
+        &path[..3]
     } else {
         &path[..separator]
     })
@@ -53,7 +55,7 @@ pub(crate) fn file_name(path: &str) -> WorkspaceResult<&str> {
 }
 
 pub(crate) fn validate_absolute(path: &str) -> WorkspaceResult<()> {
-    if !path.starts_with('/')
+    if !is_absolute(path)
         || path.contains('\0')
         || path.split('/').any(|part| part == "." || part == "..")
     {
@@ -63,6 +65,20 @@ pub(crate) fn validate_absolute(path: &str) -> WorkspaceResult<()> {
         ));
     }
     Ok(())
+}
+
+fn is_absolute(path: &str) -> bool {
+    path.starts_with('/')
+        || (path.len() >= 3
+            && path.as_bytes()[0].is_ascii_alphabetic()
+            && path.as_bytes()[1] == b':'
+            && path.as_bytes()[2] == b'/')
+}
+
+fn is_drive_root(path: &str) -> bool {
+    path.len() == 2
+        && path.as_bytes()[0].is_ascii_alphabetic()
+        && path.as_bytes()[1] == b':'
 }
 
 fn trim_trailing_slashes(path: &str) -> &str {
@@ -106,5 +122,13 @@ mod tests {
                 "{child} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn workspace_paths_support_normalized_windows_drive_roots() {
+        assert_eq!(join("C:/", "Users").unwrap(), "C:/Users");
+        assert_eq!(parent("C:/Users/demo").unwrap(), "C:/Users");
+        assert_eq!(parent("C:/Users").unwrap(), "C:/");
+        assert!(parent("C:/").is_err());
     }
 }

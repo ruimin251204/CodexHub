@@ -5,6 +5,7 @@ import { FilesPanel, formatModifiedAt } from "./FilesPanel";
 import { workspaceHostLabel } from "./hostLabel";
 import { resolveFileColumnWidths } from "./files/FileTable";
 import { filesUiCopy } from "./files/filesUiCopy";
+import { childPath, parentPath } from "./files/fileDisplay";
 import { createPersonalInfoMasker } from "../personalInfo";
 import { PersonalInfoMaskingProvider } from "../ui/PersonalInfoMasking";
 import type {
@@ -22,9 +23,17 @@ const host: WorkspaceHost = {
   status: "online"
 };
 
+test("Windows drive paths keep their root while navigating", () => {
+  expect(parentPath("C:/Users/demo")).toBe("C:/Users");
+  expect(parentPath("C:/Users")).toBe("C:/");
+  expect(parentPath("C:/")).toBe("C:/");
+  expect(childPath("C:/", "Users")).toBe("C:/Users");
+});
+
 const session: WorkspaceFilesSession = {
   fileSessionId: "files-1",
   hostAlias: "demo",
+  targetKind: "remote",
   homePath: "/home/demo",
   currentPath: "/home/demo",
   state: "connected",
@@ -177,10 +186,19 @@ test("connected Files host keeps status inside the compact host selector", async
   expect(screen.queryByText(filesUiCopy.en.sftpConnected)).not.toBeInTheDocument();
 });
 
-test("the local Files landing does not open an SSH file session", async () => {
+test("the local Files target opens the real local file session", async () => {
   const stop = () => undefined;
+  const localSession: WorkspaceFilesSession = {
+    ...session,
+    fileSessionId: "local-files",
+    hostAlias: "",
+    targetKind: "local",
+    homePath: "C:/",
+    currentPath: "C:/"
+  };
   const api = {
-    openFiles: vi.fn(),
+    openFiles: vi.fn().mockResolvedValue(localSession),
+    listDirectory: vi.fn().mockResolvedValue(page("C:/", [])),
     events: {
       onFileSearchUpdated: vi.fn().mockReturnValue(stop),
       onLocalDrop: vi.fn().mockReturnValue(stop)
@@ -189,8 +207,8 @@ test("the local Files landing does not open an SSH file session", async () => {
 
   render(errorPanel(api, vi.fn(), { selectedHostAlias: "" }));
 
-  expect(await screen.findByText(workspaceCopy.en.localFiles, { selector: "strong" })).toBeInTheDocument();
-  expect(api.openFiles).not.toHaveBeenCalled();
+  await waitFor(() => expect(api.openFiles).toHaveBeenCalledWith({ hostAlias: "" }));
+  expect(api.listDirectory).toHaveBeenCalledWith(expect.objectContaining({ fileSessionId: "local-files", path: "C:/" }));
 });
 
 test("dot-prefixed paths are hidden by default and can be revealed", async () => {

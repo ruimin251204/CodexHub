@@ -123,7 +123,10 @@ test("skill download and delete buttons open usable dialogs", async () => {
   const user = userEvent.setup();
   const { onDeleteLibrarySkill } = renderSkills();
 
-  await user.click(screen.getByRole("button", { name: "Download" }));
+  const downloadButton = screen.getByRole("button", { name: "Download" });
+  expect(downloadButton.querySelector(".pageActionIcon")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Delete" }).querySelector(".pageActionIcon")).not.toBeInTheDocument();
+  await user.click(downloadButton);
   const downloadDialog = await screen.findByRole("dialog", { name: "Download skill" });
   expect(within(downloadDialog).getByRole("textbox")).toBeVisible();
   const cancelButtons = within(downloadDialog).getAllByRole("button", { name: "Cancel" });

@@ -86,6 +86,7 @@ export function WorkspacePage({
   const splitRef = useRef<HTMLDivElement>(null);
   const consumedTerminalHostRequestIdRef = useRef<number | null>(null);
   const latestTerminalHostRequestIdRef = useRef(0);
+  const filesDefaultAppliedRef = useRef(false);
 
   const sessions = useMemo(
     () => controller.state.sessions.filter((session) => session.state !== "closed"),
@@ -93,6 +94,11 @@ export function WorkspacePage({
   );
   const activeTerminal = sessions.find((session) => session.sessionId === activeSessionId) ?? null;
   const cwd = activeTerminal ? controller.state.cwdBySession[activeTerminal.sessionId] ?? null : null;
+  const filesDefaultAlias = sessions[0]?.hostAlias ?? "";
+  const filesHostAlias = mode === "files" && controller.state.sessionsLoaded && !filesDefaultAppliedRef.current
+    ? filesDefaultAlias
+    : selectedHostAlias;
+  const filesActive = mode === "split" || (mode === "files" && controller.state.sessionsLoaded);
 
   useEffect(() => {
     const container = splitRef.current;
@@ -127,6 +133,18 @@ export function WorkspacePage({
     setInternalHostAlias(hostAlias);
     onSelectedHostChange?.(hostAlias);
   }, [onSelectedHostChange]);
+
+  // Files selects the oldest live terminal host only when the page is entered;
+  // without a terminal, the empty alias represents the real local filesystem.
+  useEffect(() => {
+    if (mode !== "files") {
+      filesDefaultAppliedRef.current = false;
+      return;
+    }
+    if (!controller.state.sessionsLoaded || filesDefaultAppliedRef.current) return;
+    filesDefaultAppliedRef.current = true;
+    selectHost(sessions[0]?.hostAlias ?? "");
+  }, [controller.state.sessionsLoaded, mode, selectHost, sessions]);
 
   /** Keeps the selected app host aligned with the PTY receiving terminal input. */
   const activateTerminal = useCallback((sessionId: string, knownSession?: WorkspaceTerminalSession) => {
@@ -373,10 +391,10 @@ export function WorkspacePage({
       cwd={cwd}
       followCwd={followCwd}
       hosts={hosts}
-      isActive={mode === "files" || mode === "split"}
+      isActive={filesActive}
       compact={mode === "split"}
       locale={locale}
-      selectedHostAlias={selectedHostAlias}
+      selectedHostAlias={filesHostAlias}
       onError={onError}
       onFollowCwdChange={setFollowCwd}
       onHostSelected={selectHost}

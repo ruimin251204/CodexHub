@@ -104,15 +104,15 @@
   justify-content: center;
   gap: 6px;
   min-height: 30px;
-  border-color: var(--blue) !important;
+  border-color: transparent !important;
   color: #fff !important;
   font-weight: 700;
   white-space: nowrap;
-  background: var(--blue) !important;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--blue) 24%, transparent);
+  background: var(--primary-action-background) !important;
+  box-shadow: var(--primary-action-shadow);
 }
 
-.workspaceFilesUploadButton:not(:disabled):hover { background: color-mix(in srgb, var(--blue) 88%, #000) !important; }
+.workspaceFilesUploadButton:not(:disabled):hover { border-color: transparent !important; background: var(--primary-action-background) !important; box-shadow: var(--primary-action-shadow); }
 
 .workspaceFilesMoreActions {
   position: relative;

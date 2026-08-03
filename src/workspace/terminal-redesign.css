@@ -265,17 +265,18 @@
   height: 32px;
   min-height: 32px;
   margin: 0 0 0 2px;
-  border-color: #2865d8;
+  border-color: transparent;
   padding: 0;
   color: #fff;
-  background: linear-gradient(180deg, #3d7cf0, #2865d8);
-  box-shadow: 0 5px 12px color-mix(in srgb, var(--ch-terminal-accent) 22%, transparent);
+  background: var(--primary-action-background);
+  box-shadow: var(--primary-action-shadow);
 }
 
 .chTerminalToolbar .chTerminalTabAdd:not(:disabled):hover {
-  border-color: #1e54bb;
+  border-color: transparent;
   color: #fff;
-  background: linear-gradient(180deg, #3375ef, #1e54bb);
+  background: var(--primary-action-background);
+  box-shadow: var(--primary-action-shadow);
 }
 
 .chTerminalStage.workspaceTerminalStage {
@@ -477,10 +478,11 @@
 }
 
 .chTerminalEmptyState .chTerminalPrimaryAction {
-  border-color: #3b78ec;
+  border-color: transparent;
   color: #fff;
   font-family: var(--font-mono, "Cascadia Mono", "Cascadia Code", "SF Mono", "Menlo", "Consolas", "PingFang SC", "Microsoft YaHei UI", monospace);
-  background: #2d69dc;
+  background: var(--primary-action-background);
+  box-shadow: var(--primary-action-shadow);
 }
 
 .chTerminalHostPickerBackdrop {

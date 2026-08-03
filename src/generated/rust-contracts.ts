@@ -253,14 +253,16 @@ export type WorkspaceTerminalAckRequestDto = { sessionId: string, generation: nu
 
 export type WorkspaceTerminalIdentityRequestDto = { sessionId: string, generation: number, };
 
-export type WorkspaceOpenFilesRequestDto = { hostId: string, hostName: string, hostAlias: string, };
+export type WorkspaceOpenFilesRequestDto = { local: boolean, hostId: string, hostName: string, hostAlias: string, };
 
 export type WorkspaceFileSessionDto = { fileSessionId: string, hostId: string, hostName: string, hostAlias: string, homePath: string, supportsFsync: boolean,
 /**
  * A remote hard link gives regular files an atomic create-if-absent
  * publish path. Workspace refuses a claimed no-replace move without it.
  */
-supportsHardlink: boolean, supportsPosixRename: boolean, };
+supportsHardlink: boolean, supportsPosixRename: boolean, targetKind: WorkspaceFileTargetKindDto, };
+
+export type WorkspaceFileTargetKindDto = "local" | "remote";
 
 export type RemoteFileKindDto = "file" | "directory" | "symlink" | "fifo" | "socket" | "block-device" | "character-device" | "unknown";
 
@@ -295,6 +297,8 @@ export type WorkspacePreviewKindDto = "text" | "image" | "metadata";
 export type WorkspaceFilePreviewDto = { entry: RemoteFileEntryDto, kind: WorkspacePreviewKindDto, mimeType: string, text: string | null, dataBase64: string | null, truncated: boolean, };
 
 export type WorkspaceCreateDirectoryRequestDto = { fileSessionId: string, parentPath: string, name: string, };
+
+export type WorkspaceCopyFileEntryRequestDto = { fileSessionId: string, sourceEntryRef: string, destinationPath: string, };
 
 export type WorkspaceCwdSourceDto = "osc7" | "proc";
 

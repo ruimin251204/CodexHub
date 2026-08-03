@@ -5,6 +5,7 @@ mod background_process;
 pub mod error;
 pub mod events;
 pub mod files;
+pub mod local_files;
 pub mod operations;
 pub(crate) mod remote_path;
 pub mod terminal;

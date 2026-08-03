@@ -130,9 +130,13 @@ test("Transfer header uses the parent workspace title and keeps refresh and new-
   expect(within(panel!).queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
   expect(within(panel!).getByText("Manage cross-host uploads, downloads, and recovery tasks")).toBeInTheDocument();
 
-  fireEvent.click(within(panel!).getByRole("button", { name: "Refresh" }));
+  const refreshButton = within(panel!).getByRole("button", { name: "Refresh" });
+  const newTransferButton = within(panel!).getByRole("button", { name: "New transfer" });
+  expect(refreshButton.querySelector(".pageActionIcon")).toBeInTheDocument();
+  expect(newTransferButton.querySelector(".pageActionIcon")).toBeInTheDocument();
+  fireEvent.click(refreshButton);
   await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
-  fireEvent.click(within(panel!).getByRole("button", { name: "New transfer" }));
+  fireEvent.click(newTransferButton);
   expect(onNewTransfer).toHaveBeenCalledTimes(1);
 });
 

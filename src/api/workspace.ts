@@ -81,7 +81,7 @@ function entry(raw: RemoteFileEntryDto): RemoteFileEntry {
 }
 
 function fileSession(raw: WorkspaceFileSessionDto): WorkspaceFilesSession {
-  return { fileSessionId: raw.fileSessionId, hostAlias: raw.hostAlias, homePath: raw.homePath, currentPath: raw.homePath, state: "connected", reason: null };
+  return { fileSessionId: raw.fileSessionId, hostAlias: raw.hostAlias, targetKind: raw.targetKind, homePath: raw.homePath, currentPath: raw.homePath, state: "connected", reason: null };
 }
 
 function grant(raw: WorkspaceLocalPathGrantDto): WorkspaceLocalGrant {
@@ -197,8 +197,11 @@ export const desktopWorkspaceApi: WorkspaceApi = {
   closeTerminal: ({ sessionId, generation }) => requiredInvoke<void>("workspace_close_terminal", { request: { sessionId, generation } }),
 
   openFiles: async ({ hostAlias }) => {
+    if (!hostAlias) {
+      return requiredInvoke<WorkspaceFileSessionDto>("workspace_open_files", { request: { local: true, hostId: "local", hostName: "Local files", hostAlias: "" } }).then(fileSession);
+    }
     const selected = await host(hostAlias);
-    return requiredInvoke<WorkspaceFileSessionDto>("workspace_open_files", { request: { hostId: selected.id, hostName: selected.name, hostAlias } }).then(fileSession);
+    return requiredInvoke<WorkspaceFileSessionDto>("workspace_open_files", { request: { local: false, hostId: selected.id, hostName: selected.name, hostAlias } }).then(fileSession);
   },
   closeFiles: ({ fileSessionId }) => requiredInvoke<void>("workspace_close_files", { fileSessionId }),
   listDirectory: ({ fileSessionId, path, snapshotId, cursor, sort, direction }) => requiredInvoke<WorkspaceListDirectoryResultDto>("workspace_list_directory", {
@@ -219,6 +222,9 @@ export const desktopWorkspaceApi: WorkspaceApi = {
   })),
   createDirectory: ({ fileSessionId, parentPath, name }) => requiredInvoke<RemoteFileEntryDto>("workspace_create_directory", {
     request: { fileSessionId, parentPath, name }
+  }).then(entry),
+  copyEntry: ({ fileSessionId, sourceEntryRef, destinationPath }) => requiredInvoke<RemoteFileEntryDto>("workspace_copy_file_entry", {
+    request: { fileSessionId, sourceEntryRef, destinationPath }
   }).then(entry),
   validateTerminalCwd: ({ sessionId, generation, fileSessionId }) => requiredInvoke<WorkspaceValidatedCwdDto>("workspace_validate_terminal_cwd", {
     request: { sessionId, generation, fileSessionId }
@@ -244,7 +250,7 @@ export const desktopWorkspaceApi: WorkspaceApi = {
   selectUploadSources: () => requiredInvoke<WorkspaceLocalPathGrantDto[]>("workspace_select_upload_sources").then((items) => items.map(grant)),
   selectDownloadTarget: () => requiredInvoke<WorkspaceLocalPathGrantDto | null>("workspace_select_download_target").then((item) => item ? grant(item) : null),
   enqueueTransfers: async ({ direction, hostAlias, fileSessionId, sourceEntryRefs, localGrantIds, destinationPath, conflictPolicy }) => {
-    const selected = await host(hostAlias);
+    const selected = hostAlias ? await host(hostAlias) : { id: "local", name: "Local files" };
     const refs = direction === "upload" ? localGrantIds : sourceEntryRefs;
     const items = refs.map((sourceRef) => ({
       direction, hostId: selected.id, hostName: selected.name, hostAlias, sourceRef,

@@ -64,7 +64,7 @@ export function FileOperationDialog({
     <div className="workspaceInlineDialogBackdrop" role="presentation">
       <section aria-labelledby="workspace-operation-title" className="workspaceInlineDialog workspaceOperationDialog" role="alertdialog" aria-modal="true">
         <h3 id="workspace-operation-title">{copy.operationTitle}</h3>
-        {!preview && ["rename", "create-directory"].includes(pending.operation) ? (
+        {!preview && ["rename", "copy", "create-directory"].includes(pending.operation) ? (
           <label>{pending.operation === "create-directory" ? copy.folderName : copy.destinationName}
             <input autoFocus value={pending.name} onChange={(event) => onNameChange(event.target.value)} />
             {!nameValid ? <small role="alert">{copy.invalidName}</small> : null}
@@ -84,7 +84,7 @@ export function FileOperationDialog({
         ) : null}
         <div className="workspaceDialogActions">
           <button disabled={busy} type="button" onClick={onCancel}>{copy.cancel}</button>
-          {!preview ? <button className="workspacePrimaryButton" disabled={busy || !nameValid} type="button" onClick={onPrepare}>{busy ? copy.busy : pending.operation === "create-directory" ? copy.confirmOperation : copy.preview}</button> : null}
+          {!preview ? <button className="workspacePrimaryButton" disabled={busy || !nameValid} type="button" onClick={onPrepare}>{busy ? copy.busy : pending.operation === "copy" ? copy.copyEntry : pending.operation === "create-directory" ? copy.confirmOperation : copy.preview}</button> : null}
           {preview ? <button className="workspaceDangerButton" disabled={busy} type="button" onClick={onConfirm}>{busy ? copy.busy : copy.confirmOperation}</button> : null}
         </div>
       </section>

@@ -133,6 +133,7 @@ pub fn run() {
             workspace_cancel_file_search,
             workspace_preview_file,
             workspace_create_directory,
+            workspace_copy_file_entry,
             workspace_validate_terminal_cwd,
             workspace_close_files,
             workspace_prepare_file_operation,

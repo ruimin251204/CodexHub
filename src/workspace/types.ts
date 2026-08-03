@@ -89,6 +89,7 @@ export type WorkspaceTerminalCwdEvent = {
 export type WorkspaceFilesSession = {
   fileSessionId: string;
   hostAlias: string;
+  targetKind: "local" | "remote";
   homePath: string;
   currentPath: string;
   state: "connecting" | "connected" | "closed" | "failed";
@@ -252,7 +253,7 @@ export type WorkspaceLocalTransferRecoveryPurgePreview = {
   expiresAt: string;
 };
 
-export type WorkspaceFileOperationKind = "delete" | "rename" | "move" | "create-directory";
+export type WorkspaceFileOperationKind = "delete" | "rename" | "move" | "copy" | "create-directory";
 
 export type WorkspaceFileOperationPreview = {
   token: string;
@@ -317,6 +318,7 @@ export type WorkspaceApi = {
   cancelFileSearch: (input: { searchId: string }) => Promise<void>;
   previewFile: (input: { fileSessionId: string; entryRef: string }) => Promise<WorkspaceFilePreview>;
   createDirectory: (input: { fileSessionId: string; parentPath: string; name: string }) => Promise<RemoteFileEntry>;
+  copyEntry: (input: { fileSessionId: string; sourceEntryRef: string; destinationPath: string }) => Promise<RemoteFileEntry>;
   validateTerminalCwd: (input: { sessionId: string; generation: number; fileSessionId: string }) => Promise<WorkspaceTerminalCwdEvent>;
   prepareFileOperation: (input: {
     fileSessionId: string;

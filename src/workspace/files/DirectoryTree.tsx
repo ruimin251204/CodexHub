@@ -8,6 +8,17 @@ import { FilesIcon } from "./FilesIcon";
 type TreeNode = { name: string; path: string };
 
 function pathSegments(path: string) {
+  const drive = path.match(/^([A-Za-z]:)\/?(.*)$/);
+  if (drive) {
+    const root = `${drive[1]}/`;
+    const nodes: TreeNode[] = [{ name: drive[1], path: root }];
+    let cursor = root.replace(/\/$/, "");
+    for (const segment of drive[2].split("/").filter(Boolean)) {
+      cursor += `/${segment}`;
+      nodes.push({ name: segment, path: cursor });
+    }
+    return nodes;
+  }
   const normalized = path === "/" ? "/" : `/${path.split("/").filter(Boolean).join("/")}`;
   const nodes: TreeNode[] = [{ name: "/", path: "/" }];
   if (normalized === "/") return nodes;
@@ -130,6 +141,7 @@ export function DirectoryTree({
     () => session ? buildTreeChildren(session, currentPath, directoryEntriesByPath) : new Map<string, TreeNode[]>(),
     [currentPath, directoryEntriesByPath, session]
   );
+  const rootNode = session ? pathSegments(session.homePath)[0] ?? { name: "/", path: "/" } : { name: "/", path: "/" };
 
   return (
     <aside aria-label={copy.directoryTree} className="workspaceFilesTree">
@@ -143,7 +155,7 @@ export function DirectoryTree({
               depth={0}
               expandedPaths={expandedPaths}
               loadingPaths={loadingPaths}
-              node={{ name: "/", path: "/" }}
+              node={rootNode}
               treeChildren={treeChildren}
               onNavigate={onNavigate}
               onToggle={onToggle}

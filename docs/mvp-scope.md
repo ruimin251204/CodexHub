@@ -35,9 +35,9 @@ Build a desktop app that helps a user manage Codex App SSH multi-server workflow
 - Skill library table actions for preview, install, uninstall, and delete across the local machine and configured hosts.
 - Operation log with backups and restore points.
 - Codex App fallback wizard for host enablement and reconnect guidance.
-- Workspace / 工作台: Terminal, Files, Split, and Transfers modes backed by real desktop-only Tauri commands. Terminal uses local PTY + system OpenSSH, while Files and Transfers use an alias-bound SFTP subsystem session; Mock explicitly returns `desktop-backend-required` and never invents a shell, file list, or transfer progress.
+- Workspace / 工作台: Terminal, Files, Split, and Transfers modes backed by real desktop-only Tauri commands. Terminal uses local PTY + system OpenSSH. Files defaults to the first live Terminal host, or to the real local filesystem (`C:/` on Windows) when no Terminal exists; remote targets use alias-bound SFTP. Mock explicitly returns `desktop-backend-required` and never invents a shell, file list, or transfer progress.
 - Bounded Workspace lifecycle: logical terminal session IDs, generation-checked output/input/resize/ACK, replay buffer, bounded auto-reconnect, close/exit cleanup, and transient heartbeat events.
-- Safe remote file browsing, preview, bounded search, regular-file upload/download queueing, pause/retry/cancel, checksum verification, explicit conflict resolution, and recovery-backed delete/overwrite/rename with a second purge confirmation. Safe no-replace destructive moves require OpenSSH `hardlink@openssh.com` and reject directory/symlink boundaries; a persisted interrupted transfer needs a fresh local grant and matching Files session before resume or retry.
+- Safe local and remote file browsing, preview, bounded search, create/copy/move/rename, regular-file upload/download queueing, pause/retry/cancel, checksum verification, explicit conflict resolution, and recovery-backed delete/overwrite/rename with a second purge confirmation. A persisted interrupted transfer needs a fresh local grant and matching Files session before resume or retry.
 
 ## Explicitly Out Of Scope For MVP
 

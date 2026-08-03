@@ -84,6 +84,8 @@ import { PersonalInfoMaskingProvider, usePersonalInfoMasking } from "./ui/Person
 import { AppShell, Sidebar } from "./components/Layout";
 import type { SidebarGroup } from "./components/Layout";
 import { SearchBox } from "./components/UI";
+import { ActionIcon } from "./components/UI/ActionIcon";
+import type { ActionIconName } from "./components/UI/ActionIcon";
 import type { StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
 import { searchGlobalEntries } from "./search/globalSearch";
@@ -133,6 +135,7 @@ type BadgeTone = "green" | "yellow" | "red" | "blue" | "gray";
 type CommandBarAction = {
   id: string;
   label: string;
+  icon?: ActionIconName;
   kind?: "primary" | "secondary" | "danger";
   disabled?: boolean;
   onClick: () => void;
@@ -2248,13 +2251,14 @@ function CommandBarActions({
     <CommandBar ariaLabel={ariaLabel} className={className}>
       {actions.map((action) => (
         <button
-          className={action.kind === "primary" ? "primaryButton" : action.kind === "danger" ? "secondaryButton dangerButton" : "secondaryButton"}
+          className={`${action.kind === "primary" ? "primaryButton" : action.kind === "danger" ? "secondaryButton dangerButton" : "secondaryButton"} pageActionButton`}
           disabled={action.disabled}
           key={action.id}
           type="button"
           onClick={action.onClick}
         >
-          {action.label}
+          {action.icon ? <ActionIcon name={action.icon} /> : null}
+          <span>{action.label}</span>
         </button>
       ))}
     </CommandBar>
@@ -4805,11 +4809,12 @@ function App() {
   };
   const pageActions: CommandBarAction[] = [
     ...(activeSection === "hosts"
-      ? [{ id: "add-host", label: copy.common.addServer, kind: "primary" as const, onClick: handleAddHost }]
+      ? [{ id: "add-host", icon: "add" as const, label: copy.common.addServer, kind: "primary" as const, onClick: handleAddHost }]
       : []),
     ...(activeSection === "profiles"
       ? [{
           id: "new-api-config",
+          icon: "add" as const,
           label: copy.profiles.newApiConfig,
           kind: "primary" as const,
           onClick: handleNewProfile
@@ -5893,8 +5898,9 @@ function MonitorView({
             <small className="monitorCheckedAt">{`${copy.monitor.lastUpdated}: ${formatMonitorTimestamp(checkedAt, copy)}`}</small>
           </div>
           <CommandBar ariaLabel={copy.sections.monitor.title} className="topActions monitorActions">
-            <button className="primaryButton monitorRefreshButton" disabled={busy || hosts.length === 0} type="button" onClick={() => void onRefresh()}>
-              {busy ? copy.monitor.refreshing : copy.monitor.refreshNow}
+            <button className="primaryButton pageActionButton monitorRefreshButton" disabled={busy || hosts.length === 0} type="button" onClick={() => void onRefresh()}>
+              <ActionIcon name="refresh" />
+              <span>{busy ? copy.monitor.refreshing : copy.monitor.refreshNow}</span>
             </button>
             <div className="monitorAutoRefreshControl">
               <span>{copy.monitor.autoRefresh}</span>
@@ -6453,8 +6459,9 @@ function ServerMatrix({
       <div className="panelHeader matrixHeader">
         <TitleWithIcon icon="hosts" level={2}>{copy.dashboard.serverMatrix}</TitleWithIcon>
         <CommandBar ariaLabel={copy.dashboard.serverMatrix} className="topActions">
-          <button className="primaryButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
-            {testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}
+          <button className="primaryButton pageActionButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
+            <ActionIcon name="refresh" />
+            <span>{testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}</span>
           </button>
         </CommandBar>
       </div>
@@ -6464,7 +6471,7 @@ function ServerMatrix({
           <div className="matrixEmptyIcon" aria-hidden="true"><NavIcon id="hosts" /></div>
           <h3>{copy.dashboard.noHosts}</h3>
           <p>{copy.dashboard.noHostsBody}</p>
-          <button className="primaryButton" type="button" onClick={onAddServer}>{copy.common.addServer}</button>
+          <button className="primaryButton pageActionButton" type="button" onClick={onAddServer}><ActionIcon name="add" /><span>{copy.common.addServer}</span></button>
         </div>
       ) : (
         <div className="matrixGrid">
@@ -6650,21 +6657,24 @@ function HostsView({
             <TitleWithIcon icon="hosts" level={2}>{copy.hosts.detectedSshHosts}</TitleWithIcon>
           </div>
           <CommandBar ariaLabel={copy.hosts.detectedSshHosts} className="topActions">
-            <button className="secondaryButton" disabled={detectHostsBusy || anyHostBusy} type="button" onClick={() => void handleDetectLocalHosts().catch(reportActionError)}>
-              {detectHostsBusy ? copy.setupGuide.detecting : copy.hosts.detect}
+            <button className="secondaryButton pageActionButton" disabled={detectHostsBusy || anyHostBusy} type="button" onClick={() => void handleDetectLocalHosts().catch(reportActionError)}>
+              <ActionIcon name="scan" />
+              <span>{detectHostsBusy ? copy.setupGuide.detecting : copy.hosts.detect}</span>
             </button>
-            <button className="secondaryButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
-              {testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}
+            <button className="secondaryButton pageActionButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
+              <ActionIcon name="refresh" />
+              <span>{testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}</span>
             </button>
-            <button className="primaryButton" disabled={outdatedCodexAliases.length === 0 || anyHostBusy} type="button" onClick={() => void onUpdateOutdatedCodexHosts(outdatedCodexAliases)}>
-              {updatingOutdated ? copy.hosts.updatingOutdatedCodex : copy.hosts.updateOutdatedCodex}
+            <button className="primaryButton pageActionButton" disabled={outdatedCodexAliases.length === 0 || anyHostBusy} type="button" onClick={() => void onUpdateOutdatedCodexHosts(outdatedCodexAliases)}>
+              <ActionIcon name="update" />
+              <span>{updatingOutdated ? copy.hosts.updatingOutdatedCodex : copy.hosts.updateOutdatedCodex}</span>
             </button>
           </CommandBar>
         </div>
 
         {sshConfigHosts.length === 0 ? (
           <EmptyListState
-            action={<button className="primaryButton" type="button" onClick={() => void onOpenSetupGuide()}>{copy.hosts.detectLocalConfig}</button>}
+            action={<button className="primaryButton pageActionButton" type="button" onClick={() => void onOpenSetupGuide()}><ActionIcon name="scan" /><span>{copy.hosts.detectLocalConfig}</span></button>}
             copy={copy}
             message={copy.emptyLists.hosts}
             variant="hosts"
@@ -7478,14 +7488,15 @@ export function ProfilesView({
             <TitleWithIcon icon="profiles" level={2}>{copy.profiles.library}</TitleWithIcon>
           </div>
           <CommandBar ariaLabel={copy.profiles.library} className="topActions profileLibraryActions">
-            <button className="secondaryButton" type="button" onClick={() => importInputRef.current?.click()}>{copy.profiles.import}</button>
+            <button className="secondaryButton pageActionButton" type="button" onClick={() => importInputRef.current?.click()}><ActionIcon name="upload" /><span>{copy.profiles.import}</span></button>
             <button
-              className={`${canImportCcSwitchDetection ? "primaryButton" : "secondaryButton"} ccSwitchActionButton`}
+              className={`${canImportCcSwitchDetection ? "primaryButton" : "secondaryButton"} pageActionButton ccSwitchActionButton`}
               disabled={canImportCcSwitchDetection ? busy === "import-cc" : busy === "detect"}
               type="button"
               onClick={() => void (canImportCcSwitchDetection ? handleImportDetected() : handleDetectCcSwitch())}
             >
-              {canImportCcSwitchDetection ? copy.profiles.importDetected : copy.profiles.detectCcSwitch}
+              <ActionIcon name={canImportCcSwitchDetection ? "upload" : "scan"} />
+              <span>{canImportCcSwitchDetection ? copy.profiles.importDetected : copy.profiles.detectCcSwitch}</span>
             </button>
             <input
               ref={importInputRef}
@@ -8724,17 +8735,21 @@ export function SkillsView({
         <div className="panelHeader compact">
           <TitleWithIcon icon="skills" level={2}>{copy.skills.library}</TitleWithIcon>
           <CommandBar ariaLabel={copy.skills.library} className="skillLibraryActions">
-            <button className="secondaryButton" disabled={busy === "detect"} type="button" onClick={handleDetectClick}>
-              {busy === "detect" ? copy.skills.detecting : copy.skills.detect}
+            <button className="secondaryButton pageActionButton" disabled={busy === "detect"} type="button" onClick={handleDetectClick}>
+              <ActionIcon name="scan" />
+              <span>{busy === "detect" ? copy.skills.detecting : copy.skills.detect}</span>
             </button>
-            <button className="secondaryButton" disabled={busy === "refresh"} type="button" onClick={() => void handleRefresh().catch(reportActionError)}>
-              {busy === "refresh" ? copy.skills.refreshing : copy.skills.refresh}
+            <button className="secondaryButton pageActionButton" disabled={busy === "refresh"} type="button" onClick={() => void handleRefresh().catch(reportActionError)}>
+              <ActionIcon name="refresh" />
+              <span>{busy === "refresh" ? copy.skills.refreshing : copy.skills.refresh}</span>
             </button>
-            <button className="secondaryButton" disabled={busy === "import"} type="button" onClick={() => void handleImport().catch(reportActionError)}>
-              {copy.skills.importDirectory}
+            <button className="secondaryButton pageActionButton" disabled={busy === "import"} type="button" onClick={() => void handleImport().catch(reportActionError)}>
+              <ActionIcon name="upload" />
+              <span>{copy.skills.importDirectory}</span>
             </button>
-            <button className="primaryButton" disabled={busy === "download"} type="button" onClick={openDownload}>
-              {copy.skills.download}
+            <button className="primaryButton pageActionButton" disabled={busy === "download"} type="button" onClick={openDownload}>
+              <ActionIcon name="download" />
+              <span>{copy.skills.download}</span>
             </button>
           </CommandBar>
         </div>
@@ -9857,12 +9872,13 @@ export function TasksView({
             <TitleWithIcon icon="tasks" level={2}>{copy.tasks.taskHistory}</TitleWithIcon>
           </div>
           <button
-            className="secondaryButton dangerButton"
+            className="secondaryButton dangerButton pageActionButton"
             disabled={clearingHistory || completedTaskCount === 0}
             type="button"
             onClick={() => setClearHistoryOpen(true)}
           >
-            {clearingHistory ? copy.tasks.clearingHistory : copy.tasks.clearHistory}
+            <ActionIcon name="trash" />
+            <span>{clearingHistory ? copy.tasks.clearingHistory : copy.tasks.clearHistory}</span>
           </button>
         </div>
         {tasks.length === 0 ? (
@@ -10139,8 +10155,9 @@ function SettingsView({
               {settingsSaveError ? <p className="mutedText">{personalInfo.maskText(settingsSaveError)}</p> : null}
             </div>
             {settingsSaveError ? (
-              <button className="secondaryButton" disabled={settingsSaving} type="button" onClick={() => void onRetrySettings()}>
-                {copy.settings.settingsRetry}
+              <button className="secondaryButton pageActionButton" disabled={settingsSaving} type="button" onClick={() => void onRetrySettings()}>
+                <ActionIcon name="refresh" />
+                <span>{copy.settings.settingsRetry}</span>
               </button>
             ) : null}
           </div>
@@ -10324,9 +10341,10 @@ function SettingsView({
             <TitleWithIcon icon="key" level={2}>{copy.settings.localSsh}</TitleWithIcon>
           </div>
           <CommandBar ariaLabel={copy.settings.localSsh} className="topActions">
-            <button className="secondaryButton" type="button" onClick={() => void onRefreshSsh()}>{copy.settings.refresh}</button>
-            <button className="primaryButton copyPublicKeyButton" data-success={publicKeyCopied} disabled={!publicKey} type="button" onClick={() => void handleCopyPublicKey()}>
-              {publicKeyCopied ? copy.settings.copyPublicKeySuccess : copy.settings.copyPublicKey}
+            <button className="secondaryButton pageActionButton" type="button" onClick={() => void onRefreshSsh()}><ActionIcon name="refresh" /><span>{copy.settings.refresh}</span></button>
+            <button className="primaryButton pageActionButton copyPublicKeyButton" data-success={publicKeyCopied} disabled={!publicKey} type="button" onClick={() => void handleCopyPublicKey()}>
+              <ActionIcon name={publicKeyCopied ? "check" : "copy"} />
+              <span>{publicKeyCopied ? copy.settings.copyPublicKeySuccess : copy.settings.copyPublicKey}</span>
             </button>
           </CommandBar>
         </div>
@@ -10347,11 +10365,13 @@ function SettingsView({
             <p className="appUpdateSchedule">{copy.settings.dailyUpdateCheck}</p>
           </div>
           <CommandBar ariaLabel={copy.settings.appUpdates} className="topActions">
-            <button className="secondaryButton" disabled={!canCheckStableUpdate} type="button" onClick={() => void onCheckStableUpdate()}>
-              {appUpdateChecking ? copy.settings.updateChecking : copy.settings.checkStableUpdate}
+            <button className="secondaryButton pageActionButton" disabled={!canCheckStableUpdate} type="button" onClick={() => void onCheckStableUpdate()}>
+              <ActionIcon name="refresh" />
+              <span>{appUpdateChecking ? copy.settings.updateChecking : copy.settings.checkStableUpdate}</span>
             </button>
-            <button className="primaryButton" disabled={!canInstallStableUpdate} type="button" onClick={() => void onInstallStableUpdate()}>
-              {appUpdateInstalling ? copy.settings.updateInstalling : copy.settings.installStableUpdate}
+            <button className="primaryButton pageActionButton" disabled={!canInstallStableUpdate} type="button" onClick={() => void onInstallStableUpdate()}>
+              <ActionIcon name="download" />
+              <span>{appUpdateInstalling ? copy.settings.updateInstalling : copy.settings.installStableUpdate}</span>
             </button>
           </CommandBar>
         </div>

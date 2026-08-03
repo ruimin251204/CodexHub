@@ -11,7 +11,7 @@ import type {
 
 vi.mock("./FilesPanel", () => ({
   WORKSPACE_FILES_LOCATION_EVENT: "codexhub:workspace-files-location",
-  FilesPanel: () => <div data-testid="files-panel" />
+  FilesPanel: ({ selectedHostAlias }: { selectedHostAlias: string }) => <div data-testid="files-panel">{selectedHostAlias || "local"}</div>
 }));
 
 vi.mock("./TransfersPanel", () => ({
@@ -96,12 +96,14 @@ function createWorkspaceApi(
 
 function renderWorkspace({
   api,
+  mode,
   selectedHostAlias = "alpha",
   terminalHostRequest = null,
   onSelectedHostChange = vi.fn(),
   onTerminalHostRequestHandled = vi.fn()
 }: {
   api: WorkspaceApi;
+  mode?: "terminal" | "files" | "split" | "transfers";
   selectedHostAlias?: string;
   terminalHostRequest?: WorkspaceTerminalHostRequest | null;
   onSelectedHostChange?: ReturnType<typeof vi.fn>;
@@ -112,6 +114,7 @@ function renderWorkspace({
       api={api}
       hosts={hosts}
       locale="en"
+      mode={mode}
       platform="windows"
       selectedHostAlias={selectedHostAlias}
       terminalHostRequest={terminalHostRequest}
@@ -124,6 +127,24 @@ function renderWorkspace({
   );
   return { onSelectedHostChange, onTerminalHostRequestHandled };
 }
+
+test("Files defaults to the first restored terminal host", async () => {
+  const onSelectedHostChange = vi.fn();
+  const api = createWorkspaceApi([
+    terminalSession("terminal-alpha", "alpha", "2026-08-01T00:00:00.000Z"),
+    terminalSession("terminal-beta", "beta", "2026-08-01T00:00:01.000Z")
+  ]);
+  renderWorkspace({ api, mode: "files", selectedHostAlias: "", onSelectedHostChange });
+
+  await waitFor(() => expect(onSelectedHostChange).toHaveBeenCalledWith("alpha"));
+});
+
+test("Files defaults to the local target when no terminal exists", async () => {
+  const onSelectedHostChange = vi.fn();
+  renderWorkspace({ api: createWorkspaceApi([]), mode: "files", selectedHostAlias: "alpha", onSelectedHostChange });
+
+  await waitFor(() => expect(onSelectedHostChange).toHaveBeenCalledWith(""));
+});
 
 test("activating a terminal keeps the selected Terminal host aligned with its PTY", async () => {
   const onSelectedHostChange = vi.fn();

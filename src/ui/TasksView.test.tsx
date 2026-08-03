@@ -49,8 +49,11 @@ test("task page header clears all completed history while the detail dialog has 
 
   const clearButton = screen.getByRole("button", { name: "Clear all" });
   expect(clearButton.closest(".panelHeader")).toBeInTheDocument();
+  expect(clearButton.querySelector(".pageActionIcon")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "Logs" }));
+  const logsButton = screen.getByRole("button", { name: "Logs" });
+  expect(logsButton.querySelector(".pageActionIcon")).not.toBeInTheDocument();
+  await user.click(logsButton);
   const detail = await screen.findByRole("dialog", { name: "Save settings" });
   expect(within(detail).queryByRole("button", { name: "Clear all" })).not.toBeInTheDocument();
   expect(within(detail).getByText("Historical details")).toBeInTheDocument();

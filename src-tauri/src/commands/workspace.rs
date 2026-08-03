@@ -300,9 +300,10 @@ fn should_reconnect_workspace_files(error: &crate::workspace::error::WorkspaceEr
 
 /// File mutations are durable recovery operations, so their Job Manager row
 /// is created before the confirmation token can trigger a remote write.
-fn begin_workspace_file_task(
+fn begin_workspace_file_task_identity(
     state: &AppState,
-    host: &Host,
+    target_id: &str,
+    target_name: &str,
     action: &str,
 ) -> Result<String, String> {
     let task_id = format!("task-workspace-file-{}", Uuid::new_v4());
@@ -310,8 +311,8 @@ fn begin_workspace_file_task(
         &state.task_store,
         state.task_event_sink.as_ref(),
         &task_id,
-        &host.id,
-        &host.name,
+        target_id,
+        target_name,
         action,
     )?;
     task.steps = workspace_file_operation_steps(&task.id);
@@ -351,7 +352,16 @@ async fn open_recovery_files(
     state: &AppState,
     workspace: &crate::workspace::WorkspaceManager,
     recovery: &RecoveryDto,
-) -> Result<(Host, String), String> {
+) -> Result<(String, String, String), String> {
+    if recovery.host_id == "local" && recovery.host_alias.is_empty() {
+        let session = workspace.files.open(OpenFilesRequest {
+            local: true,
+            host_id: "local".into(),
+            host_name: "Local files".into(),
+            host_alias: String::new(),
+        }).await.map_err(|error| error.to_string())?.session;
+        return Ok(("local".into(), "Local files".into(), session.file_session_id));
+    }
     let host = host_for_alias(state, &recovery.host_alias)?;
     if host.id != recovery.host_id {
         return Err(
@@ -362,6 +372,7 @@ async fn open_recovery_files(
     let session = workspace
         .files
         .open(OpenFilesRequest {
+            local: false,
             host_id: host.id.clone(),
             host_name: host.name.clone(),
             host_alias: host.host_alias.clone(),
@@ -369,7 +380,7 @@ async fn open_recovery_files(
         .await
         .map_err(|error| error.to_string())?
         .session;
-    Ok((host, session.file_session_id))
+    Ok((host.id, host.name, session.file_session_id))
 }
 
 fn manager(state: &AppState) -> Result<&crate::workspace::WorkspaceManager, String> {
@@ -399,12 +410,18 @@ fn assert_terminal_host(state: &AppState, request: &OpenTerminalRequest) -> Resu
     Ok(())
 }
 
-fn assert_files_host(state: &AppState, request: &OpenFilesRequest) -> Result<Host, String> {
+fn assert_files_host(state: &AppState, request: &OpenFilesRequest) -> Result<Option<Host>, String> {
+    if request.local {
+        if request.host_id != "local" || !request.host_alias.is_empty() {
+            return Err("Workspace local Files identity is invalid.".into());
+        }
+        return Ok(None);
+    }
     let host = host_for_alias(state, &request.host_alias)?;
     if host.id != request.host_id || host.name != request.host_name {
         return Err("Workspace Files host identity no longer matches the saved host.".into());
     }
-    Ok(host)
+    Ok(Some(host))
 }
 
 #[tauri::command]
@@ -534,11 +551,12 @@ pub(crate) async fn workspace_open_files(
     match workspace.files.open(request).await {
         Ok(opened) if opened.reused => Ok(opened.session),
         Ok(opened) => {
+            let (host_id, host_name) = host.as_ref().map(|item| (item.id.as_str(), item.name.as_str())).unwrap_or(("local", "Local files"));
             let task_id = begin_workspace_files_task(
                 &state.task_store,
                 state.task_event_sink.as_ref(),
-                &host.id,
-                &host.name,
+                host_id,
+                host_name,
                 WorkspaceFilesTaskOperation::Connect,
             )?;
             settle_workspace_files_task(
@@ -551,13 +569,14 @@ pub(crate) async fn workspace_open_files(
             Ok(opened.session)
         }
         Err(error) => {
+            let (host_id, host_name) = host.as_ref().map(|item| (item.id.as_str(), item.name.as_str())).unwrap_or(("local", "Local files"));
             let error_code = workspace_files_error_code(&error);
             let safe_message = WorkspaceFilesTaskOperation::Connect.failed_message(error_code);
             let task_id = begin_workspace_files_task(
                 &state.task_store,
                 state.task_event_sink.as_ref(),
-                &host.id,
-                &host.name,
+                host_id,
+                host_name,
                 WorkspaceFilesTaskOperation::Connect,
             )?;
             settle_workspace_files_task(
@@ -670,6 +689,20 @@ pub(crate) async fn workspace_create_directory(
 }
 
 #[tauri::command]
+pub(crate) async fn workspace_copy_file_entry(
+    state: State<'_, AppState>,
+    request: CopyFileEntryRequest,
+) -> Result<RemoteFileEntry, String> {
+    let workspace = manager(&state)?;
+    let (target_id, target_name) = workspace.files.operation_host_identity(&request.file_session_id)
+        .map_err(|error| error.to_string())?;
+    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Copy Workspace file")?;
+    let result = workspace.files.copy_entry(request).await.map_err(|error| error.to_string());
+    settle_workspace_file_task(&state, &task_id, result.is_ok(), if result.is_ok() { "Workspace file copy completed." } else { "Workspace file copy failed without replacing the destination." });
+    result
+}
+
+#[tauri::command]
 pub(crate) async fn workspace_validate_terminal_cwd(
     state: State<'_, AppState>,
     request: ValidateTerminalCwdRequest,
@@ -749,14 +782,16 @@ pub(crate) async fn workspace_confirm_file_operation(
         .operations
         .prepared_host(&request.operation_token)
         .map_err(|error| error.to_string())?;
-    let host = host_for_alias(&state, &prepared_alias)?;
-    if host.id != prepared_host_id {
-        return Err(
-            "file-operation-host-unavailable: The saved host identity changed; confirm is blocked."
-                .into(),
-        );
-    }
-    let task_id = begin_workspace_file_task(&state, &host, "Workspace file operation")?;
+    let (target_id, target_name) = if prepared_host_id == "local" && prepared_alias.is_empty() {
+        ("local".to_string(), "Local files".to_string())
+    } else {
+        let host = host_for_alias(&state, &prepared_alias)?;
+        if host.id != prepared_host_id {
+            return Err("file-operation-host-unavailable: The saved host identity changed; confirm is blocked.".into());
+        }
+        (host.id, host.name)
+    };
+    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Workspace file operation")?;
     let result = workspace
         .operations
         .confirm(&workspace.files, request, Some(task_id.clone()))
@@ -785,8 +820,8 @@ pub(crate) async fn workspace_restore_recovery(
         .operations
         .get(&request.recovery_id)
         .map_err(|error| error.to_string())?;
-    let (host, file_session_id) = open_recovery_files(&state, workspace, &recovery).await?;
-    let task_id = begin_workspace_file_task(&state, &host, "Restore Workspace recovery")?;
+    let (target_id, target_name, file_session_id) = open_recovery_files(&state, workspace, &recovery).await?;
+    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Restore Workspace recovery")?;
     let result = workspace
         .operations
         .restore(
@@ -833,8 +868,8 @@ pub(crate) async fn workspace_purge_recovery(
         .operations
         .prepared_purge_recovery(&request.purge_token)
         .map_err(|error| error.to_string())?;
-    let (host, file_session_id) = open_recovery_files(&state, workspace, &recovery).await?;
-    let task_id = begin_workspace_file_task(&state, &host, "Purge Workspace recovery")?;
+    let (target_id, target_name, file_session_id) = open_recovery_files(&state, workspace, &recovery).await?;
+    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Purge Workspace recovery")?;
     let result = workspace
         .operations
         .purge(
@@ -942,6 +977,9 @@ pub(crate) async fn workspace_enqueue_transfers(
     let services = state.services.clone();
     let workspace = manager(&state)?;
     for draft in &mut request.items {
+        if draft.host_id == "local" && draft.host_alias.is_empty() {
+            workspace.files.assert_host(&request.file_session_id, "local").map_err(|error| error.to_string())?;
+        } else {
         let host = host_for_alias(&state, &draft.host_alias)?;
         if host.id != draft.host_id || host.name != draft.host_name {
             return Err(
@@ -952,6 +990,7 @@ pub(crate) async fn workspace_enqueue_transfers(
             .files
             .assert_host(&request.file_session_id, &host.id)
             .map_err(|error| error.to_string())?;
+        }
         if draft.direction == TransferDirection::Upload {
             let name = workspace
                 .transfer_io

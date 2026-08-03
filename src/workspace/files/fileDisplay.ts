@@ -2,9 +2,10 @@ import type { RemoteFileEntry } from "../types";
 import type { WorkspaceCopy } from "../copy";
 
 export function parentPath(path: string) {
-  if (path === "/") return "/";
+  if (path === "/" || /^[A-Za-z]:\/?$/.test(path)) return path.endsWith("/") ? path : `${path}/`;
   const normalized = path.replace(/\/+$/, "");
   const separator = normalized.lastIndexOf("/");
+  if (separator === 2 && /^[A-Za-z]:/.test(normalized)) return `${normalized.slice(0, 2)}/`;
   return separator <= 0 ? "/" : normalized.slice(0, separator);
 }
 
