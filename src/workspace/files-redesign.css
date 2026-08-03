@@ -172,6 +172,7 @@
 
 .workspaceFilesMoreMenu > button:hover:not(:disabled) { background: var(--surface-muted); }
 .workspaceFilesMoreMenu > .workspaceToggleButton[aria-pressed="true"] { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, var(--surface-muted)); }
+.workspaceFilesMoreMenu > .workspaceFilesDeleteButton { color: var(--red); }
 .workspaceFilesMoreMenu > button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .workspaceFilesMoreSelect { justify-content: space-between; color: var(--text-muted); }
@@ -345,6 +346,11 @@
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface));
 }
 
+.workspaceFilesRedesign .workspaceFileRow[data-kind="file"] .workspaceFileGlyph {
+  fill: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  stroke: color-mix(in srgb, var(--text-muted) 82%, var(--text));
+}
+
 .workspaceFilesQuickAccess h3 {
   margin: 0 7px 5px;
   color: var(--text-faint);
@@ -389,10 +395,12 @@
 
 .workspaceFilesRedesign .workspaceFileGrid {
   --workspace-file-name-column-width: 340px;
+  --workspace-file-type-column-width: 104px;
   --workspace-file-size-column-width: 124px;
   --workspace-file-modified-column-width: 188px;
+  --workspace-file-table-width: 804px;
   min-height: 220px;
-  overflow-x: hidden;
+  overflow-x: auto;
   background: var(--surface);
 }
 
@@ -401,14 +409,15 @@
   grid-template-columns:
     28px
     minmax(0, var(--workspace-file-name-column-width))
+    minmax(0, var(--workspace-file-type-column-width))
     minmax(0, var(--workspace-file-size-column-width))
     minmax(0, var(--workspace-file-modified-column-width));
-  min-width: 0;
+  min-width: var(--workspace-file-table-width);
   column-gap: 0;
   padding: 0 10px;
 }
 
-.workspaceFilesRedesign .workspaceFileGridBody { min-width: 0; }
+.workspaceFilesRedesign .workspaceFileGridBody { min-width: var(--workspace-file-table-width); }
 
 .workspaceFilesRedesign .workspaceFileGridHeader {
   min-height: 42px;
@@ -420,6 +429,32 @@
 .workspaceFilesRedesign .workspaceFileRow { min-height: 42px; }
 .workspaceFilesRedesign .workspaceFileRow:hover { background: color-mix(in srgb, var(--blue) 5%, var(--surface)); }
 .workspaceFilesRedesign .workspaceFileRow[aria-selected="true"] { background: color-mix(in srgb, var(--blue) 9%, var(--surface)); box-shadow: inset 2px 0 0 var(--blue); }
+.workspaceFilesRedesign .workspaceFileRow[data-external-drop-target="true"] {
+  position: relative;
+  z-index: 2;
+  background: color-mix(in srgb, var(--blue) 14%, var(--surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--blue) 72%, transparent);
+}
+
+.workspaceFileDropOverlay {
+  position: absolute;
+  z-index: 4;
+  inset: 50px 12px 48px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  border: 2px dashed color-mix(in srgb, var(--blue) 68%, var(--border));
+  border-radius: var(--radius-surface);
+  color: var(--blue);
+  pointer-events: none;
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface) 90%);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--blue) 14%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.workspaceFileDropOverlay strong { font-size: 0.9rem; }
+.workspaceFileDropOverlay span { max-width: min(620px, 80%); overflow: hidden; color: var(--text-muted); font-size: 0.77rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .workspaceFileColumnHeader {
   position: relative;
@@ -429,7 +464,26 @@
   padding-right: 9px;
 }
 
-.workspaceFileColumnHeader > span {
+.workspaceFileColumnSort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  border-radius: var(--radius-control-sm);
+  padding: 4px 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+}
+
+.workspaceFileColumnSort:hover { color: var(--text); background: color-mix(in srgb, var(--blue) 7%, transparent); }
+.workspaceFileColumnSort:focus-visible { outline: 2px solid var(--blue); outline-offset: -1px; }
+.workspaceFileColumnSort .workspaceFilesActionIcon { flex: 0 0 auto; color: var(--blue); }
+
+.workspaceFileColumnSort > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -516,6 +570,125 @@
 .workspaceFilesPagination select { min-width: 50px; padding: 3px 20px 3px 6px; }
 .workspaceFilesPagination .workspaceLoadMore { margin: 0; }
 
+.workspaceFileTransferDrawer {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  height: min(var(--workspace-file-transfer-height, 210px), 70%);
+  min-height: 112px;
+  border-top: 2px solid color-mix(in srgb, var(--blue) 52%, var(--border-strong));
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-muted) 82%, var(--surface));
+  box-shadow: 0 -14px 30px color-mix(in srgb, var(--text) 11%, transparent);
+}
+
+.workspaceFileTransferResizeHandle {
+  position: absolute;
+  z-index: 2;
+  top: -5px;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  border: 0;
+  padding: 0;
+  cursor: row-resize;
+  background: transparent;
+}
+
+.workspaceFileTransferResizeHandle::after {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 42px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  content: "";
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--blue) 42%, var(--border-strong));
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.workspaceFileTransferResizeHandle:hover::after,
+.workspaceFileTransferResizeHandle:focus-visible::after { opacity: 1; }
+
+.workspaceFileTransferDrawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface-muted));
+}
+
+.workspaceFileTransferDrawer > header > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.workspaceFileTransferTitle { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.workspaceFileTransferTitle svg { color: var(--blue); }
+.workspaceFileTransferSummary { overflow: hidden; color: var(--text-faint); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.workspaceFileTransferDrawer > header button,
+.workspaceFileTransferActions button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control-sm);
+  padding: 3px;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.workspaceFileTransferDrawer > header button:hover,
+.workspaceFileTransferActions button:hover { border-color: var(--border); color: var(--text); background: var(--surface-solid); }
+.workspaceFileTransferTable {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 1px solid color-mix(in srgb, var(--border-strong) 88%, transparent);
+  background: var(--surface-solid);
+}
+.workspaceFileTransferHeader,
+.workspaceFileTransferRow {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(180px, 1.6fr) minmax(130px, 0.9fr) 100px 100px 82px;
+  align-items: center;
+  min-width: 800px;
+  column-gap: 12px;
+  padding: 0 10px;
+}
+
+.workspaceFileTransferHeader { min-height: 28px; color: var(--text-faint); font-size: 0.68rem; font-weight: 700; }
+.workspaceFileTransferRows { height: calc(100% - 28px); overflow-y: auto; }
+.workspaceFileTransferRow { min-height: 38px; border-top: 1px solid color-mix(in srgb, var(--border) 58%, transparent); font-size: 0.73rem; }
+.workspaceFileTransferRow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspaceFileTransferName { display: flex; align-items: center; gap: 7px; color: var(--text); font-weight: 650; }
+.workspaceFileTransferName svg { flex: 0 0 auto; color: var(--blue); }
+.workspaceFileTransferName > span { overflow: hidden; text-overflow: ellipsis; }
+.workspaceFileTransferProgress { display: grid; grid-template-columns: 34px minmax(60px, 1fr); align-items: center; gap: 6px; }
+.workspaceFileTransferProgress progress { width: 100%; height: 5px; accent-color: var(--blue); }
+.workspaceFileTransferRow > span:nth-last-child(2) { display: inline-flex; align-items: center; gap: 6px; }
+.workspaceFileTransferRow > span:nth-last-child(2) i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: var(--radius-pill); background: var(--text-faint); }
+.workspaceFileTransferRow[data-state="running"] > span:nth-last-child(2) i,
+.workspaceFileTransferRow[data-state="verifying"] > span:nth-last-child(2) i,
+.workspaceFileTransferRow[data-state="finalizing"] > span:nth-last-child(2) i { background: var(--blue); }
+.workspaceFileTransferRow[data-state="completed"] > span:nth-last-child(2) i { background: var(--green); }
+.workspaceFileTransferRow[data-state="failed"] > span:nth-last-child(2) i,
+.workspaceFileTransferRow[data-state="cancelled"] > span:nth-last-child(2) i,
+.workspaceFileTransferRow[data-state="interrupted"] > span:nth-last-child(2) i { background: var(--red); }
+.workspaceFileTransferActions { display: flex; justify-content: flex-end; gap: 3px; }
+.workspaceFileTransferDrawer[data-collapsed="true"] { height: 42px; min-height: 42px; }
+
+.workspaceDeleteModeDialog,
+.workspaceDeletePreferenceDialog { width: min(460px, calc(100vw - 32px)); }
+.workspaceDeleteModeDialog > p,
+.workspaceDeletePreferenceDialog > p { color: var(--text-muted); line-height: 1.55; }
+.workspaceDeleteModeChoices { display: grid; gap: 8px; }
+.workspaceDeleteModeChoices button { width: 100%; min-height: 36px; }
+
 /* Split keeps the file list continuous; the optional tree opens above it instead of consuming its width. */
 .workspaceFilesRedesign[data-compact="true"] .workspaceFilesCommandBar {
   grid-template-columns: minmax(86px, 0.8fr) minmax(88px, 1.2fr) 28px 30px;
@@ -535,6 +708,8 @@
   padding: 0;
 }
 .workspaceFilesRedesign[data-compact="true"] .workspaceFilesUploadButton > span { display: none; }
+.workspaceFilesRedesign[data-compact="true"] .workspaceFileTransferHeader,
+.workspaceFilesRedesign[data-compact="true"] .workspaceFileTransferRow { grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr) minmax(110px, 0.8fr) 88px 92px 72px; }
 
 .workspaceFilesRedesign[data-compact="true"] .workspaceFilesExplorer {
   position: relative;

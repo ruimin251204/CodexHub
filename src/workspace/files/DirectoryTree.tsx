@@ -5,7 +5,9 @@ import type { FilesUiCopy } from "./filesUiCopy";
 import { FileGlyph } from "./FileGlyph";
 import { FilesIcon } from "./FilesIcon";
 
-type TreeNode = { name: string; path: string };
+type TreeNode = { name: string; path: string; virtualRoot?: boolean };
+
+const LOCAL_ROOTS_PATH = "codexhub://local-roots";
 
 function pathSegments(path: string) {
   const drive = path.match(/^([A-Za-z]:)\/?(.*)$/);
@@ -33,7 +35,8 @@ function pathSegments(path: string) {
 function buildTreeChildren(
   session: WorkspaceFilesSession,
   currentPath: string | null,
-  directoryEntriesByPath: ReadonlyMap<string, RemoteFileEntry[]>
+  directoryEntriesByPath: ReadonlyMap<string, RemoteFileEntry[]>,
+  localRoots: readonly string[]
 ) {
   const children = new Map<string, TreeNode[]>();
   const mergeChild = (parent: string, node: TreeNode) => {
@@ -42,6 +45,10 @@ function buildTreeChildren(
       children.set(parent, [...current, node].sort((a, b) => a.name.localeCompare(b.name)));
     }
   };
+
+  if (session.targetKind === "local" && localRoots.some((path) => /^[A-Za-z]:\/$/.test(path))) {
+    children.set(LOCAL_ROOTS_PATH, localRoots.map((path) => ({ name: path.slice(0, 2), path })));
+  }
 
   // Session and canonical page paths are authoritative, so their ancestry can
   // safely keep the active location visible before a parent is lazily listed.
@@ -78,23 +85,31 @@ function TreeBranch({
   onNavigate: (path: string) => void;
   onToggle: (path: string) => void;
 }) {
-  const expanded = expandedPaths.has(node.path);
+  const expanded = node.virtualRoot || expandedPaths.has(node.path);
   const children = treeChildren.get(node.path) ?? [];
   const label = node.path === "/" ? copy.rootDirectory : node.name;
   return (
     <li role="treeitem" aria-expanded={expanded} aria-current={currentPath === node.path ? "page" : undefined}>
       <div className="workspaceDirectoryTreeRow" data-active={currentPath === node.path} style={{ "--tree-depth": depth } as CSSProperties}>
-        <button
-          aria-label={`${expanded ? copy.collapseDirectory : copy.expandDirectory}: ${label}`}
-          className="workspaceDirectoryChevron"
-          data-loading={loadingPaths.has(node.path)}
-          type="button"
-          onClick={() => onToggle(node.path)}
-        >{loadingPaths.has(node.path) ? "·" : <FilesIcon name={expanded ? "chevronDown" : "chevronRight"} />}</button>
-        <button className="workspaceDirectoryName" title={node.path} type="button" onClick={() => onNavigate(node.path)}>
-          <FileGlyph kind="directory" />
-          <span>{label}</span>
-        </button>
+        {node.virtualRoot ? (
+          <span aria-hidden="true" className="workspaceDirectoryChevron"><FilesIcon name="chevronDown" /></span>
+        ) : (
+          <button
+            aria-label={`${expanded ? copy.collapseDirectory : copy.expandDirectory}: ${label}`}
+            className="workspaceDirectoryChevron"
+            data-loading={loadingPaths.has(node.path)}
+            type="button"
+            onClick={() => onToggle(node.path)}
+          >{loadingPaths.has(node.path) ? "·" : <FilesIcon name={expanded ? "chevronDown" : "chevronRight"} />}</button>
+        )}
+        {node.virtualRoot ? (
+          <span className="workspaceDirectoryName"><FileGlyph kind="directory" /><span>{label}</span></span>
+        ) : (
+          <button className="workspaceDirectoryName" title={node.path} type="button" onClick={() => onNavigate(node.path)}>
+            <FileGlyph kind="directory" />
+            <span>{label}</span>
+          </button>
+        )}
       </div>
       {expanded && children.length > 0 ? (
         <ul role="group">
@@ -123,6 +138,7 @@ export function DirectoryTree({
   currentPath,
   directoryEntriesByPath,
   expandedPaths,
+  localRoots,
   loadingPaths,
   session,
   onNavigate,
@@ -132,16 +148,20 @@ export function DirectoryTree({
   currentPath: string | null;
   directoryEntriesByPath: ReadonlyMap<string, RemoteFileEntry[]>;
   expandedPaths: ReadonlySet<string>;
+  localRoots: readonly string[];
   loadingPaths: ReadonlySet<string>;
   session: WorkspaceFilesSession | null;
   onNavigate: (path: string) => void;
   onToggle: (path: string) => void;
 }) {
   const treeChildren = useMemo(
-    () => session ? buildTreeChildren(session, currentPath, directoryEntriesByPath) : new Map<string, TreeNode[]>(),
-    [currentPath, directoryEntriesByPath, session]
+    () => session ? buildTreeChildren(session, currentPath, directoryEntriesByPath, localRoots) : new Map<string, TreeNode[]>(),
+    [currentPath, directoryEntriesByPath, localRoots, session]
   );
-  const rootNode = session ? pathSegments(session.homePath)[0] ?? { name: "/", path: "/" } : { name: "/", path: "/" };
+  const hasWindowsRoots = session?.targetKind === "local" && localRoots.some((path) => /^[A-Za-z]:\/$/.test(path));
+  const rootNode = hasWindowsRoots
+    ? { name: copy.computerRoot, path: LOCAL_ROOTS_PATH, virtualRoot: true }
+    : session ? pathSegments(currentPath ?? session.homePath)[0] ?? { name: "/", path: "/" } : { name: "/", path: "/" };
 
   return (
     <aside aria-label={copy.directoryTree} className="workspaceFilesTree">

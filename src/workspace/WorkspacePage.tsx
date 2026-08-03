@@ -401,7 +401,8 @@ export function WorkspacePage({
       onOpenTerminalAt={(hostAlias, fileSessionId, path) => void openTerminal(hostAlias, { fileSessionId, path })}
       onRecoveryCreated={controller.upsertRecovery}
       onViewRecoveries={() => chooseMode("transfers")}
-      onTransfersQueued={() => void controller.reload().catch(onError)}
+      transfers={controller.state.transfers}
+      onTransfersQueued={controller.upsertTransfers}
     />
   );
 

@@ -162,6 +162,12 @@ export type WorkspaceLocalDropEvent = {
   grants: WorkspaceLocalGrant[];
 };
 
+export type WorkspaceLocalDragStateEvent = {
+  phase: "enter" | "over" | "leave" | "drop";
+  clientX: number | null;
+  clientY: number | null;
+};
+
 export type WorkspaceTransferDirection = "upload" | "download";
 export type WorkspaceTransferState =
   | "queued"
@@ -303,6 +309,7 @@ export type WorkspaceApi = {
   reconnectTerminal: (input: { sessionId: string }) => Promise<WorkspaceTerminalSession>;
   closeTerminal: (input: { sessionId: string; generation: number }) => Promise<void>;
 
+  listLocalRoots: () => Promise<string[]>;
   openFiles: (input: { hostAlias: string }) => Promise<WorkspaceFilesSession>;
   closeFiles: (input: { fileSessionId: string }) => Promise<void>;
   listDirectory: (input: {
@@ -365,6 +372,7 @@ export type WorkspaceApi = {
     onTerminalCwd: (listener: (event: WorkspaceTerminalCwdEvent) => void) => WorkspaceApiSubscription;
     onTransferUpdated: (listener: (event: WorkspaceTransferUpdatedEvent) => void) => WorkspaceApiSubscription;
     onFileSearchUpdated: (listener: (event: WorkspaceFileSearchEvent) => void) => WorkspaceApiSubscription;
+    onLocalDragState: (listener: (event: WorkspaceLocalDragStateEvent) => void) => WorkspaceApiSubscription;
     onLocalDrop: (listener: (event: WorkspaceLocalDropEvent) => void) => WorkspaceApiSubscription;
   };
 };

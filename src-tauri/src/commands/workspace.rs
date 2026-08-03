@@ -9,7 +9,7 @@ use crate::workspace::transfer_io::{TransferAuditSink, TransferAuditStage, Trans
 use crate::workspace::types::*;
 use crate::{jobs, AppServices, AppState, Host};
 use chrono::Local;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -539,6 +539,16 @@ pub(crate) fn workspace_close_terminal(
             .close(request)
             .map_err(|error| error.to_string())
     })
+}
+
+#[tauri::command]
+pub(crate) fn workspace_list_local_roots(
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    manager(&state)?
+        .files
+        .local_roots()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1135,11 +1145,29 @@ pub(crate) async fn workspace_enqueue_transfers(
             }
         }
     }
-    schedule_transfer_workers(services);
-    workspace
+    let created_ids = created
+        .iter()
+        .map(|transfer| transfer.transfer_id.as_str())
+        .collect::<HashSet<_>>();
+    // The enqueue command returns only this request's batch. Durable history
+    // remains available through workspace_list_transfers.
+    let created = workspace
         .transfers
         .list()
         .map_err(|error| error.to_string())
+        .map(|transfers| retain_created_transfers(transfers, &created_ids))?;
+    schedule_transfer_workers(services);
+    Ok(created)
+}
+
+fn retain_created_transfers(
+    transfers: Vec<TransferDto>,
+    created_ids: &HashSet<&str>,
+) -> Vec<TransferDto> {
+    transfers
+        .into_iter()
+        .filter(|transfer| created_ids.contains(transfer.transfer_id.as_str()))
+        .collect()
 }
 
 fn remote_child_path(parent: &str, name: &str) -> Result<String, String> {
@@ -1387,6 +1415,49 @@ async fn select_folder(app: AppHandle) -> Result<Option<PathBuf>, String> {
 mod tests {
     use super::*;
     use crate::storage::TaskStore;
+
+    fn transfer_for_enqueue_test(id: &str) -> TransferDto {
+        TransferDto {
+            transfer_id: id.to_string(),
+            batch_id: "batch-test".to_string(),
+            task_id: None,
+            direction: TransferDirection::Upload,
+            host_id: "host-1".to_string(),
+            host_name: "Host 1".to_string(),
+            host_alias: "host-1".to_string(),
+            source_ref: format!("grant-{id}"),
+            destination_path: format!("/tmp/{id}"),
+            created_at: "2026-08-03T00:00:00Z".to_string(),
+            updated_at: "2026-08-03T00:00:00Z".to_string(),
+            state: TransferState::Queued,
+            revision: 1,
+            bytes: 0,
+            total: None,
+            speed: None,
+            eta_seconds: None,
+            attempt: 0,
+            resumable: false,
+            resume_offset: None,
+            conflict_strategy: ConflictStrategy::ReplaceWithBackup,
+            conflict_revision: None,
+            error_code: None,
+            fingerprint_status: None,
+            durable_source_fingerprint: None,
+            durable_partial_locator: None,
+        }
+    }
+
+    #[test]
+    fn enqueue_response_excludes_durable_transfer_history() {
+        let history = transfer_for_enqueue_test("history");
+        let created = transfer_for_enqueue_test("created");
+        let created_ids = HashSet::from(["created"]);
+
+        let response = retain_created_transfers(vec![history, created], &created_ids);
+
+        assert_eq!(response.len(), 1);
+        assert_eq!(response[0].transfer_id, "created");
+    }
 
     #[test]
     fn files_connection_task_settles_without_transport_payloads() {

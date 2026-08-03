@@ -40,6 +40,7 @@
 .transferPageContent,
 .transferTableCard,
 .transferTableScroller,
+.transferSupportSection,
 .transferSupportGrid {
   min-width: 0;
   max-width: 100%;
@@ -86,9 +87,9 @@
   background: var(--surface-solid);
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
   cursor: pointer;
 }
+.transferPageActions button { font-size: 0.875rem; font-weight: 700; }
 .transferPageActions button:hover:not(:disabled),
 .transferRecoveryActions button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--transfer-blue) 55%, var(--border)); }
 .transferPageActions .transferPrimaryAction {
@@ -101,6 +102,8 @@
 
 .transferPageContent {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
@@ -112,7 +115,9 @@
 }
 .transferStats {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: repeat(5, minmax(150px, 1fr));
+  min-height: 110px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 13px;
@@ -245,6 +250,25 @@
 .transferPagination button { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-solid); color: var(--text); cursor: pointer; }
 .transferPagination button:disabled { opacity: 0.35; cursor: default; }
 
+.transferSupportSection { display: grid; gap: 10px; }
+.transferSupportToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 46px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--surface-solid) 92%, var(--surface-muted));
+  box-shadow: 0 6px 20px color-mix(in srgb, #14213d 5%, transparent);
+}
+.transferSupportToggle > span:last-child { display: inline-flex; align-items: center; gap: 6px; color: var(--transfer-blue); font-size: 0.75rem; }
+.transferSupportToggle:hover { border-color: color-mix(in srgb, var(--transfer-blue) 45%, var(--border)); background: var(--surface-solid); }
 .transferSupportGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .transferSupportCard { display: grid; align-content: start; }
 .transferSupportCard > header { align-items: flex-start; gap: 10px; padding: 15px 16px 12px; border-bottom: 1px solid var(--border); }

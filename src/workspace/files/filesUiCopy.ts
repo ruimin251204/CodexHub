@@ -2,6 +2,7 @@ import type { WorkspaceLocale } from "../types";
 
 const en = {
   directoryTree: "Directory tree",
+  computerRoot: "This PC",
   rootDirectory: "Root directory",
   quickAccess: "Quick access",
   homeDirectory: "Home",
@@ -43,13 +44,27 @@ const en = {
   loadedItems: "loaded items",
   selected: "selected",
   unknownOwner: "—",
-  closePanel: "Close panel"
+  closePanel: "Close panel",
+  dropToCurrentDirectory: "Drop to upload to the current directory",
+  dropToDirectory: "Upload to",
+  transferQueue: "File transfers",
+  collapseTransfers: "Collapse transfers",
+  expandTransfers: "Expand transfers",
+  resizeTransfers: "Resize transfer panel",
+  transferFile: "File",
+  transferTarget: "Destination",
+  transferProgress: "Progress",
+  transferSpeed: "Speed",
+  transferStatus: "Status",
+  activeTransfers: "active",
+  completedTransfers: "completed in this batch"
 };
 
 type FilesUiCopyShape = { [Key in keyof typeof en]: string };
 
 const zh: FilesUiCopyShape = {
   directoryTree: "目录树",
+  computerRoot: "此电脑",
   rootDirectory: "根目录",
   quickAccess: "快捷访问",
   homeDirectory: "主目录",
@@ -91,7 +106,20 @@ const zh: FilesUiCopyShape = {
   loadedItems: "个已加载项目",
   selected: "已选择",
   unknownOwner: "—",
-  closePanel: "关闭面板"
+  closePanel: "关闭面板",
+  dropToCurrentDirectory: "松开即可上传到当前目录",
+  dropToDirectory: "上传到",
+  transferQueue: "文件传输",
+  collapseTransfers: "收起传输列表",
+  expandTransfers: "展开传输列表",
+  resizeTransfers: "调整传输区域高度",
+  transferFile: "文件",
+  transferTarget: "目标路径",
+  transferProgress: "进度",
+  transferSpeed: "速度",
+  transferStatus: "状态",
+  activeTransfers: "个进行中",
+  completedTransfers: "个本批次已完成"
 };
 
 export const filesUiCopy: Record<WorkspaceLocale, FilesUiCopyShape> = { en, zh };

@@ -54,6 +54,10 @@ impl LocalFileSessions {
         id == LOCAL_SESSION_ID
     }
 
+    pub(crate) fn roots(&self) -> WorkspaceResult<Vec<String>> {
+        available_local_roots()
+    }
+
     pub(crate) fn open(&self) -> WorkspaceResult<FileSessionDto> {
         let home = default_local_root()?;
         Ok(FileSessionDto {
@@ -370,15 +374,63 @@ fn default_local_root() -> WorkspaceResult<PathBuf> {
     { Ok(PathBuf::from("/")) }
 }
 
+fn available_local_roots() -> WorkspaceResult<Vec<String>> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Storage::FileSystem::GetLogicalDrives;
+
+        // SAFETY: GetLogicalDrives accepts no pointers and only returns the
+        // process-visible logical-drive bitmask.
+        let mask = unsafe { GetLogicalDrives() };
+        if mask == 0 {
+            return Err(WorkspaceError::new(
+                "local-roots-unavailable",
+                "Windows did not return any local drive roots.",
+            ));
+        }
+        Ok(windows_drive_roots_from_mask(mask))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(vec!["/".into()])
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_drive_roots_from_mask(mask: u32) -> Vec<String> {
+    (0..26)
+        .filter(|index| mask & (1 << index) != 0)
+        .map(|index| format!("{}:/", (b'A' + index as u8) as char))
+        .collect()
+}
+
 fn path_from_display(path: &str) -> WorkspaceResult<PathBuf> {
     if path.contains('\0') {
         return Err(WorkspaceError::new("invalid-local-path", "Local paths must be absolute and normalized."));
     }
+    // Windows commonly accepts `E:` as a drive-root shortcut in location
+    // fields. Resolve it as `E:/` instead of treating it as a relative path.
+    #[cfg(target_os = "windows")]
+    let normalized;
+    #[cfg(target_os = "windows")]
+    let path = if is_windows_drive_designator(path) {
+        normalized = format!("{path}/");
+        normalized.as_str()
+    } else {
+        path
+    };
     let value = PathBuf::from(path);
     if !value.is_absolute() || value.components().any(|component| matches!(component, Component::ParentDir | Component::CurDir)) {
         return Err(WorkspaceError::new("invalid-local-path", "Local paths must be absolute."));
     }
     Ok(value)
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_drive_designator(path: &str) -> bool {
+    path.len() == 2
+        && path.as_bytes()[0].is_ascii_alphabetic()
+        && path.as_bytes()[1] == b':'
 }
 
 fn display_path(path: &Path) -> WorkspaceResult<String> {
@@ -428,7 +480,11 @@ fn sort_entries(entries: &mut [RemoteFileEntry], field: FileSortField, direction
     entries.sort_by(|a, b| {
         let ordering = match field {
             FileSortField::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            FileSortField::Type => kind_code(a.kind).cmp(kind_code(b.kind)).then_with(|| a.name.cmp(&b.name)),
+            // Type is the primary key; names keep the same ascending semantics within each type.
+            FileSortField::Type => kind_code(a.kind)
+                .cmp(kind_code(b.kind))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                .then_with(|| a.name.cmp(&b.name)),
             FileSortField::Size => a.size.as_deref().unwrap_or("0").parse::<u64>().unwrap_or(0).cmp(&b.size.as_deref().unwrap_or("0").parse::<u64>().unwrap_or(0)),
             FileSortField::Modified => a.modified_at.cmp(&b.modified_at),
         };
@@ -520,10 +576,80 @@ fn lock_error<T>(_error: std::sync::PoisonError<T>) -> WorkspaceError {
 mod tests {
     use super::*;
 
+    fn sort_entry(name: &str, kind: RemoteFileKind) -> RemoteFileEntry {
+        RemoteFileEntry {
+            entry_ref: format!("entry-{name}"),
+            path: format!("/tmp/{name}"),
+            name: name.into(),
+            kind,
+            size: Some("0".into()),
+            modified_at: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            symlink_target: None,
+            fingerprint: format!("fingerprint-{name}"),
+            writable_name: true,
+        }
+    }
+
+    #[test]
+    fn local_type_sort_uses_name_as_the_secondary_key() {
+        let mut entries = vec![
+            sort_entry("zeta.txt", RemoteFileKind::File),
+            sort_entry("folder", RemoteFileKind::Directory),
+            sort_entry("Alpha.txt", RemoteFileKind::File),
+        ];
+
+        sort_entries(&mut entries, FileSortField::Type, SortDirection::Asc);
+
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["folder", "Alpha.txt", "zeta.txt"]);
+    }
+
     #[test]
     fn local_paths_reject_traversal_and_relative_values() {
         assert!(path_from_display("relative/path").is_err());
         assert!(path_from_display("C:/safe/../secret").is_err());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_local_paths_accept_any_drive_root_shape() {
+        assert_eq!(path_from_display("E:").unwrap(), PathBuf::from("E:/"));
+        assert_eq!(path_from_display("E:/").unwrap(), PathBuf::from("E:/"));
+        assert_eq!(path_from_display(r"E:\").unwrap(), PathBuf::from(r"E:\"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_local_roots_follow_the_logical_drive_mask() {
+        let mask = (1 << 2) | (1 << 4) | (1 << 5);
+        assert_eq!(windows_drive_roots_from_mask(mask), ["C:/", "E:/", "F:/"]);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[tokio::test]
+    async fn windows_local_session_can_navigate_to_an_available_non_default_drive() {
+        let available = (b'D'..=b'Z')
+            .map(|letter| format!("{}:/", letter as char))
+            .find(|root| Path::new(root).is_dir());
+        let Some(root) = available else { return };
+
+        let sessions = LocalFileSessions::new(None);
+        let page = sessions.list_directory(ListDirectoryRequest {
+            file_session_id: LOCAL_SESSION_ID.into(),
+            path: root.clone(),
+            snapshot_id: None,
+            page_token: None,
+            sort: Some(FileSortField::Name),
+            direction: Some(SortDirection::Asc),
+        }).await.unwrap();
+
+        assert_eq!(page.canonical_path, root);
     }
 
     #[test]

@@ -5,6 +5,7 @@ export type FilesIconName =
   | "back"
   | "chevronDown"
   | "chevronRight"
+  | "chevronUp"
   | "close"
   | "current"
   | "download"
@@ -20,6 +21,8 @@ export type FilesIconName =
   | "sortAscending"
   | "sortDescending"
   | "tree"
+  | "transfer"
+  | "trash"
   | "up"
   | "upload";
 
@@ -27,6 +30,7 @@ const iconPaths: Record<FilesIconName, ReactNode> = {
   back: <path d="m9.5 3.5-4.5 4.5 4.5 4.5" />,
   chevronDown: <path d="m4.5 6 3.5 3.5L11.5 6" />,
   chevronRight: <path d="m6 4.5 3.5 3.5L6 11.5" />,
+  chevronUp: <path d="m4.5 10 3.5-3.5 3.5 3.5" />,
   close: <path d="m4 4 8 8m0-8-8 8" />,
   current: <><circle cx="8" cy="8" r="4" /><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" /></>,
   download: <><path d="M8 2.5v7" /><path d="m5 7 3 3 3-3" /><path d="M3 13.5h10" /></>,
@@ -42,6 +46,8 @@ const iconPaths: Record<FilesIconName, ReactNode> = {
   sortAscending: <><path d="M3 4h7M3 8h5M3 12h3M13 12V4m0 0-2 2m2-2 2 2" /></>,
   sortDescending: <><path d="M3 4h3M3 8h5M3 12h7M13 4v8m0 0-2-2m2 2 2-2" /></>,
   tree: <><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" /><path d="M6 2.5v11M8.5 5.5h2.5M8.5 8h2.5M8.5 10.5h2.5" /></>,
+  transfer: <><path d="M3 5h9m0 0L9.5 2.5M12 5 9.5 7.5" /><path d="M13 11H4m0 0 2.5-2.5M4 11l2.5 2.5" /></>,
+  trash: <><path d="M3.5 4.5h9M6 4.5V3h4v1.5M5 6.5l.5 6h5l.5-6M7 7.5v3.5M9 7.5v3.5" /></>,
   up: <><path d="M8 13V3" /><path d="m4.8 6.2L8 3l3.2 3.2" /></>,
   upload: <><path d="M8 13V6" /><path d="m5 8.8 3-3 3 3" /><path d="M3 13.5h10" /></>
 };

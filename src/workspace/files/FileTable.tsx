@@ -4,51 +4,60 @@ import type { WorkspaceCopy } from "../copy";
 import type { RemoteFileEntry, WorkspaceFileOperationKind, WorkspaceFileSortField } from "../types";
 import { displaySize, formatModifiedAt } from "./fileDisplay";
 import { FileGlyph } from "./FileGlyph";
+import { FilesIcon } from "./FilesIcon";
 import type { FilesUiCopy } from "./filesUiCopy";
 import { usePersonalInfoMasking } from "../../ui/PersonalInfoMasking";
 
 type ContextPoint = { x: number; y: number };
-type ResizableColumn = "name" | "size" | "modified";
+type ResizableColumn = "name" | "type" | "size" | "modified";
 type FileColumnWidths = Record<ResizableColumn, number>;
 
 const FILE_GRID_OVERHEAD = 48;
 
 const COLUMN_LIMITS: Record<ResizableColumn, { min: number; max: number }> = {
   name: { min: 200, max: 920 },
+  type: { min: 72, max: 240 },
   size: { min: 88, max: 320 },
   modified: { min: 154, max: 420 }
 };
 
 const DEFAULT_COLUMN_WIDTHS: FileColumnWidths = {
   name: 340,
+  type: 104,
   size: 124,
   modified: 188
 };
 
 const STANDARD_COLUMN_MINIMUMS: FileColumnWidths = {
   name: 160,
+  type: 80,
   size: 72,
   modified: 116
 };
 
 const COMPACT_COLUMN_MINIMUMS: FileColumnWidths = {
   name: 88,
+  type: 64,
   size: 52,
   modified: 84
 };
 
-function clampColumnWidth(column: ResizableColumn, width: number) {
+function clampColumnWidth(column: ResizableColumn, width: number, currentWidth?: number) {
   const { min, max } = COLUMN_LIMITS[column];
-  return Math.max(min, Math.min(max, Math.round(width)));
+  // A responsive table may already be narrower than the desktop minimum.
+  const effectiveMin = currentWidth === undefined ? min : Math.min(min, currentWidth);
+  return Math.max(effectiveMin, Math.min(max, Math.round(width)));
 }
 
-function distributeColumnWidths(name: number, size: number, available: number): FileColumnWidths {
+function distributeColumnWidths(name: number, type: number, size: number, available: number): FileColumnWidths {
   const resolvedName = Math.max(0, Math.floor(name));
+  const resolvedType = Math.max(0, Math.floor(type));
   const resolvedSize = Math.max(0, Math.floor(size));
   return {
     name: resolvedName,
+    type: resolvedType,
     size: resolvedSize,
-    modified: Math.max(0, Math.floor(available - resolvedName - resolvedSize))
+    modified: Math.max(0, Math.floor(available - resolvedName - resolvedType - resolvedSize))
   };
 }
 
@@ -61,32 +70,50 @@ export function resolveFileColumnWidths(
   if (containerWidth <= 0) return preferred;
 
   const available = Math.max(0, containerWidth - FILE_GRID_OVERHEAD);
-  const preferredTotal = preferred.name + preferred.size + preferred.modified;
+  const preferredTotal = preferred.name + preferred.type + preferred.size + preferred.modified;
   if (available >= preferredTotal) {
     return { ...preferred, name: preferred.name + available - preferredTotal };
   }
 
   const minimums = compact ? COMPACT_COLUMN_MINIMUMS : STANDARD_COLUMN_MINIMUMS;
-  const minimumTotal = minimums.name + minimums.size + minimums.modified;
+  const minimumTotal = minimums.name + minimums.type + minimums.size + minimums.modified;
   if (available <= minimumTotal) {
     const ratio = available / minimumTotal;
-    return distributeColumnWidths(minimums.name * ratio, minimums.size * ratio, available);
+    return distributeColumnWidths(
+      minimums.name * ratio,
+      minimums.type * ratio,
+      minimums.size * ratio,
+      available
+    );
   }
 
   const preferredFlex = {
     name: Math.max(0, preferred.name - minimums.name),
+    type: Math.max(0, preferred.type - minimums.type),
     size: Math.max(0, preferred.size - minimums.size),
     modified: Math.max(0, preferred.modified - minimums.modified)
   };
-  const preferredFlexTotal = preferredFlex.name + preferredFlex.size + preferredFlex.modified;
-  if (preferredFlexTotal === 0) return distributeColumnWidths(minimums.name, minimums.size, available);
+  const preferredFlexTotal = preferredFlex.name + preferredFlex.type + preferredFlex.size + preferredFlex.modified;
+  if (preferredFlexTotal === 0) {
+    return distributeColumnWidths(minimums.name, minimums.type, minimums.size, available);
+  }
 
   const remaining = available - minimumTotal;
   return distributeColumnWidths(
     minimums.name + remaining * (preferredFlex.name / preferredFlexTotal),
+    minimums.type + remaining * (preferredFlex.type / preferredFlexTotal),
     minimums.size + remaining * (preferredFlex.size / preferredFlexTotal),
     available
   );
+}
+
+function fileTypeLabel(entry: RemoteFileEntry, copy: WorkspaceCopy) {
+  switch (entry.kind) {
+    case "directory": return copy.directory;
+    case "file": return copy.file;
+    case "symlink": return copy.symlink;
+    default: return copy.other;
+  }
 }
 
 function ResizableColumnHeader({
@@ -95,6 +122,7 @@ function ResizableColumnHeader({
   label,
   resizeLabel,
   width,
+  onSort,
   onResizeKeyDown,
   onResizeStart
 }: {
@@ -103,13 +131,17 @@ function ResizableColumnHeader({
   label: string;
   resizeLabel: string;
   width: number;
+  onSort: (column: ResizableColumn) => void;
   onResizeKeyDown: (column: ResizableColumn, event: ReactKeyboardEvent<HTMLButtonElement>) => void;
   onResizeStart: (column: ResizableColumn, event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
   const limits = COLUMN_LIMITS[column];
   return (
     <span aria-label={label} aria-sort={ariaSort} className="workspaceFileColumnHeader" role="columnheader">
-      <span>{label}</span>
+      <button className="workspaceFileColumnSort" type="button" onClick={() => onSort(column)}>
+        <span>{label}</span>
+        {ariaSort !== "none" ? <FilesIcon name={ariaSort === "ascending" ? "sortAscending" : "sortDescending"} size={14} /> : null}
+      </button>
       <button
         aria-label={`${resizeLabel}: ${label}`}
         aria-orientation="vertical"
@@ -130,6 +162,7 @@ export function FileTable({
   compact = false,
   copy,
   entries,
+  externalDropTargetPath,
   focusedIndex,
   locale,
   selectedRefs,
@@ -143,11 +176,13 @@ export function FileTable({
   onOpenEntry,
   onSelectEntry,
   onSelectPage,
+  onSort,
   onShowPreview
 }: {
   compact?: boolean;
   copy: WorkspaceCopy;
   entries: RemoteFileEntry[];
+  externalDropTargetPath: string | null;
   focusedIndex: number;
   locale: "en" | "zh";
   selectedRefs: ReadonlySet<string>;
@@ -161,18 +196,27 @@ export function FileTable({
   onOpenEntry: (entry: RemoteFileEntry) => void;
   onSelectEntry: (entry: RemoteFileEntry, toggle: boolean) => void;
   onSelectPage: (selected: boolean) => void;
+  onSort: (column: WorkspaceFileSortField) => void;
   onShowPreview: (entry: RemoteFileEntry) => void;
 }) {
   const personalInfo = usePersonalInfoMasking();
   const gridRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const compactRef = useRef(compact);
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [manualColumnWidths, setManualColumnWidths] = useState(false);
   const [resizingColumn, setResizingColumn] = useState<ResizableColumn | null>(null);
   const allSelected = entries.length > 0 && entries.every((entry) => selectedRefs.has(entry.entryRef));
 
   useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  useEffect(() => {
+    if (compactRef.current === compact) return;
+    compactRef.current = compact;
+    setManualColumnWidths(false);
+  }, [compact]);
 
   useEffect(() => {
     const grid = gridRef.current;
@@ -197,12 +241,21 @@ export function FileTable({
     resizeCleanupRef.current?.();
 
     const initialX = event.clientX;
-    const initialWidth = columnWidths[column];
+    // Start from the widths currently painted on screen. Once the user drags,
+    // each column is independent and later columns follow the pointer direction.
+    const initialWidths = resolvedColumnWidths;
+    const initialWidth = initialWidths[column];
+    setColumnWidths(initialWidths);
+    setManualColumnWidths(true);
     const move = (pointerEvent: PointerEvent) => {
-      setColumnWidths((current) => ({
-        ...current,
-        [column]: clampColumnWidth(column, initialWidth + pointerEvent.clientX - initialX)
-      }));
+      setColumnWidths({
+        ...initialWidths,
+        [column]: clampColumnWidth(
+          column,
+          initialWidth + pointerEvent.clientX - initialX,
+          initialWidth
+        )
+      });
     };
     const stop = () => {
       window.removeEventListener("pointermove", move);
@@ -224,21 +277,35 @@ export function FileTable({
     const delta = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
     if (!delta) return;
     event.preventDefault();
-    setColumnWidths((current) => ({
-      ...current,
-      [column]: clampColumnWidth(column, current[column] + delta)
-    }));
+    setManualColumnWidths(true);
+    setColumnWidths({
+      ...resolvedColumnWidths,
+      [column]: clampColumnWidth(
+        column,
+        resolvedColumnWidths[column] + delta,
+        resolvedColumnWidths[column]
+      )
+    });
   };
 
   const resolvedColumnWidths = useMemo(
-    () => resolveFileColumnWidths(columnWidths, containerWidth, compact),
-    [columnWidths, compact, containerWidth]
+    () => manualColumnWidths
+      ? columnWidths
+      : resolveFileColumnWidths(columnWidths, containerWidth, compact),
+    [columnWidths, compact, containerWidth, manualColumnWidths]
   );
+  const tableWidth = FILE_GRID_OVERHEAD
+    + resolvedColumnWidths.name
+    + resolvedColumnWidths.type
+    + resolvedColumnWidths.size
+    + resolvedColumnWidths.modified;
 
   const gridStyle = {
     "--workspace-file-name-column-width": `${resolvedColumnWidths.name}px`,
+    "--workspace-file-type-column-width": `${resolvedColumnWidths.type}px`,
     "--workspace-file-size-column-width": `${resolvedColumnWidths.size}px`,
-    "--workspace-file-modified-column-width": `${resolvedColumnWidths.modified}px`
+    "--workspace-file-modified-column-width": `${resolvedColumnWidths.modified}px`,
+    "--workspace-file-table-width": `${tableWidth}px`
   } as CSSProperties;
 
   const focusRow = (index: number) => {
@@ -292,6 +359,17 @@ export function FileTable({
           label={copy.fileName}
           resizeLabel={ui.resizeColumn}
           width={columnWidths.name}
+          onSort={onSort}
+          onResizeKeyDown={handleColumnResizeKeyDown}
+          onResizeStart={startColumnResize}
+        />
+        <ResizableColumnHeader
+          ariaSort={sortKey === "type" ? sortAscending ? "ascending" : "descending" : "none"}
+          column="type"
+          label={copy.fileType}
+          resizeLabel={ui.resizeColumn}
+          width={columnWidths.type}
+          onSort={onSort}
           onResizeKeyDown={handleColumnResizeKeyDown}
           onResizeStart={startColumnResize}
         />
@@ -301,6 +379,7 @@ export function FileTable({
           label={copy.fileSize}
           resizeLabel={ui.resizeColumn}
           width={columnWidths.size}
+          onSort={onSort}
           onResizeKeyDown={handleColumnResizeKeyDown}
           onResizeStart={startColumnResize}
         />
@@ -310,6 +389,7 @@ export function FileTable({
           label={copy.fileModified}
           resizeLabel={ui.resizeColumn}
           width={columnWidths.modified}
+          onSort={onSort}
           onResizeKeyDown={handleColumnResizeKeyDown}
           onResizeStart={startColumnResize}
         />
@@ -319,7 +399,9 @@ export function FileTable({
           <div
             aria-selected={selectedRefs.has(entry.entryRef)}
             className="workspaceFileRow"
+            data-external-drop-target={externalDropTargetPath === entry.canonicalPath || undefined}
             data-kind={entry.kind}
+            data-workspace-drop-directory={entry.kind === "directory" ? entry.canonicalPath : undefined}
             draggable={entry.writable && entry.nameEncoding === "utf8"}
             key={entry.entryRef}
             ref={(node) => { if (node) rowRefs.current.set(entry.entryRef, node); else rowRefs.current.delete(entry.entryRef); }}
@@ -358,6 +440,7 @@ export function FileTable({
               />
             </span>
             <span className="workspaceFileName" role="gridcell" title={personalInfo.maskText(entry.canonicalPath)}><FileGlyph kind={entry.kind} /><span>{personalInfo.maskText(entry.name)}</span></span>
+            <span className="workspaceFileType" role="gridcell">{fileTypeLabel(entry, copy)}</span>
             <span role="gridcell">{entry.kind === "directory" ? "—" : displaySize(entry.size)}</span>
             <span role="gridcell">{formatModifiedAt(entry.modifiedAt, locale === "zh" ? "zh-CN" : "en")}</span>
           </div>

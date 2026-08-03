@@ -1,7 +1,12 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { workspaceCopy } from "./copy";
-import { FilesPanel, formatModifiedAt } from "./FilesPanel";
+import {
+  FILE_DELETE_MODE_STORAGE_KEY,
+  FILE_TRANSFER_COMPLETED_RETENTION_MS,
+  FilesPanel,
+  formatModifiedAt
+} from "./FilesPanel";
 import { workspaceHostLabel } from "./hostLabel";
 import { resolveFileColumnWidths } from "./files/FileTable";
 import { filesUiCopy } from "./files/filesUiCopy";
@@ -13,7 +18,10 @@ import type {
   WorkspaceApi,
   WorkspaceDirectoryPage,
   WorkspaceFilesSession,
-  WorkspaceHost
+  WorkspaceHost,
+  WorkspaceLocalDragStateEvent,
+  WorkspaceLocalDropEvent,
+  WorkspaceTransfer
 } from "./types";
 
 const host: WorkspaceHost = {
@@ -62,6 +70,15 @@ const hiddenDirectory: RemoteFileEntry = {
   entryRef: "entry-hidden",
   canonicalPath: "/home/demo/.config",
   name: ".config"
+};
+
+const textFile: RemoteFileEntry = {
+  ...directory,
+  entryRef: "entry-notes",
+  canonicalPath: "/home/demo/notes.txt",
+  name: "notes.txt",
+  kind: "file",
+  size: "128"
 };
 
 function page(path: string, entries: RemoteFileEntry[]): WorkspaceDirectoryPage {
@@ -197,6 +214,7 @@ test("the local Files target opens the real local file session", async () => {
     currentPath: "C:/"
   };
   const api = {
+    listLocalRoots: vi.fn().mockResolvedValue(["C:/", "E:/", "F:/"]),
     openFiles: vi.fn().mockResolvedValue(localSession),
     listDirectory: vi.fn().mockResolvedValue(page("C:/", [])),
     events: {
@@ -209,6 +227,55 @@ test("the local Files target opens the real local file session", async () => {
 
   await waitFor(() => expect(api.openFiles).toHaveBeenCalledWith({ hostAlias: "" }));
   expect(api.listDirectory).toHaveBeenCalledWith(expect.objectContaining({ fileSessionId: "local-files", path: "C:/" }));
+});
+
+test("local Files can correct an unavailable drive and navigate to another drive", async () => {
+  const stop = () => undefined;
+  const localSession: WorkspaceFilesSession = {
+    ...session,
+    fileSessionId: "local-files",
+    hostAlias: "",
+    targetKind: "local",
+    homePath: "C:/",
+    currentPath: "C:/"
+  };
+  const listDirectory = vi.fn(async ({ path }: { path: string | null }) => {
+    if (path === "D:/") throw new Error("local-path-unavailable");
+    return page(path === "E:" || path === "E:/" ? "E:/" : "C:/", []);
+  });
+  const api = {
+    listLocalRoots: vi.fn().mockResolvedValue(["C:/", "E:/", "F:/"]),
+    openFiles: vi.fn().mockResolvedValue(localSession),
+    listDirectory,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const onError = vi.fn();
+
+  render(errorPanel(api, onError, { selectedHostAlias: "" }));
+  const location = await screen.findByRole("textbox", { name: workspaceCopy.en.location });
+  await waitFor(() => expect(location).toHaveValue("C:/"));
+
+  fireEvent.change(location, { target: { value: "D:/" } });
+  fireEvent.submit(location.closest("form")!);
+  await waitFor(() => expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "local-path-unavailable" })));
+  expect(location).toHaveValue("C:/");
+  expect(api.openFiles).toHaveBeenCalledTimes(1);
+
+  const tree = screen.getByRole("tree", { name: filesUiCopy.en.directoryTree });
+  expect(within(tree).getByText(filesUiCopy.en.computerRoot)).toBeInTheDocument();
+  expect(within(tree).getByTitle("C:/").closest('[role="treeitem"]')).toHaveAttribute("aria-current", "page");
+  expect(within(tree).getByTitle("E:/")).toBeInTheDocument();
+  expect(within(tree).getByTitle("F:/")).toBeInTheDocument();
+
+  fireEvent.click(within(tree).getByTitle("E:/"));
+  await waitFor(() => expect(location).toHaveValue("E:/"));
+  expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ fileSessionId: "local-files", path: "E:/" }));
+  expect(api.openFiles).toHaveBeenCalledTimes(1);
+  expect(within(tree).getByTitle("E:/").closest('[role="treeitem"]')).toHaveAttribute("aria-current", "page");
+  expect(within(tree).getByTitle("C:/")).toBeInTheDocument();
 });
 
 test("dot-prefixed paths are hidden by default and can be revealed", async () => {
@@ -224,15 +291,16 @@ test("dot-prefixed paths are hidden by default and can be revealed", async () =>
   expect(screen.queryByRole("row", { name: /.config/i })).not.toBeInTheDocument();
 });
 
-test("the focused two-pane view keeps only name, size and modified file columns", async () => {
+test("the focused two-pane view keeps name, type, size and modified file columns", async () => {
   renderPanel();
 
   const grid = await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
 
   expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileName })).toBeInTheDocument();
+  expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileType })).toBeInTheDocument();
   expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileSize })).toBeInTheDocument();
   expect(within(grid).getByRole("columnheader", { name: workspaceCopy.en.fileModified })).toBeInTheDocument();
-  expect(within(grid).queryByRole("columnheader", { name: workspaceCopy.en.fileType })).not.toBeInTheDocument();
+  expect(within(await screen.findByRole("row", { name: /projects/i })).getByText(workspaceCopy.en.directory)).toBeInTheDocument();
   expect(within(grid).queryByRole("columnheader", { name: filesUiCopy.en.permissions })).not.toBeInTheDocument();
   expect(within(grid).queryByRole("columnheader", { name: filesUiCopy.en.owner })).not.toBeInTheDocument();
   expect(screen.queryByRole("complementary", { name: filesUiCopy.en.details })).not.toBeInTheDocument();
@@ -271,6 +339,127 @@ test("Files more-actions menu closes from an outside press or Escape", async () 
   expect(toggle).toHaveFocus();
 });
 
+test("the More menu delete action offers backup mode and asks whether to remember it", async () => {
+  window.localStorage.removeItem(FILE_DELETE_MODE_STORAGE_KEY);
+  const stop = () => undefined;
+  const recovery = {
+    recoveryId: "recovery-delete-1",
+    hostAlias: host.hostAlias,
+    operation: "delete" as const,
+    originalPath: textFile.canonicalPath,
+    recoveryPath: "/home/demo/.codexhub-workspace-backups/recovery-delete-1/payload",
+    createdAt: "2026-08-03T08:00:00.000Z",
+    state: "available" as const,
+    taskId: "task-delete-1",
+    reason: null
+  };
+  const listDirectory = vi.fn()
+    .mockResolvedValueOnce(page(session.homePath, [textFile]))
+    .mockResolvedValue(page(session.homePath, []));
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory,
+    prepareFileOperation: vi.fn().mockResolvedValue({
+      token: "delete-token",
+      operation: "delete",
+      hostAlias: host.hostAlias,
+      sourcePath: textFile.canonicalPath,
+      targetPath: null,
+      backupPath: recovery.recoveryPath,
+      impactSummary: "delete",
+      expiresAt: "2026-08-03T08:01:00.000Z",
+      requiresBackup: false
+    }),
+    confirmFileOperation: vi.fn().mockResolvedValue({ taskId: recovery.taskId, recovery, destinationEntry: null }),
+    prepareRecoveryPurge: vi.fn(),
+    purgeRecovery: vi.fn(),
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  try {
+    render(errorPanel(api, vi.fn()));
+    fireEvent.click(await screen.findByRole("row", { name: /notes\.txt/i }));
+    const menu = document.querySelector<HTMLDetailsElement>(".workspaceFilesMoreActions");
+    expect(menu).not.toBeNull();
+    if (!menu) throw new Error("Files more-actions menu is unavailable");
+    fireEvent.click(menu.querySelector("summary")!);
+    const menuGroup = within(menu).getByRole("group", { name: filesUiCopy.en.moreActions });
+    const menuButtons = within(menuGroup).getAllByRole("button");
+    const newFolderIndex = menuButtons.findIndex((button) => button.getAttribute("aria-label") === workspaceCopy.en.newFolder);
+    const deleteIndex = menuButtons.findIndex((button) => button.getAttribute("aria-label") === workspaceCopy.en.delete);
+    expect(deleteIndex).toBe(newFolderIndex + 1);
+
+    fireEvent.click(within(menuGroup).getByRole("button", { name: workspaceCopy.en.delete }));
+    expect(screen.getByRole("alertdialog", { name: workspaceCopy.en.deleteModeTitle })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.backupDelete }));
+    expect(screen.getByRole("alertdialog", { name: workspaceCopy.en.deletePreferenceTitle })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.askDeleteNextTime }));
+
+    await waitFor(() => expect(api.confirmFileOperation).toHaveBeenCalledWith({ token: "delete-token" }));
+    expect(api.prepareRecoveryPurge).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(FILE_DELETE_MODE_STORAGE_KEY)).toBeNull();
+    await waitFor(() => expect(listDirectory).toHaveBeenCalledTimes(2));
+  } finally {
+    window.localStorage.removeItem(FILE_DELETE_MODE_STORAGE_KEY);
+  }
+});
+
+test("direct delete purges the temporary recovery and persists the chosen default", async () => {
+  window.localStorage.removeItem(FILE_DELETE_MODE_STORAGE_KEY);
+  const stop = () => undefined;
+  const recovery = {
+    recoveryId: "recovery-direct-1",
+    hostAlias: host.hostAlias,
+    operation: "delete" as const,
+    originalPath: textFile.canonicalPath,
+    recoveryPath: "/home/demo/.codexhub-workspace-backups/recovery-direct-1/payload",
+    createdAt: "2026-08-03T08:00:00.000Z",
+    state: "available" as const,
+    taskId: "task-direct-1",
+    reason: null
+  };
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [textFile])),
+    prepareFileOperation: vi.fn().mockResolvedValue({ token: "direct-token" }),
+    confirmFileOperation: vi.fn().mockResolvedValue({ taskId: recovery.taskId, recovery, destinationEntry: null }),
+    prepareRecoveryPurge: vi.fn().mockResolvedValue({
+      token: "purge-token",
+      recoveryId: recovery.recoveryId,
+      hostAlias: host.hostAlias,
+      recoveryPath: recovery.recoveryPath,
+      expiresAt: "2026-08-03T08:01:00.000Z"
+    }),
+    purgeRecovery: vi.fn().mockResolvedValue({ ...recovery, state: "purged" }),
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  try {
+    render(errorPanel(api, vi.fn()));
+    fireEvent.contextMenu(await screen.findByRole("row", { name: /notes\.txt/i }), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole("menuitem", { name: workspaceCopy.en.delete }));
+    fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.directDelete }));
+    fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.setDeleteDefault }));
+
+    await waitFor(() => expect(api.prepareRecoveryPurge).toHaveBeenCalledWith({ recoveryId: recovery.recoveryId }));
+    expect(api.purgeRecovery).toHaveBeenCalledWith({ token: "purge-token" });
+    expect(window.localStorage.getItem(FILE_DELETE_MODE_STORAGE_KEY)).toBe("direct");
+
+    fireEvent.contextMenu(await screen.findByRole("row", { name: /notes\.txt/i }), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole("menuitem", { name: workspaceCopy.en.delete }));
+    await waitFor(() => expect(api.confirmFileOperation).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alertdialog", { name: workspaceCopy.en.deleteModeTitle })).not.toBeInTheDocument();
+  } finally {
+    window.localStorage.removeItem(FILE_DELETE_MODE_STORAGE_KEY);
+  }
+});
+
 test("directory tree and file columns expose pointer resize controls", async () => {
   renderPanel();
 
@@ -291,6 +480,39 @@ test("directory tree and file columns expose pointer resize controls", async () 
   fireEvent.pointerMove(window, { clientX: 180 });
   expect(screen.getByRole("grid", { name: filesUiCopy.en.tableView }).style.getPropertyValue("--workspace-file-name-column-width")).toBe("420px");
   fireEvent.pointerUp(window);
+});
+
+test("file column resize follows the pointer after responsive fitting", async () => {
+  const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get() { return this.classList.contains("workspaceFileGrid") ? 900 : 0; }
+  });
+
+  try {
+    renderPanel();
+    const grid = await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
+    await waitFor(() => expect(grid.style.getPropertyValue("--workspace-file-name-column-width")).toBe("436px"));
+    const handle = screen.getByRole("separator", { name: `${filesUiCopy.en.resizeColumn}: ${workspaceCopy.en.fileName}` });
+
+    fireEvent.pointerDown(handle, { button: 0, clientX: 100 });
+    fireEvent.pointerMove(window, { clientX: 180 });
+    expect(grid.style.getPropertyValue("--workspace-file-name-column-width")).toBe("516px");
+    expect(grid.style.getPropertyValue("--workspace-file-table-width")).toBe("980px");
+    fireEvent.pointerUp(window);
+
+    fireEvent.pointerDown(handle, { button: 0, clientX: 180 });
+    fireEvent.pointerMove(window, { clientX: 100 });
+    expect(grid.style.getPropertyValue("--workspace-file-name-column-width")).toBe("436px");
+    expect(grid.style.getPropertyValue("--workspace-file-table-width")).toBe("900px");
+    fireEvent.pointerUp(window);
+  } finally {
+    if (clientWidthDescriptor) {
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidthDescriptor);
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+    }
+  }
 });
 
 test("compact Files starts with its directory tree collapsed and can open it on demand", async () => {
@@ -344,12 +566,13 @@ test("entering compact Files closes the tree once without overriding a later use
 });
 
 test("file columns fit the compact table viewport without horizontal overflow", () => {
-  const widths = resolveFileColumnWidths({ name: 340, size: 124, modified: 188 }, 230, true);
+  const widths = resolveFileColumnWidths({ name: 340, type: 104, size: 124, modified: 188 }, 230, true);
 
   expect(widths.name).toBeGreaterThan(0);
+  expect(widths.type).toBeGreaterThan(0);
   expect(widths.size).toBeGreaterThan(0);
   expect(widths.modified).toBeGreaterThan(0);
-  expect(widths.name + widths.size + widths.modified).toBe(182);
+  expect(widths.name + widths.type + widths.size + widths.modified).toBe(182);
 });
 
 test("directory tree expansion lazily lists the selected real canonical path", async () => {
@@ -384,6 +607,37 @@ test("client pagination and page checkboxes keep selection explicit", async () =
 
   fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.nextPage }));
   expect(await screen.findByRole("row", { name: /item-29/i })).toBeInTheDocument();
+});
+
+test("file column headers sort ascending first and reverse on the second click", async () => {
+  const listDirectory = renderPanel();
+  const nameHeader = await screen.findByRole("columnheader", { name: workspaceCopy.en.fileName });
+  const typeHeader = screen.getByRole("columnheader", { name: workspaceCopy.en.fileType });
+  const sizeHeader = screen.getByRole("columnheader", { name: workspaceCopy.en.fileSize });
+  const modifiedHeader = screen.getByRole("columnheader", { name: workspaceCopy.en.fileModified });
+
+  expect(typeHeader).toHaveAttribute("aria-sort", "ascending");
+  expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "type", direction: "asc" }));
+
+  fireEvent.click(within(typeHeader).getByRole("button", { name: workspaceCopy.en.fileType }));
+  await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "type", direction: "desc" })));
+  expect(typeHeader).toHaveAttribute("aria-sort", "descending");
+
+  fireEvent.click(within(nameHeader).getByRole("button", { name: workspaceCopy.en.fileName }));
+  await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "name", direction: "asc" })));
+  expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
+
+  fireEvent.click(within(sizeHeader).getByRole("button", { name: workspaceCopy.en.fileSize }));
+  await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "size", direction: "asc" })));
+  expect(sizeHeader).toHaveAttribute("aria-sort", "ascending");
+
+  fireEvent.click(within(sizeHeader).getByRole("button", { name: workspaceCopy.en.fileSize }));
+  await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "size", direction: "desc" })));
+  expect(sizeHeader).toHaveAttribute("aria-sort", "descending");
+
+  fireEvent.click(within(modifiedHeader).getByRole("button", { name: workspaceCopy.en.fileModified }));
+  await waitFor(() => expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "modified", direction: "asc" })));
+  expect(modifiedHeader).toHaveAttribute("aria-sort", "ascending");
 });
 
 test("Files-specific redesign copy follows the requested locale", async () => {
@@ -465,6 +719,49 @@ test("mode changes preserve the active host directory without reopening Files", 
   await screen.findByDisplayValue(directory.canonicalPath);
   expect(api.openFiles).toHaveBeenCalledTimes(1);
   expect(listDirectory).toHaveBeenCalledTimes(callsBeforeModeChange);
+});
+
+test("parent callback rerenders do not reopen Files at the home path", async () => {
+  const listDirectory = vi.fn(async ({ path }: { path: string | null }) =>
+    path === directory.canonicalPath
+      ? page(directory.canonicalPath, [])
+      : page(session.homePath, [directory]));
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const stableProps = {
+    activeTerminal: null,
+    api,
+    copy: workspaceCopy.en,
+    cwd: null,
+    followCwd: false,
+    hosts: [host],
+    isActive: true,
+    selectedHostAlias: host.hostAlias,
+    onFollowCwdChange: vi.fn(),
+    onHostSelected: vi.fn(),
+    onOpenTerminalAt: vi.fn(),
+    onRecoveryCreated: vi.fn(),
+    onViewRecoveries: vi.fn()
+  };
+  const view = render(<FilesPanel {...stableProps} onError={vi.fn()} />);
+
+  fireEvent.doubleClick(await screen.findByRole("row", { name: /projects/i }));
+  await screen.findByDisplayValue(directory.canonicalPath);
+  const callsBeforeParentRerender = listDirectory.mock.calls.length;
+
+  // App recreates its error reporter when transfer progress updates render.
+  view.rerender(<FilesPanel {...stableProps} onError={vi.fn()} />);
+
+  await screen.findByDisplayValue(directory.canonicalPath);
+  expect(api.openFiles).toHaveBeenCalledTimes(1);
+  expect(listDirectory).toHaveBeenCalledTimes(callsBeforeParentRerender);
 });
 
 test("an unfinished Files view reloads after returning to the mode", async () => {
@@ -588,4 +885,292 @@ test("retry after a child-directory failure requests the same directory", async 
   expect(api.closeFiles).toHaveBeenCalledWith({ fileSessionId: session.fileSessionId });
   await screen.findByDisplayValue(directory.canonicalPath);
   expect(screen.getByText(workspaceCopy.en.emptyDirectory)).toBeInTheDocument();
+});
+
+function sampleTransfer(
+  state: WorkspaceTransfer["state"],
+  overrides: Partial<WorkspaceTransfer> = {}
+): WorkspaceTransfer {
+  return {
+    transferId: "transfer-upload-1",
+    revision: state === "completed" ? 2 : 1,
+    createdAt: "2026-08-03T08:00:00.000Z",
+    updatedAt: state === "completed" ? "2026-08-03T08:00:02.000Z" : "2026-08-03T08:00:00.000Z",
+    direction: "upload",
+    hostAlias: host.hostAlias,
+    sourceLabel: "Local selection",
+    targetLabel: session.homePath,
+    state,
+    bytes: state === "completed" ? "100" : "20",
+    total: "100",
+    speedBytesPerSecond: state === "completed" ? null : "25",
+    etaSeconds: state === "completed" ? null : 3,
+    attempt: 1,
+    resumable: true,
+    resumeOffset: null,
+    fingerprintState: "unchecked",
+    errorCode: null,
+    errorMessage: null,
+    taskId: null,
+    conflictRevision: null,
+    capabilities: {
+      canPause: state === "running",
+      canResume: state === "paused",
+      canCancel: state !== "completed",
+      canRetry: false,
+      canRestart: false
+    },
+    ...overrides
+  };
+}
+
+test("native file drag highlights a directory and uploads to that exact target", async () => {
+  let dragHandler: ((event: WorkspaceLocalDragStateEvent) => void) | null = null;
+  let dropHandler: ((event: WorkspaceLocalDropEvent) => void) | null = null;
+  const enqueueTransfers = vi.fn().mockResolvedValue([sampleTransfer("running")]);
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    enqueueTransfers,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDragState: vi.fn((handler) => { dragHandler = handler; return stop; }),
+      onLocalDrop: vi.fn((handler) => { dropHandler = handler; return stop; })
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  const row = await screen.findByRole("row", { name: /projects/i });
+  await waitFor(() => expect(dragHandler).not.toBeNull());
+  const originalElementFromPoint = document.elementFromPoint;
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: vi.fn().mockReturnValue(row) });
+  try {
+    act(() => dragHandler?.({ phase: "over", clientX: 40, clientY: 80 }));
+    expect(row).toHaveAttribute("data-external-drop-target", "true");
+    act(() => dragHandler?.({ phase: "drop", clientX: 40, clientY: 80 }));
+    act(() => dropHandler?.({ grants: [{ grantId: "grant-1", displayName: "notes.txt", kind: "file", expiresAt: "2026-08-03T08:05:00.000Z" }] }));
+    await waitFor(() => expect(enqueueTransfers).toHaveBeenCalledWith(expect.objectContaining({
+      conflictPolicy: "replace-with-backup",
+      destinationPath: directory.canonicalPath,
+      localGrantIds: ["grant-1"]
+    })));
+  } finally {
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: originalElementFromPoint });
+  }
+});
+
+test("starting a new upload batch replaces older drawer rows even while they are still active", async () => {
+  const firstRunning = sampleTransfer("running", {
+    transferId: "transfer-first",
+    sourceLabel: "first-upload.txt"
+  });
+  const nextRunning = sampleTransfer("running", {
+    transferId: "transfer-next",
+    sourceLabel: "next-upload.txt"
+  });
+  const stop = () => undefined;
+  const selectUploadSources = vi.fn()
+    .mockResolvedValueOnce([
+      { grantId: "grant-first", displayName: "first-upload.txt", kind: "file", expiresAt: "2026-08-03T08:05:00.000Z" }
+    ])
+    .mockResolvedValueOnce([
+      { grantId: "grant-next", displayName: "next-upload.txt", kind: "file", expiresAt: "2026-08-03T08:05:00.000Z" }
+    ]);
+  const enqueueTransfers = vi.fn()
+    .mockResolvedValueOnce([firstRunning])
+    .mockResolvedValueOnce([nextRunning]);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    selectUploadSources,
+    enqueueTransfers,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDragState: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const stableProps = {
+    activeTerminal: null,
+    api,
+    copy: workspaceCopy.en,
+    cwd: null,
+    followCwd: false,
+    hosts: [host],
+    isActive: true,
+    selectedHostAlias: host.hostAlias,
+    onError: vi.fn(),
+    onFollowCwdChange: vi.fn(),
+    onHostSelected: vi.fn(),
+    onOpenTerminalAt: vi.fn(),
+    onRecoveryCreated: vi.fn(),
+    onViewRecoveries: vi.fn(),
+    onTransfersQueued: vi.fn()
+  };
+  const view = render(<FilesPanel {...stableProps} transfers={[]} />);
+  await screen.findByDisplayValue(session.homePath);
+
+  fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.upload }));
+  await waitFor(() => expect(enqueueTransfers).toHaveBeenCalledTimes(1));
+  view.rerender(<FilesPanel {...stableProps} transfers={[firstRunning]} />);
+  expect(await screen.findByText("first-upload.txt")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.upload }));
+  await waitFor(() => expect(enqueueTransfers).toHaveBeenCalledTimes(2));
+  view.rerender(<FilesPanel {...stableProps} transfers={[firstRunning, nextRunning]} />);
+  expect(await screen.findByText("next-upload.txt")).toBeInTheDocument();
+  expect(screen.queryByText("first-upload.txt")).not.toBeInTheDocument();
+});
+
+test("upload drawer stays on the current directory and clears ten seconds after completion", async () => {
+  const running = sampleTransfer("running");
+  const completed = sampleTransfer("completed", { targetLabel: `${session.homePath}/notes.txt` });
+  const listDirectory = vi.fn().mockResolvedValue(page(session.homePath, [directory]));
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory,
+    selectUploadSources: vi.fn().mockResolvedValue([
+      { grantId: "grant-1", displayName: "notes.txt", kind: "file", expiresAt: "2026-08-03T08:05:00.000Z" }
+    ]),
+    enqueueTransfers: vi.fn().mockResolvedValue([running]),
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDragState: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const stableProps = {
+    activeTerminal: null,
+    api,
+    copy: workspaceCopy.en,
+    cwd: null,
+    followCwd: false,
+    hosts: [host],
+    isActive: true,
+    selectedHostAlias: host.hostAlias,
+    onError: vi.fn(),
+    onFollowCwdChange: vi.fn(),
+    onHostSelected: vi.fn(),
+    onOpenTerminalAt: vi.fn(),
+    onRecoveryCreated: vi.fn(),
+    onViewRecoveries: vi.fn(),
+    onTransfersQueued: vi.fn()
+  };
+  const view = render(<FilesPanel {...stableProps} transfers={[]} />);
+  await screen.findByDisplayValue(session.homePath);
+  fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.upload }));
+  await waitFor(() => expect(api.enqueueTransfers).toHaveBeenCalledWith(expect.objectContaining({
+    conflictPolicy: "replace-with-backup"
+  })));
+
+  const staleConflict = sampleTransfer("waiting-conflict", {
+    transferId: "transfer-stale-conflict",
+    sourceLabel: "past-upload.txt"
+  });
+  view.rerender(<FilesPanel {...stableProps} transfers={[staleConflict, running]} />);
+  expect(await screen.findByRole("region", { name: filesUiCopy.en.transferQueue })).toBeInTheDocument();
+  expect(screen.getByText("notes.txt")).toBeInTheDocument();
+  expect(screen.getByText("25 B/s")).toBeInTheDocument();
+  expect(screen.queryByText("past-upload.txt")).not.toBeInTheDocument();
+
+  const transferDrawer = screen.getByRole("region", { name: filesUiCopy.en.transferQueue });
+  const tablePane = document.querySelector<HTMLElement>(".workspaceFilesTablePane");
+  expect(tablePane).not.toBeNull();
+  if (!tablePane) throw new Error("Files table pane is unavailable");
+  Object.defineProperty(tablePane, "clientHeight", { configurable: true, value: 600 });
+  vi.spyOn(transferDrawer, "getBoundingClientRect").mockReturnValue({
+    bottom: 600,
+    height: 210,
+    left: 0,
+    right: 800,
+    top: 390,
+    width: 800,
+    x: 0,
+    y: 390,
+    toJSON: () => ({})
+  });
+  const transferResizeHandle = screen.getByRole("separator", { name: filesUiCopy.en.resizeTransfers });
+  fireEvent.pointerDown(transferResizeHandle, { button: 0, clientY: 500 });
+  fireEvent.pointerMove(window, { clientY: 400 });
+  expect(transferDrawer.style.getPropertyValue("--workspace-file-transfer-height")).toBe("310px");
+  fireEvent.pointerUp(window);
+
+  fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.collapseTransfers }));
+  expect(screen.getByRole("region", { name: filesUiCopy.en.transferQueue })).toBeInTheDocument();
+  expect(screen.queryByText("notes.txt")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.expandTransfers }));
+  expect(screen.getByText("notes.txt")).toBeInTheDocument();
+
+  vi.useFakeTimers();
+  try {
+    view.rerender(<FilesPanel {...stableProps} transfers={[completed]} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(listDirectory).toHaveBeenCalledTimes(2);
+    expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ path: session.homePath }));
+    expect(screen.getByDisplayValue(session.homePath)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: filesUiCopy.en.transferQueue })).toBeInTheDocument();
+    expect(screen.getByText(/1 completed in this batch/)).toBeInTheDocument();
+    expect(screen.queryByText(workspaceCopy.en.loading)).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(FILE_TRANSFER_COMPLETED_RETENTION_MS - 1));
+    expect(screen.getByRole("region", { name: filesUiCopy.en.transferQueue })).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole("region", { name: filesUiCopy.en.transferQueue })).not.toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("collapsing a completed upload drawer clears the current batch immediately", async () => {
+  const running = sampleTransfer("running");
+  const completed = sampleTransfer("completed");
+  const stop = () => undefined;
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    selectUploadSources: vi.fn().mockResolvedValue([
+      { grantId: "grant-1", displayName: "notes.txt", kind: "file", expiresAt: "2026-08-03T08:05:00.000Z" }
+    ]),
+    enqueueTransfers: vi.fn().mockResolvedValue([running]),
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDragState: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+  const stableProps = {
+    activeTerminal: null,
+    api,
+    copy: workspaceCopy.en,
+    cwd: null,
+    followCwd: false,
+    hosts: [host],
+    isActive: true,
+    selectedHostAlias: host.hostAlias,
+    onError: vi.fn(),
+    onFollowCwdChange: vi.fn(),
+    onHostSelected: vi.fn(),
+    onOpenTerminalAt: vi.fn(),
+    onRecoveryCreated: vi.fn(),
+    onViewRecoveries: vi.fn(),
+    onTransfersQueued: vi.fn()
+  };
+  const view = render(<FilesPanel {...stableProps} transfers={[]} />);
+  await screen.findByDisplayValue(session.homePath);
+  fireEvent.click(screen.getByRole("button", { name: workspaceCopy.en.upload }));
+  await waitFor(() => expect(api.enqueueTransfers).toHaveBeenCalled());
+
+  view.rerender(<FilesPanel {...stableProps} transfers={[running]} />);
+  expect(await screen.findByRole("region", { name: filesUiCopy.en.transferQueue })).toBeInTheDocument();
+  view.rerender(<FilesPanel {...stableProps} transfers={[completed]} />);
+  expect(await screen.findByText(/1 completed in this batch/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: filesUiCopy.en.collapseTransfers }));
+  expect(screen.queryByRole("region", { name: filesUiCopy.en.transferQueue })).not.toBeInTheDocument();
 });

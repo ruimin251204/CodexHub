@@ -132,12 +132,46 @@ test("Transfer header uses the parent workspace title and keeps refresh and new-
 
   const refreshButton = within(panel!).getByRole("button", { name: "Refresh" });
   const newTransferButton = within(panel!).getByRole("button", { name: "New transfer" });
+  expect(refreshButton).toHaveClass("secondaryButton", "pageActionButton");
+  expect(newTransferButton).toHaveClass("primaryButton", "pageActionButton");
   expect(refreshButton.querySelector(".pageActionIcon")).toBeInTheDocument();
   expect(newTransferButton.querySelector(".pageActionIcon")).toBeInTheDocument();
   fireEvent.click(refreshButton);
   await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
   fireEvent.click(newTransferButton);
   expect(onNewTransfer).toHaveBeenCalledTimes(1);
+});
+
+test("Backup and recent-transfer cards are collapsed by default and share one toggle", () => {
+  render(
+    <TransfersPanel
+      api={{} as WorkspaceApi}
+      copy={workspaceCopy.en}
+      locale="en"
+      recoveries={[recovery]}
+      localRecoveries={[]}
+      transfers={[runningTransfer]}
+      onError={vi.fn()}
+      onRecoveryUpdated={vi.fn()}
+      onLocalRecoveryRemoved={vi.fn()}
+      onLocalRecoveryUpdated={vi.fn()}
+    />
+  );
+
+  const expand = screen.getByRole("button", { name: "Expand backups and recent transfers" });
+  expect(expand).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("heading", { name: "Recovery backups" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Recent transfers" })).not.toBeInTheDocument();
+
+  fireEvent.click(expand);
+  expect(screen.getByRole("heading", { name: "Recovery backups" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Local download backups" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Recent transfers" })).toBeInTheDocument();
+
+  const collapse = screen.getByRole("button", { name: "Collapse backups and recent transfers" });
+  expect(collapse).toHaveAttribute("aria-expanded", "true");
+  fireEvent.click(collapse);
+  expect(screen.queryByRole("heading", { name: "Recovery backups" })).not.toBeInTheDocument();
 });
 
 test("Recovery remains explicitly restorable and requires a second purge confirmation", async () => {
@@ -161,6 +195,7 @@ test("Recovery remains explicitly restorable and requires a second purge confirm
     />
   );
 
+  fireEvent.click(screen.getByRole("button", { name: "Expand backups and recent transfers" }));
   fireEvent.click(screen.getByRole("button", { name: "Restore" }));
   await waitFor(() => expect(restoreRecovery).toHaveBeenCalledWith({ recoveryId: recovery.recoveryId }));
   expect(onRecoveryUpdated).toHaveBeenCalledWith(expect.objectContaining({ state: "restored" }));
@@ -209,6 +244,7 @@ test("Local download recovery reveals only names and requires a second purge con
     />
   );
 
+  fireEvent.click(screen.getByRole("button", { name: "Expand backups and recent transfers" }));
   expect(screen.getByText("report.txt")).toBeInTheDocument();
   expect(screen.queryByText(/Users|CodexHub/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Restore" }));

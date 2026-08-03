@@ -127,6 +127,7 @@ pub fn run() {
             workspace_terminal_ack,
             workspace_reconnect_terminal,
             workspace_close_terminal,
+            workspace_list_local_roots,
             workspace_open_files,
             workspace_list_directory,
             workspace_start_file_search,
@@ -254,18 +255,64 @@ fn handle_window_close_request(window: &Window, event: &WindowEvent) {
     }
 }
 
-/// Native drops are converted to opaque one-shot grants before the webview is
-/// notified. The raw operating-system paths never become Workspace state.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceLocalDragState<'a> {
+    phase: &'a str,
+    client_x: Option<f64>,
+    client_y: Option<f64>,
+}
+
+/// Native drag movement exposes only webview-relative coordinates. Raw paths
+/// stay in Rust and are converted to opaque one-shot grants after the drop.
 fn handle_workspace_native_drop(window: &Window, event: &WindowEvent) {
     if window.label() != MAIN_WINDOW_LABEL {
         return;
     }
-    let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event else {
+    let WindowEvent::DragDrop(drag_event) = event else {
         return;
+    };
+
+    let scale_factor = window.scale_factor().unwrap_or(1.0).max(f64::EPSILON);
+    let emit_position = |phase, position: &tauri::PhysicalPosition<f64>| {
+        let _ = window.app_handle().emit(
+            "workspace-local-drag-state",
+            WorkspaceLocalDragState {
+                phase,
+                client_x: Some(position.x / scale_factor),
+                client_y: Some(position.y / scale_factor),
+            },
+        );
+    };
+
+    let paths = match drag_event {
+        tauri::DragDropEvent::Enter { position, .. } => {
+            emit_position("enter", position);
+            return;
+        }
+        tauri::DragDropEvent::Over { position } => {
+            emit_position("over", position);
+            return;
+        }
+        tauri::DragDropEvent::Leave => {
+            let _ = window.app_handle().emit(
+                "workspace-local-drag-state",
+                WorkspaceLocalDragState {
+                    phase: "leave",
+                    client_x: None,
+                    client_y: None,
+                },
+            );
+            return;
+        }
+        tauri::DragDropEvent::Drop { paths, position } => {
+            emit_position("drop", position);
+            paths.clone()
+        }
+        _ => return,
     };
     let app = window.app_handle().clone();
     let services = app.state::<AppState>().services.clone();
-    let paths = paths.clone();
     tauri::async_runtime::spawn(async move {
         let Ok(workspace) = services.workspace.as_ref() else {
             return;

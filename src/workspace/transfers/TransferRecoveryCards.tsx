@@ -1,8 +1,10 @@
+import { useState } from "react";
 import type { WorkspaceCopy } from "../copy";
 import type { WorkspaceLocalTransferRecovery, WorkspaceRecovery, WorkspaceTransfer } from "../types";
 import type { TransferUiCopy } from "./copy";
 import { formatBytes, formatDateTime } from "./format";
 import { usePersonalInfoMasking } from "../../ui/PersonalInfoMasking";
+import { FilesIcon } from "../files/FilesIcon";
 
 export function TransferRecoveryCards({
   busyId,
@@ -32,10 +34,22 @@ export function TransferRecoveryCards({
   ui: TransferUiCopy;
 }) {
   const personalInfo = usePersonalInfoMasking();
+  const [expanded, setExpanded] = useState(false);
   const recent = [...transfers].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
 
   return (
-    <section className="transferSupportGrid">
+    <section className="transferSupportSection">
+      <button
+        aria-expanded={expanded}
+        aria-label={expanded ? ui.collapseSupportDetails : ui.expandSupportDetails}
+        className="transferSupportToggle"
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span>{ui.supportDetails}</span>
+        <span>{expanded ? ui.collapseSupportDetails : ui.expandSupportDetails}<FilesIcon name={expanded ? "chevronUp" : "chevronDown"} /></span>
+      </button>
+      {expanded ? <div className="transferSupportGrid">
       <article className="transferSupportCard">
         <header><span className="transferSupportIcon" aria-hidden="true">↶</span><div><h2>{ui.restoreBackups}</h2><p>{ui.restoreBackupsHint}</p></div></header>
         <div className="transferSupportList">
@@ -79,6 +93,7 @@ export function TransferRecoveryCards({
           ))}
         </div>
       </article>
+      </div> : null}
     </section>
   );
 }

@@ -84,6 +84,7 @@ export const commandPolicies = {
   workspace_terminal_ack: { effect: "read", liveSsh: false, sensitiveInput: false },
   workspace_reconnect_terminal: { effect: "remote-write", liveSsh: true, sensitiveInput: false },
   workspace_close_terminal: { effect: "remote-write", liveSsh: true, sensitiveInput: false },
+  workspace_list_local_roots: { effect: "read", liveSsh: false, sensitiveInput: false, sensitiveOutput: true },
   workspace_open_files: { effect: "refresh", liveSsh: true, sensitiveInput: false },
   workspace_list_directory: { effect: "read", liveSsh: true, sensitiveInput: false, sensitiveOutput: true },
   workspace_start_file_search: { effect: "refresh", liveSsh: true, sensitiveInput: false, sensitiveOutput: true },

@@ -14,14 +14,21 @@ import type {
   WorkspaceLocale,
   WorkspaceRecovery,
   WorkspaceTerminalCwdEvent,
-  WorkspaceTerminalSession
+  WorkspaceTerminalSession,
+  WorkspaceTransfer
 } from "./types";
 import { workspaceHostLabel } from "./hostLabel";
 import { usePersonalInfoMasking } from "../ui/PersonalInfoMasking";
 import { DirectoryTree } from "./files/DirectoryTree";
-import { FileOperationDialog, FilePreviewDialog } from "./files/FileDialogs";
-import type { PendingFileOperation } from "./files/FileDialogs";
+import {
+  FileDeleteModeDialog,
+  FileDeletePreferenceDialog,
+  FileOperationDialog,
+  FilePreviewDialog
+} from "./files/FileDialogs";
+import type { FileDeleteMode, PendingFileOperation } from "./files/FileDialogs";
 import { FileTable } from "./files/FileTable";
+import { FileTransferDrawer } from "./files/FileTransferDrawer";
 import { FilesIcon } from "./files/FilesIcon";
 import { childPath, parentPath } from "./files/fileDisplay";
 import { filesUiCopy } from "./files/filesUiCopy";
@@ -37,6 +44,31 @@ const TREE_MIN_WIDTH = 180;
 const TREE_MAX_WIDTH = 520;
 const FILES_TABLE_MIN_WIDTH = 360;
 const DEFAULT_TREE_WIDTH = 248;
+export const FILE_TRANSFER_COMPLETED_RETENTION_MS = 10_000;
+export const FILE_DELETE_MODE_STORAGE_KEY = "codexhub.files-delete-mode";
+const ACTIVE_TRANSFER_STATES = new Set<WorkspaceTransfer["state"]>([
+  "queued", "running", "pausing", "paused", "waiting-conflict", "verifying", "finalizing"
+]);
+// Files uploads behave like an explicit overwrite action while the backend
+// still journals the replaced destination for recovery.
+const FILE_UPLOAD_CONFLICT_POLICY = "replace-with-backup" as const;
+
+function loadFileDeleteMode(): FileDeleteMode | null {
+  try {
+    const value = window.localStorage.getItem(FILE_DELETE_MODE_STORAGE_KEY);
+    return value === "direct" || value === "backup" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveFileDeleteMode(mode: FileDeleteMode) {
+  try {
+    window.localStorage.setItem(FILE_DELETE_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Hardened WebViews may disable storage; the current deletion still runs.
+  }
+}
 
 type FilesHostView = {
   fileSession: WorkspaceFilesSession | null;
@@ -55,6 +87,7 @@ type FilesHostView = {
   searchTruncated: boolean;
   selectedRefs: Set<string>;
   focusedIndex: number;
+  localRoots: string[];
   directoryEntriesByPath: Map<string, RemoteFileEntry[]>;
   expandedTreePaths: Set<string>;
   clientPage: number;
@@ -90,6 +123,7 @@ export function FilesPanel({
   onOpenTerminalAt,
   onRecoveryCreated,
   onViewRecoveries,
+  transfers = [],
   onTransfersQueued
 }: {
   activeTerminal: WorkspaceTerminalSession | null;
@@ -109,17 +143,21 @@ export function FilesPanel({
   onOpenTerminalAt: (hostAlias: string, fileSessionId: string, path: string) => void;
   onRecoveryCreated: (recovery: WorkspaceRecovery) => void;
   onViewRecoveries: () => void;
-  onTransfersQueued?: () => void;
+  transfers?: WorkspaceTransfer[];
+  onTransfersQueued?: (transfers: WorkspaceTransfer[]) => void;
 }) {
   const ui = filesUiCopy[locale];
   const personalInfo = usePersonalInfoMasking();
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const reportError = useCallback((error: unknown) => onErrorRef.current(error), []);
   const [fileSession, setFileSession] = useState<WorkspaceFilesSession | null>(null);
   const [page, setPage] = useState<WorkspaceDirectoryPage | null>(null);
   const [loading, setLoading] = useState(false);
   const [pathInput, setPathInput] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<SortKey>("type");
   const [sortAscending, setSortAscending] = useState(true);
   const [query, setQuery] = useState("");
   const [showHidden, setShowHidden] = useState(false);
@@ -129,6 +167,7 @@ export function FilesPanel({
   const [searchTruncated, setSearchTruncated] = useState(false);
   const [selectedRefs, setSelectedRefs] = useState<Set<string>>(() => new Set());
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [localRoots, setLocalRoots] = useState<string[]>([]);
   const [directoryEntriesByPath, setDirectoryEntriesByPath] = useState<Map<string, RemoteFileEntry[]>>(() => new Map());
   const [expandedTreePaths, setExpandedTreePaths] = useState<Set<string>>(() => new Set(["/"]));
   const [loadingTreePaths, setLoadingTreePaths] = useState<Set<string>>(() => new Set());
@@ -142,10 +181,17 @@ export function FilesPanel({
   const [pendingOperation, setPendingOperation] = useState<PendingFileOperation | null>(null);
   const [operationPreview, setOperationPreview] = useState<WorkspaceFileOperationPreview | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [defaultDeleteMode, setDefaultDeleteMode] = useState<FileDeleteMode | null>(() => loadFileDeleteMode());
+  const [pendingDelete, setPendingDelete] = useState<{ entries: RemoteFileEntry[]; mode: FileDeleteMode | null } | null>(null);
   const [filesError, setFilesError] = useState(false);
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const [createdRecovery, setCreatedRecovery] = useState<WorkspaceRecovery | null>(null);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
+  const [externalDropTarget, setExternalDropTarget] = useState<{ path: string; kind: "current" | "directory" } | null>(null);
+  const [transferDrawerCollapsed, setTransferDrawerCollapsed] = useState(false);
+  const [visibleTransferIds, setVisibleTransferIds] = useState<Set<string>>(() => new Set());
+  const [transferDisplayNames, setTransferDisplayNames] = useState<Map<string, string>>(() => new Map());
   const locationRef = useRef<HTMLInputElement>(null);
   const moreActionsRef = useRef<HTMLDetailsElement>(null);
   const explorerRef = useRef<HTMLDivElement>(null);
@@ -161,6 +207,10 @@ export function FilesPanel({
   const compactModeRef = useRef(compact);
   const currentViewRef = useRef<FilesHostView | null>(null);
   const retryRequestRef = useRef<{ hostAlias: string; path: string | null } | null>(null);
+  // undefined keeps compatibility with older runtimes that only emit Drop;
+  // null means the native drop happened outside the file destination surface.
+  const pendingNativeDropTargetRef = useRef<string | null | undefined>(undefined);
+  const transferStatesRef = useRef(new Map<string, WorkspaceTransfer["state"]>());
 
   useEffect(() => () => treeResizeCleanupRef.current?.(), []);
 
@@ -235,6 +285,7 @@ export function FilesPanel({
     searchTruncated,
     selectedRefs,
     focusedIndex,
+    localRoots,
     directoryEntriesByPath,
     expandedTreePaths,
     clientPage,
@@ -249,7 +300,7 @@ export function FilesPanel({
     setPathInput(view?.pathInput ?? "");
     setHistory(view?.history ?? []);
     setHistoryIndex(view?.historyIndex ?? -1);
-    setSortKey(view?.sortKey ?? "name");
+    setSortKey(view?.sortKey ?? "type");
     setSortAscending(view?.sortAscending ?? true);
     setQuery(view?.query ?? "");
     setSearchId(view?.searchId ?? null);
@@ -258,6 +309,7 @@ export function FilesPanel({
     setSearchTruncated(view?.searchTruncated ?? false);
     setSelectedRefs(view?.selectedRefs ?? new Set());
     setFocusedIndex(view?.focusedIndex ?? 0);
+    setLocalRoots(view?.localRoots ?? []);
     setDirectoryEntriesByPath(view?.directoryEntriesByPath ?? new Map());
     setExpandedTreePaths(view?.expandedTreePaths ?? new Set(["/"]));
     setLoadingTreePaths(new Set());
@@ -323,19 +375,64 @@ export function FilesPanel({
       setHistoryIndex(historyIndexRef.current + 1);
     } catch (error) {
       if (requestId === requestSequence.current) {
-        // A failed list may have left the per-host SFTP child unusable. Mark it
-        // for ordered disposal before the next open so it cannot be reused.
-        failedHostAliasesRef.current.add(session.hostAlias);
-        failedFileSessionIdsRef.current.set(session.hostAlias, session.fileSessionId);
-        setFileSession(null);
-        setFilesError(true);
-        setFailedPath(path);
-        onError(error);
+        if (session.targetKind === "remote") {
+          // A failed remote list may have left the per-host SFTP child unusable.
+          // Dispose it in order before reopening that host.
+          failedHostAliasesRef.current.add(session.hostAlias);
+          failedFileSessionIdsRef.current.set(session.hostAlias, session.fileSessionId);
+          setFileSession(null);
+          setFilesError(true);
+          setFailedPath(path);
+        } else if (currentViewRef.current?.page) {
+          // A bad or unavailable local path does not invalidate the local file
+          // authority. Keep the last usable directory available for correction.
+          setPathInput(currentViewRef.current.page.canonicalPath);
+          setFilesError(false);
+          setFailedPath(null);
+        } else {
+          setFilesError(true);
+          setFailedPath(path);
+        }
+        reportError(error);
       }
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [api, onError, onFollowCwdChange, rememberDirectoryPage]);
+  }, [api, onFollowCwdChange, rememberDirectoryPage, reportError]);
+
+  // Transfer completion refreshes only the directory snapshot. Keeping the
+  // session, history and current page mounted prevents a disruptive blank view.
+  const refreshCurrentDirectory = useCallback(async () => {
+    const view = currentViewRef.current;
+    if (!view?.fileSession || !view.page) return;
+    const sessionId = view.fileSession.fileSessionId;
+    const path = view.page.canonicalPath;
+    try {
+      const nextPage = await api.listDirectory({
+        fileSessionId: sessionId,
+        path,
+        snapshotId: null,
+        cursor: null,
+        pageSize: 500,
+        sort: sortRef.current.key,
+        direction: sortRef.current.ascending ? "asc" : "desc"
+      });
+      const current = currentViewRef.current;
+      if (current?.fileSession?.fileSessionId !== sessionId || current.page?.canonicalPath !== path) return;
+      pageSortSignatureRef.current = [
+        sessionId,
+        nextPage.canonicalPath,
+        sortRef.current.key,
+        sortRef.current.ascending ? "asc" : "desc"
+      ].join("\u0000");
+      setPage(nextPage);
+      rememberDirectoryPage(nextPage);
+      const availableRefs = new Set(nextPage.entries.map((entry) => entry.entryRef));
+      setSelectedRefs((selected) => new Set([...selected].filter((entryRef) => availableRefs.has(entryRef))));
+    } catch (error) {
+      reportError(error);
+    }
+  }, [api, rememberDirectoryPage, reportError]);
 
   useEffect(() => {
     const previousHostAlias = activeHostRef.current;
@@ -385,6 +482,14 @@ export function FilesPanel({
       if (disposed) return;
       const session = await api.openFiles({ hostAlias: selectedHostAlias });
       if (disposed) return;
+      const roots = session.targetKind === "local"
+        ? await api.listLocalRoots().catch((error) => {
+            reportError(error);
+            return [session.homePath];
+          })
+        : [];
+      if (disposed) return;
+      setLocalRoots(roots);
       setFileSession(session);
       setHistory([]);
       setHistoryIndex(-1);
@@ -393,7 +498,7 @@ export function FilesPanel({
       if (!disposed) {
         setFilesError(true);
         setFailedPath(retryRequest?.path ?? null);
-        onError(error);
+        reportError(error);
       }
     }).finally(() => {
       if (!disposed) setLoading(false);
@@ -402,7 +507,7 @@ export function FilesPanel({
       disposed = true;
       requestSequence.current += 1;
     };
-  }, [api, connectionAttempt, isActive, navigate, onError, restoreHostView, selectedHostAlias]);
+  }, [api, connectionAttempt, isActive, navigate, reportError, restoreHostView, selectedHostAlias]);
 
   useEffect(() => {
     let disposed = false;
@@ -413,13 +518,62 @@ export function FilesPanel({
       setSearchScanned(event.scanned);
       setSearchTruncated(event.truncated);
       if (event.state !== "running") setSearchId(null);
-      if (event.state === "failed" && event.reason) onError(new Error(event.reason));
+      if (event.state === "failed" && event.reason) reportError(new Error(event.reason));
     })).then((stop) => {
       if (disposed) stop();
       else unsubscribe = stop;
-    }).catch(onError);
+    }).catch(reportError);
     return () => { disposed = true; unsubscribe(); };
-  }, [api, onError, searchId]);
+  }, [api, reportError, searchId]);
+
+  const trackQueuedTransfers = useCallback((queued: WorkspaceTransfer[], displayNames: string[]) => {
+    if (queued.length === 0) return;
+    // Each enqueue response is one Files drawer batch. Replacing the set keeps
+    // overlapping older transfers in Transfers history without leaking them
+    // into the newly opened drawer.
+    setVisibleTransferIds(new Set(queued.map((transfer) => transfer.transferId)));
+    setTransferDisplayNames(() => {
+      const next = new Map<string, string>();
+      queued.forEach((transfer, index) => next.set(transfer.transferId, displayNames[index] ?? transfer.sourceLabel));
+      return next;
+    });
+    setTransferDrawerCollapsed(false);
+    onTransfersQueued?.(queued);
+  }, [onTransfersQueued]);
+
+  useEffect(() => {
+    if (!isActive || !fileSession || !api.events.onLocalDragState) return;
+    let disposed = false;
+    let unsubscribe: () => void = () => undefined;
+    void Promise.resolve(api.events.onLocalDragState((event) => {
+      if (disposed) return;
+      if (event.phase === "leave") {
+        pendingNativeDropTargetRef.current = undefined;
+        setExternalDropTarget(null);
+        return;
+      }
+      if (event.clientX === null || event.clientY === null || !page) return;
+      const hit = typeof document.elementFromPoint === "function"
+        ? document.elementFromPoint(event.clientX, event.clientY)
+        : null;
+      const directoryRow = hit?.closest<HTMLElement>("[data-workspace-drop-directory]") ?? null;
+      const tablePane = hit?.closest<HTMLElement>(".workspaceFilesTablePane") ?? null;
+      const target = directoryRow && explorerRef.current?.contains(directoryRow)
+        ? { path: directoryRow.dataset.workspaceDropDirectory ?? page.canonicalPath, kind: "directory" as const }
+        : tablePane && explorerRef.current?.contains(tablePane)
+          ? { path: page.canonicalPath, kind: "current" as const }
+          : null;
+      setExternalDropTarget(target);
+      if (event.phase === "drop") {
+        pendingNativeDropTargetRef.current = target?.path ?? null;
+        setExternalDropTarget(null);
+      }
+    })).then((stop) => {
+      if (disposed) stop();
+      else unsubscribe = stop;
+    }).catch(reportError);
+    return () => { disposed = true; unsubscribe(); setExternalDropTarget(null); };
+  }, [api, fileSession, isActive, page, reportError]);
 
   useEffect(() => {
     if (!isActive || !fileSession) return;
@@ -427,21 +581,25 @@ export function FilesPanel({
     let unsubscribe: () => void = () => undefined;
     void Promise.resolve(api.events.onLocalDrop((event) => {
       if (disposed || !page || event.grants.length === 0) return;
+      const pendingTarget = pendingNativeDropTargetRef.current;
+      pendingNativeDropTargetRef.current = undefined;
+      if (pendingTarget === null) return;
+      const destinationPath = pendingTarget ?? page.canonicalPath;
       void api.enqueueTransfers({
         direction: "upload",
         hostAlias: selectedHostAlias,
         fileSessionId: fileSession.fileSessionId,
         sourceEntryRefs: [],
         localGrantIds: event.grants.map((grant) => grant.grantId),
-        destinationPath: page.canonicalPath,
-        conflictPolicy: "ask"
-      }).then(() => onTransfersQueued?.()).catch(onError);
+        destinationPath,
+        conflictPolicy: FILE_UPLOAD_CONFLICT_POLICY
+      }).then((queued) => trackQueuedTransfers(queued, event.grants.map((grant) => grant.displayName))).catch(reportError);
     })).then((stop) => {
       if (disposed) stop();
       else unsubscribe = stop;
-    }).catch(onError);
+    }).catch(reportError);
     return () => { disposed = true; unsubscribe(); };
-  }, [api, fileSession, isActive, onError, onTransfersQueued, page, selectedHostAlias]);
+  }, [api, fileSession, isActive, page, reportError, selectedHostAlias, trackQueuedTransfers]);
 
   useEffect(() => {
     if (!isActive || !followCwd || !fileSession || !activeTerminal || !cwd?.path) return;
@@ -461,7 +619,7 @@ export function FilesPanel({
       }).catch((error) => {
         // OSC 7 is optional. An unknown cwd is a normal capability state,
         // while validation or SFTP failures remain visible to the user.
-        if (!String(error).includes("terminal-cwd-unknown") && !disposed) onError(error);
+        if (!String(error).includes("terminal-cwd-unknown") && !disposed) reportError(error);
       });
     };
     validate();
@@ -470,7 +628,7 @@ export function FilesPanel({
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [activeTerminal, api, fileSession, followCwd, isActive, onError, selectedHostAlias]);
+  }, [activeTerminal, api, fileSession, followCwd, isActive, reportError, selectedHostAlias]);
 
   useEffect(() => {
     const focusLocation = () => {
@@ -543,6 +701,50 @@ export function FilesPanel({
     }
     return next;
   }, [directoryEntriesByPath, showHidden]);
+  const drawerTransfers = useMemo(() => transfers
+    .filter((transfer) => transfer.hostAlias === selectedHostAlias)
+    .filter((transfer) => visibleTransferIds.has(transfer.transferId))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), [selectedHostAlias, transfers, visibleTransferIds]);
+  const drawerBatchFinished = drawerTransfers.length > 0
+    && drawerTransfers.every((transfer) => !ACTIVE_TRANSFER_STATES.has(transfer.state));
+  const clearVisibleTransferBatch = useCallback(() => {
+    setVisibleTransferIds(new Set());
+    setTransferDisplayNames(new Map());
+  }, []);
+
+  useEffect(() => {
+    if (!drawerBatchFinished) return;
+    if (transferDrawerCollapsed) {
+      clearVisibleTransferBatch();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setTransferDrawerCollapsed(true);
+      clearVisibleTransferBatch();
+    }, FILE_TRANSFER_COMPLETED_RETENTION_MS);
+    return () => window.clearTimeout(timer);
+  }, [clearVisibleTransferBatch, drawerBatchFinished, transferDrawerCollapsed]);
+
+  const toggleTransferDrawer = () => {
+    if (!transferDrawerCollapsed && drawerBatchFinished) clearVisibleTransferBatch();
+    setTransferDrawerCollapsed((value) => !value);
+  };
+
+  useEffect(() => {
+    let refreshNeeded = false;
+    for (const transfer of transfers) {
+      const previous = transferStatesRef.current.get(transfer.transferId);
+      transferStatesRef.current.set(transfer.transferId, transfer.state);
+      if (
+        visibleTransferIds.has(transfer.transferId)
+        && transfer.direction === "upload"
+        && transfer.state === "completed"
+        && previous !== "completed"
+        && parentPath(transfer.targetLabel) === page?.canonicalPath
+      ) refreshNeeded = true;
+    }
+    if (refreshNeeded) void refreshCurrentDirectory();
+  }, [page?.canonicalPath, refreshCurrentDirectory, transfers, visibleTransferIds]);
 
   useEffect(() => {
     setClientPage((current) => Math.min(current, clientPageCount - 1));
@@ -574,7 +776,7 @@ export function FilesPanel({
       });
       rememberDirectoryPage(treePage);
     } catch (error) {
-      onError(error);
+      reportError(error);
     } finally {
       setLoadingTreePaths((current) => {
         const next = new Set(current);
@@ -603,6 +805,13 @@ export function FilesPanel({
     });
   };
 
+  const changeSort = (nextKey: WorkspaceFileSortField) => {
+    // A newly selected column starts ascending; clicking the active column
+    // again reverses its direction.
+    setSortAscending((current) => sortKey === nextKey ? !current : true);
+    setSortKey(nextKey);
+  };
+
   const loadMore = async () => {
     if (!fileSession || !page?.nextCursor) return;
     setLoading(true);
@@ -621,7 +830,7 @@ export function FilesPanel({
         : next);
       rememberDirectoryPage(next, true);
     } catch (error) {
-      onError(error);
+      reportError(error);
     } finally {
       setLoading(false);
     }
@@ -642,7 +851,7 @@ export function FilesPanel({
   const startSearch = async () => {
     if (!fileSession || !page || !query.trim()) return;
     if (searchId) {
-      await api.cancelFileSearch({ searchId }).catch(onError);
+      await api.cancelFileSearch({ searchId }).catch(reportError);
       setSearchId(null);
       return;
     }
@@ -658,7 +867,7 @@ export function FilesPanel({
       setSearchId(result.searchId);
     } catch (error) {
       setSearchResults(null);
-      onError(error);
+      reportError(error);
     }
   };
 
@@ -667,13 +876,76 @@ export function FilesPanel({
     try {
       setPreview(await api.previewFile({ fileSessionId: fileSession.fileSessionId, entryRef: entry.entryRef }));
     } catch (error) {
-      onError(error);
+      reportError(error);
     }
+  };
+
+  const deleteEntries = async (targets: RemoteFileEntry[], mode: FileDeleteMode) => {
+    if (!fileSession || targets.length === 0) return;
+    setDeleteBusy(true);
+    let latestRecovery: WorkspaceRecovery | null = null;
+    try {
+      for (const entry of targets) {
+        const prepared = await api.prepareFileOperation({
+          fileSessionId: fileSession.fileSessionId,
+          operation: "delete",
+          entryRef: entry.entryRef,
+          destinationPath: null,
+          name: null
+        });
+        const result = await api.confirmFileOperation({ token: prepared.token });
+        if (!result.recovery) throw new Error("Delete completed without a recovery record.");
+        if (mode === "direct") {
+          try {
+            const purge = await api.prepareRecoveryPurge({ recoveryId: result.recovery.recoveryId });
+            await api.purgeRecovery({ token: purge.token });
+          } catch (error) {
+            // If permanent cleanup fails, expose the retained recovery instead
+            // of hiding a still-restorable payload from the user.
+            onRecoveryCreated(result.recovery);
+            setCreatedRecovery(result.recovery);
+            throw error;
+          }
+        } else {
+          latestRecovery = result.recovery;
+          onRecoveryCreated(result.recovery);
+        }
+      }
+      if (latestRecovery) setCreatedRecovery(latestRecovery);
+      setSelectedRefs(new Set());
+    } catch (error) {
+      reportError(error);
+    } finally {
+      await refreshCurrentDirectory();
+      setDeleteBusy(false);
+    }
+  };
+
+  const requestDelete = (targets: RemoteFileEntry[]) => {
+    const deletable = targets.filter((entry) => entry.writable && entry.nameEncoding === "utf8");
+    if (deletable.length === 0 || deleteBusy) return;
+    if (moreActionsRef.current) moreActionsRef.current.open = false;
+    if (defaultDeleteMode) {
+      void deleteEntries(deletable, defaultDeleteMode);
+      return;
+    }
+    setPendingDelete({ entries: deletable, mode: null });
+  };
+
+  const confirmDeletePreference = (remember: boolean) => {
+    if (!pendingDelete?.mode) return;
+    const { entries: targets, mode } = pendingDelete;
+    if (remember) {
+      saveFileDeleteMode(mode);
+      setDefaultDeleteMode(mode);
+    }
+    setPendingDelete(null);
+    void deleteEntries(targets, mode);
   };
 
   const askOperation = (operation: WorkspaceFileOperationKind, entry: RemoteFileEntry | null, destinationPath: string | null = null) => {
     if (entry?.nameEncoding === "unsupported") return;
-    if (operation === "delete" || operation === "move") {
+    if (operation === "move") {
       const pending = { operation, entry, name: "", destinationPath };
       setPendingOperation(pending);
       void prepareOperation(pending);
@@ -724,7 +996,7 @@ export function FilesPanel({
       });
       setOperationPreview(prepared);
     } catch (error) {
-      onError(error);
+      reportError(error);
     } finally {
       setOperationBusy(false);
     }
@@ -743,7 +1015,7 @@ export function FilesPanel({
       setPendingOperation(null);
       await navigate(fileSession, page?.canonicalPath ?? null, { manual: false, replaceHistory: true });
     } catch (error) {
-      onError(error);
+      reportError(error);
     } finally {
       setOperationBusy(false);
     }
@@ -754,18 +1026,18 @@ export function FilesPanel({
     try {
       const grants = await api.selectUploadSources();
       if (grants.length === 0) return;
-      await api.enqueueTransfers({
+      const queued = await api.enqueueTransfers({
         direction: "upload",
         hostAlias: selectedHostAlias,
         fileSessionId: fileSession.fileSessionId,
         sourceEntryRefs: [],
         localGrantIds: grants.map((grant) => grant.grantId),
         destinationPath,
-        conflictPolicy: "ask"
+        conflictPolicy: FILE_UPLOAD_CONFLICT_POLICY
       });
-      onTransfersQueued?.();
+      trackQueuedTransfers(queued, grants.map((grant) => grant.displayName));
     } catch (error) {
-      onError(error);
+      reportError(error);
     }
   };
 
@@ -774,7 +1046,7 @@ export function FilesPanel({
     try {
       const grant = await api.selectDownloadTarget();
       if (!grant) return;
-      await api.enqueueTransfers({
+      const queued = await api.enqueueTransfers({
         direction: "download",
         hostAlias: selectedHostAlias,
         fileSessionId: fileSession.fileSessionId,
@@ -783,9 +1055,9 @@ export function FilesPanel({
         destinationPath: null,
         conflictPolicy: "ask"
       });
-      onTransfersQueued?.();
+      trackQueuedTransfers(queued, targets.map((entry) => entry.name));
     } catch (error) {
-      onError(error);
+      reportError(error);
     }
   };
 
@@ -807,11 +1079,36 @@ export function FilesPanel({
       onFollowCwdChange(true);
       await navigate(fileSession, verified.path, { manual: false });
     } catch (error) {
-      onError(error);
+      reportError(error);
     }
   };
 
   const canLocate = Boolean(fileSession && activeTerminal && activeTerminal.hostAlias === selectedHostAlias);
+  const pauseTransfer = async (transfer: WorkspaceTransfer) => {
+    try {
+      await api.pauseTransfer({ transferId: transfer.transferId, revision: transfer.revision });
+    } catch (error) {
+      reportError(error);
+    }
+  };
+  const resumeTransfer = async (transfer: WorkspaceTransfer) => {
+    try {
+      await api.resumeTransfer({
+        transferId: transfer.transferId,
+        revision: transfer.revision,
+        fileSessionId: fileSession?.fileSessionId
+      });
+    } catch (error) {
+      reportError(error);
+    }
+  };
+  const cancelTransfer = async (transfer: WorkspaceTransfer) => {
+    try {
+      await api.cancelTransfer({ transferId: transfer.transferId, revision: transfer.revision });
+    } catch (error) {
+      reportError(error);
+    }
+  };
   const operationNameValid = pendingOperation
     ? !["rename", "copy", "create-directory"].includes(pendingOperation.operation)
       || Boolean(pendingOperation.name.trim() && !/[\\/]/.test(pendingOperation.name))
@@ -907,7 +1204,7 @@ export function FilesPanel({
           ><FilesIcon name={showHidden ? "eyeOff" : "eye"} /> <span>{showHidden ? copy.hideHidden : copy.showHidden}</span></button>
           <label className="workspaceFilesMoreSelect">
             <span>{copy.sortBy}</span>
-            <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+            <select value={sortKey} onChange={(event) => changeSort(event.target.value as SortKey)}>
               <option value="name">{copy.sortName}</option>
               <option value="type">{copy.sortType}</option>
               <option value="size">{copy.sortSize}</option>
@@ -917,6 +1214,7 @@ export function FilesPanel({
           <button aria-label={sortAscending ? copy.ascending : copy.descending} title={sortAscending ? copy.ascending : copy.descending} type="button" onClick={() => setSortAscending((value) => !value)}><FilesIcon name={sortAscending ? "sortAscending" : "sortDescending"} /><span>{sortAscending ? copy.ascending : copy.descending}</span></button>
           <button aria-label={copy.download} disabled={selectedEntries.length === 0} title={copy.download} type="button" onClick={() => void download()}><FilesIcon name="download" /><span>{copy.download}</span></button>
           <button aria-label={copy.newFolder} disabled={!fileSession || !page} title={copy.newFolder} type="button" onClick={() => askOperation("create-directory", null, page?.canonicalPath ?? null)}><FilesIcon name="folderPlus" /><span>{copy.newFolder}</span></button>
+          <button aria-label={copy.delete} className="workspaceFilesDeleteButton" disabled={selectedEntries.length === 0 || deleteBusy} title={copy.delete} type="button" onClick={() => requestDelete(selectedEntries)}><FilesIcon name="trash" /><span>{copy.delete}</span></button>
           </div>
         </details>
       </div>
@@ -943,6 +1241,7 @@ export function FilesPanel({
               currentPath={page?.canonicalPath ?? null}
               directoryEntriesByPath={visibleTreeDirectories}
               expandedPaths={expandedTreePaths}
+              localRoots={localRoots}
               loadingPaths={loadingTreePaths}
               session={fileSession}
               onNavigate={(path) => { if (fileSession) void navigate(fileSession, path, { manual: true }); }}
@@ -967,6 +1266,7 @@ export function FilesPanel({
             compact={compact}
             copy={copy}
             entries={paginatedEntries}
+            externalDropTargetPath={externalDropTarget?.kind === "directory" ? externalDropTarget.path : null}
             focusedIndex={focusedIndex}
             locale={locale}
             selectedRefs={selectedRefs}
@@ -980,8 +1280,16 @@ export function FilesPanel({
             onOpenEntry={openEntry}
             onSelectEntry={selectEntry}
             onSelectPage={selectPage}
+            onSort={changeSort}
             onShowPreview={(entry) => void showPreview(entry)}
           />
+          {externalDropTarget?.kind === "current" ? (
+            <div className="workspaceFileDropOverlay" role="status">
+              <FilesIcon name="upload" size={24} />
+              <strong>{ui.dropToCurrentDirectory}</strong>
+              <span>{personalInfo.maskText(externalDropTarget.path)}</span>
+            </div>
+          ) : null}
           {!loading && filesError ? (
             <div className="workspaceEmptyState workspaceFileEmpty" role="alert">
               <p>{copy.filesUnavailable}</p>
@@ -993,7 +1301,7 @@ export function FilesPanel({
           ) : null}
           {!loading && !filesError && page !== null && entries.length === 0 ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.emptyDirectory}</div> : null}
           {!loading && !filesError && page === null ? <div className="workspaceEmptyState workspaceFileEmpty">{copy.loading}</div> : null}
-          {loading ? <div className="workspacePaneState">{copy.loading}</div> : null}
+          {loading && page === null ? <div className="workspacePaneState">{copy.loading}</div> : null}
           {page && !filesError ? (
             <footer className="workspaceFilesPagination">
               <span
@@ -1012,6 +1320,18 @@ export function FilesPanel({
               {page.nextCursor && searchResults === null ? <button className="workspaceLoadMore" disabled={loading} type="button" onClick={() => void loadMore()}>{copy.loadMore}</button> : null}
             </footer>
           ) : null}
+          <FileTransferDrawer
+            collapsed={transferDrawerCollapsed}
+            copy={copy}
+            displayNames={transferDisplayNames}
+            locale={locale}
+            transfers={drawerTransfers}
+            ui={ui}
+            onCancel={(transfer) => void cancelTransfer(transfer)}
+            onPause={(transfer) => void pauseTransfer(transfer)}
+            onResume={(transfer) => void resumeTransfer(transfer)}
+            onToggle={toggleTransferDrawer}
+          />
         </main>
       </div>
 
@@ -1023,8 +1343,8 @@ export function FilesPanel({
           {contextMenu.entry.kind === "directory" ? <button role="menuitem" type="button" onClick={() => { void upload(contextMenu.entry.canonicalPath); setContextMenu(null); }}>{copy.uploadHere}</button> : null}
           <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("rename", contextMenu.entry); setContextMenu(null); }}>{copy.rename}</button>
           <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("copy", contextMenu.entry); setContextMenu(null); }}>{copy.copyEntry}</button>
-          <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("delete", contextMenu.entry); setContextMenu(null); }}>{copy.delete}</button>
-          <button role="menuitem" type="button" onClick={() => { void navigator.clipboard.writeText(contextMenu.entry.canonicalPath).catch(onError); setContextMenu(null); }}>{copy.copyPath}</button>
+          <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { requestDelete([contextMenu.entry]); setContextMenu(null); }}>{copy.delete}</button>
+          <button role="menuitem" type="button" onClick={() => { void navigator.clipboard.writeText(contextMenu.entry.canonicalPath).catch(reportError); setContextMenu(null); }}>{copy.copyPath}</button>
           <button
             disabled={!fileSession || fileSession.targetKind === "local"}
             role="menuitem"
@@ -1045,6 +1365,18 @@ export function FilesPanel({
       ) : null}
 
       <FilePreviewDialog copy={copy} preview={preview} onClose={() => setPreview(null)} />
+      <FileDeleteModeDialog
+        copy={copy}
+        count={pendingDelete?.mode === null ? pendingDelete.entries.length : 0}
+        onCancel={() => setPendingDelete(null)}
+        onChoose={(mode) => setPendingDelete((current) => current ? { ...current, mode } : current)}
+      />
+      <FileDeletePreferenceDialog
+        copy={copy}
+        mode={pendingDelete?.mode ?? null}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDeletePreference}
+      />
       <FileOperationDialog
         busy={operationBusy}
         copy={copy}

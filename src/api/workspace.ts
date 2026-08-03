@@ -98,6 +98,13 @@ function transferCapabilities(raw: WorkspaceTransferDto) {
   };
 }
 
+/** Upload grants stay opaque; the canonical destination still carries the safe file name. */
+export function transferSourceDisplayName(raw: Pick<WorkspaceTransferDto, "direction" | "sourceRef" | "destinationPath">) {
+  if (raw.direction !== "upload" || !raw.sourceRef.startsWith("grant-")) return raw.sourceRef;
+  const normalized = raw.destinationPath.replace(/[\\/]+$/, "");
+  return normalized.split(/[\\/]/).pop() || raw.destinationPath;
+}
+
 function transfer(raw: WorkspaceTransferDto): WorkspaceTransfer {
   return {
     transferId: raw.transferId,
@@ -106,7 +113,7 @@ function transfer(raw: WorkspaceTransferDto): WorkspaceTransfer {
     updatedAt: raw.updatedAt,
     direction: raw.direction,
     hostAlias: raw.hostAlias,
-    sourceLabel: raw.sourceRef.startsWith("grant-") ? "Local selection" : raw.sourceRef,
+    sourceLabel: transferSourceDisplayName(raw),
     targetLabel: raw.destinationPath,
     state: raw.state,
     bytes: decimalText(raw.bytes),
@@ -196,6 +203,7 @@ export const desktopWorkspaceApi: WorkspaceApi = {
   reconnectTerminal: ({ sessionId }) => requiredInvoke<WorkspaceTerminalSessionDto>("workspace_reconnect_terminal", { sessionId }).then(terminal),
   closeTerminal: ({ sessionId, generation }) => requiredInvoke<void>("workspace_close_terminal", { request: { sessionId, generation } }),
 
+  listLocalRoots: () => requiredInvoke<string[]>("workspace_list_local_roots"),
   openFiles: async ({ hostAlias }) => {
     if (!hostAlias) {
       return requiredInvoke<WorkspaceFileSessionDto>("workspace_open_files", { request: { local: true, hostId: "local", hostName: "Local files", hostAlias: "" } }).then(fileSession);
@@ -303,6 +311,11 @@ export const desktopWorkspaceApi: WorkspaceApi = {
       truncated: raw.truncated,
       reason: raw.errorCode
     })),
+    onLocalDragState: (handler) => subscribe<{ phase: "enter" | "over" | "leave" | "drop"; clientX: number | null; clientY: number | null }>(
+      "workspace_open_files",
+      "workspace-local-drag-state",
+      handler
+    ),
     onLocalDrop: (handler) => subscribe<WorkspaceLocalPathGrantDto[]>("workspace_open_files", "workspace-local-drop", (raw) => handler({ grants: raw.map(grant) }))
   }
 };

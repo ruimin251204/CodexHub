@@ -12,6 +12,53 @@ export type PendingFileOperation = {
   destinationPath: string | null;
 };
 
+export type FileDeleteMode = "direct" | "backup";
+
+export function FileDeleteModeDialog({ copy, count, onCancel, onChoose }: {
+  copy: WorkspaceCopy;
+  count: number;
+  onCancel: () => void;
+  onChoose: (mode: FileDeleteMode) => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <div className="workspaceInlineDialogBackdrop" role="presentation">
+      <section aria-labelledby="workspace-delete-mode-title" className="workspaceInlineDialog workspaceDeleteModeDialog" role="alertdialog" aria-modal="true">
+        <h3 id="workspace-delete-mode-title">{copy.deleteModeTitle}</h3>
+        <p>{copy.deleteModeBody.replace("{count}", String(count))}</p>
+        <div className="workspaceDeleteModeChoices">
+          <button className="workspaceDangerButton" type="button" onClick={() => onChoose("direct")}>{copy.directDelete}</button>
+          <button type="button" onClick={() => onChoose("backup")}>{copy.backupDelete}</button>
+          <button type="button" onClick={onCancel}>{copy.cancel}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function FileDeletePreferenceDialog({ copy, mode, onCancel, onConfirm }: {
+  copy: WorkspaceCopy;
+  mode: FileDeleteMode | null;
+  onCancel: () => void;
+  onConfirm: (remember: boolean) => void;
+}) {
+  if (!mode) return null;
+  const modeLabel = mode === "direct" ? copy.directDelete : copy.backupDelete;
+  return (
+    <div className="workspaceInlineDialogBackdrop" role="presentation">
+      <section aria-labelledby="workspace-delete-preference-title" className="workspaceInlineDialog workspaceDeletePreferenceDialog" role="alertdialog" aria-modal="true">
+        <h3 id="workspace-delete-preference-title">{copy.deletePreferenceTitle}</h3>
+        <p>{copy.deletePreferenceBody.replace("{mode}", modeLabel)}</p>
+        <div className="workspaceDialogActions">
+          <button type="button" onClick={onCancel}>{copy.cancel}</button>
+          <button type="button" onClick={() => onConfirm(false)}>{copy.askDeleteNextTime}</button>
+          <button className="workspacePrimaryButton" type="button" onClick={() => onConfirm(true)}>{copy.setDeleteDefault}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function FilePreviewDialog({ copy, preview, onClose }: {
   copy: WorkspaceCopy;
   preview: WorkspaceFilePreview | null;

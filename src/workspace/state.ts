@@ -28,6 +28,7 @@ export type WorkspaceStateAction =
   | { type: "session-cwd-received"; event: WorkspaceTerminalCwdEvent }
   | { type: "session-heartbeat-received"; event: WorkspaceSessionHeartbeatEvent }
   | { type: "transfers-loaded"; snapshot: WorkspaceTransferSnapshot }
+  | { type: "transfers-upserted"; transfers: WorkspaceTransfer[] }
   | { type: "transfer-received"; event: WorkspaceTransferUpdatedEvent }
   | { type: "recovery-upserted"; recovery: WorkspaceRecovery }
   | { type: "recovery-removed"; recoveryId: string }
@@ -170,6 +171,14 @@ export function workspaceStateReducer(state: WorkspaceState, action: WorkspaceSt
         ),
         recoveries: action.snapshot.recoveries,
         localRecoveries: action.snapshot.localRecoveries
+      };
+    case "transfers-upserted":
+      return {
+        ...state,
+        transfers: action.transfers.reduce(
+          (current, transfer) => upsertTransfer(current, transfer),
+          state.transfers
+        )
       };
     case "transfer-received":
       return { ...state, transfers: upsertTransfer(state.transfers, action.event) };

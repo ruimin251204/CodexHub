@@ -101,6 +101,9 @@ impl FileSessions {
             event_sink,
         }
     }
+    pub fn local_roots(&self) -> WorkspaceResult<Vec<String>> {
+        self.local.roots()
+    }
     /// Uses `ssh -s sftp`; OpenSSH therefore applies Include, Match, agent,
     /// ProxyJump and known_hosts exactly as it does in the user's terminal.
     pub async fn open(&self, request: OpenFilesRequest) -> WorkspaceResult<OpenFileSession> {
@@ -1539,7 +1542,10 @@ fn sort_entries(entries: &mut [RemoteFileEntry], field: FileSortField, direction
         }
         let order = match field {
             FileSortField::Name => a.name.cmp(&b.name),
-            FileSortField::Type => format!("{:?}", a.kind).cmp(&format!("{:?}", b.kind)),
+            // Type is the primary key; name keeps entries of the same type deterministic.
+            FileSortField::Type => format!("{:?}", a.kind)
+                .cmp(&format!("{:?}", b.kind))
+                .then_with(|| a.name.cmp(&b.name)),
             FileSortField::Size => a.size.cmp(&b.size),
             FileSortField::Modified => a.modified_at.cmp(&b.modified_at),
         };
@@ -1673,10 +1679,46 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> WorkspaceError {
 mod tests {
     use super::{
         format_remote_modified_at, is_dot_directory_entry, is_managed_recovery_root,
-        remote_entry_fingerprint,
+        remote_entry_fingerprint, sort_entries,
     };
-    use crate::workspace::types::RemoteFileKind;
+    use crate::workspace::types::{
+        FileSortField, RemoteFileEntry, RemoteFileKind, SortDirection,
+    };
     use std::ffi::OsStr;
+
+    fn sort_entry(name: &str, kind: RemoteFileKind) -> RemoteFileEntry {
+        RemoteFileEntry {
+            entry_ref: format!("entry-{name}"),
+            path: format!("/tmp/{name}"),
+            name: name.into(),
+            kind,
+            size: Some("0".into()),
+            modified_at: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            symlink_target: None,
+            fingerprint: format!("fingerprint-{name}"),
+            writable_name: true,
+        }
+    }
+
+    #[test]
+    fn remote_type_sort_uses_name_as_the_secondary_key() {
+        let mut entries = vec![
+            sort_entry("zeta.txt", RemoteFileKind::File),
+            sort_entry("folder", RemoteFileKind::Directory),
+            sort_entry("alpha.txt", RemoteFileKind::File),
+        ];
+
+        sort_entries(&mut entries, FileSortField::Type, SortDirection::Asc);
+
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["folder", "alpha.txt", "zeta.txt"]);
+    }
 
     #[test]
     fn dot_directory_entries_are_never_used_as_child_paths() {

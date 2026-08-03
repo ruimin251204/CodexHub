@@ -8,12 +8,14 @@ import type { WorkspaceApi } from "./types";
 import type {
   WorkspaceLocalTransferRecovery,
   WorkspaceRecovery,
-  WorkspaceTerminalSession
+  WorkspaceTerminalSession,
+  WorkspaceTransfer
 } from "./types";
 
 export type WorkspaceController = {
   state: WorkspaceState;
   reload: () => Promise<void>;
+  upsertTransfers: (transfers: WorkspaceTransfer[]) => void;
   upsertSession: (session: WorkspaceTerminalSession) => void;
   removeSession: (sessionId: string) => void;
   upsertRecovery: (recovery: WorkspaceRecovery) => void;
@@ -79,6 +81,7 @@ export function useWorkspaceController(
   return {
     state,
     reload,
+    upsertTransfers: (transfers) => dispatch({ type: "transfers-upserted", transfers }),
     upsertSession: (session) => dispatch({ type: "session-upserted", session }),
     removeSession: (sessionId) => dispatch({ type: "session-removed", sessionId }),
     upsertRecovery: (recovery) => dispatch({ type: "recovery-upserted", recovery }),
