@@ -88,7 +88,7 @@ export function Sidebar({
       {brand ? <div className="ch-sidebar__brand">{brand}</div> : null}
       <nav className="ch-sidebar__navigation" aria-label={ariaLabel}>
         {groups.map((group) => (
-          <div className="ch-sidebar__group" key={group.id}>
+          <div className="ch-sidebar__group" data-group={group.id} key={group.id}>
             {group.label ? <div className="ch-sidebar__group-label">{group.label}</div> : null}
             <div className="ch-sidebar__items">
               {group.items.map((item) => {

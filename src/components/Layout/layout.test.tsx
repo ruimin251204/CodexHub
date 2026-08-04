@@ -25,14 +25,20 @@ function LayoutHarness() {
           <button type="button">Update</button>
         </>
       )}
-      groups={[{
-        id: "workspace",
-        label: "Workspace",
-        items: [
-          { id: "terminal", label: "Terminal", icon: "T" },
-          { id: "files", label: "Files", icon: "F", indicator: { tone: "success", label: "Ready" } }
-        ]
-      }]}
+      groups={[
+        {
+          id: "home",
+          items: [{ id: "dashboard", label: "Home", icon: "H" }]
+        },
+        {
+          id: "workspace",
+          label: "Workspace",
+          items: [
+            { id: "terminal", label: "Terminal", icon: "T" },
+            { id: "files", label: "Files", icon: "F", indicator: { tone: "success", label: "Ready" } }
+          ]
+        }
+      ]}
     />
   );
 
@@ -70,6 +76,15 @@ test("sidebar keeps settings and update before the trailing collapse control", (
     .map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim());
 
   expect(labels).toEqual(["Settings", "Update", "Collapse sidebar"]);
+});
+
+test("sidebar keeps home in a standalone group before workspace", () => {
+  const { container } = render(<LayoutHarness />);
+  const groups = Array.from(container.querySelectorAll(".ch-sidebar__group"));
+
+  expect(groups.map((group) => group.getAttribute("data-group"))).toEqual(["home", "workspace"]);
+  expect(groups[0]?.querySelector(".ch-sidebar__group-label")).not.toBeInTheDocument();
+  expect(groups[1]?.querySelector(".ch-sidebar__group-label")).toHaveTextContent("Workspace");
 });
 
 test("app shell can omit the secondary header row", () => {

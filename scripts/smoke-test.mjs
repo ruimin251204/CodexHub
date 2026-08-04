@@ -1426,7 +1426,9 @@ for (const token of ['new URL("../src-tauri/icons/128x128.png", import.meta.url)
 }
 for (const token of [
   '<AppTitleBar copy={copy} search={globalSearchControl}',
-  'items: (["dashboard", "terminal", "files", "transfers"] as SectionId[])',
+  'id: "home",',
+  'items: [makeSidebarItem("dashboard")]',
+  'items: (["terminal", "files", "transfers"] as SectionId[])',
   'items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[])',
   'className="codexHubSidebarFooterActions"',
   'className="codexHubSidebarUtility"',
@@ -1436,9 +1438,10 @@ for (const token of [
   if (!app.includes(token)) fail(`missing integrated titlebar/sidebar shell token: ${token}`);
 }
 if (app.includes('new URL("../figs/app-logo.png", import.meta.url).href')) fail("runtime sidebar logo should not bundle figs/app-logo.png");
-for (const token of ["copy.hosts.source", "copy.dashboard.system", "copy.hosts.codex", "copy.hosts.configExists", "copy.hosts.latency", "copy.hosts.skills"]) {
+for (const token of ["copy.dashboard.system", "copy.hosts.codex", "copy.dashboard.api", "copy.hosts.latency", "copy.hosts.skills", "onConnectHost(host.hostAlias)"]) {
   if (!app.includes(token)) fail(`missing Host Matrix field token: ${token}`);
 }
+if ((app.match(/<ActionIcon name="test" \/>/g) ?? []).length !== 2) fail("both page-level host test actions should use the dedicated pulse icon");
 for (const token of [
   '@tauri-apps/plugin-dialog',
   "open({ directory: true",
@@ -2362,13 +2365,20 @@ if (!app.includes('transfers: "🔄"') || app.includes('transfers: "⇅"')) {
   fail("macOS Transfers navigation must use the colored transfer emoji");
 }
 const sidebarItemStyle = designSystemStyles.match(/\.ch-sidebar__item\s*\{[^}]*\}/)?.[0] ?? "";
+const sidebarActiveStyle = designSystemStyles.match(/\.ch-sidebar__item\[data-active="true"\]\s*\{[^}]*\}/)?.[0] ?? "";
 const sidebarUtilityStyle = appShellStyles.match(/\.codexHubSidebarUtility\s*\{[^}]*\}/)?.[0] ?? "";
 if (!sidebarItemStyle.includes("gap: 14px") || !sidebarUtilityStyle.includes("gap: 8px")) {
   fail("sidebar navigation and Settings utility rows must retain the widened icon-to-label spacing");
 }
+for (const token of ["color: var(--ch-accent-strong)", "background: var(--ch-accent-soft)", "box-shadow: inset 3px 0 0 var(--ch-accent)"]) {
+  if (!sidebarActiveStyle.includes(token)) fail(`sidebar active state must retain its blue selection treatment: ${token}`);
+}
+for (const token of ['.ch-sidebar__item[data-active="true"] .ch-sidebar__label', "font-weight: 780", '.ch-sidebar__item[data-active="true"] .navGlyph', "stroke-width: 2.1"]) {
+  if (!designSystemStyles.includes(token)) fail(`sidebar active label and icon must use stronger blue emphasis: ${token}`);
+}
 const collapsedSidebarActiveStyle = designSystemStyles.match(/\.ch-sidebar\[data-collapsed="true"\] \.ch-sidebar__item\[data-active="true"\]\s*\{[^}]*\}/)?.[0] ?? "";
-if (!collapsedSidebarActiveStyle.includes("box-shadow: none")) {
-  fail("collapsed sidebar items must not restore the curved bottom selection marker");
+if (!collapsedSidebarActiveStyle.includes("box-shadow: inset 3px 0 0 var(--ch-accent)")) {
+  fail("collapsed sidebar items must retain the left selection marker");
 }
 for (const token of [
   ':root[data-platform="windows"] .ch-sidebar .ch-sidebar__item[data-active="true"]',
@@ -2409,8 +2419,8 @@ for (const token of ['className="ch-sidebar__collapse-emoji"', 'collapsed ? "➡
 for (const token of [':root[data-platform="macos"] .ch-sidebar__collapse-icon { display: none; }', ':root[data-platform="macos"] .ch-sidebar__collapse-emoji', 'font-family: "Apple Color Emoji"']) {
   if (!designSystemStyles.includes(token)) fail(`macOS sidebar collapse control must render an emoji instead of the line icon: ${token}`);
 }
-for (const token of [':root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]', ':root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]::before', ':root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"]', 'background: var(--surface-solid)', 'box-shadow: none']) {
-  if (!appShellStyles.includes(token)) fail(`macOS sidebar selection must use the clean surface treatment: ${token}`);
+for (const token of [':root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]', ':root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"]', ':root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"]::before', 'background: var(--ch-accent-soft)', 'color: var(--ch-accent-strong)', 'box-shadow: none', 'display: none']) {
+  if (!appShellStyles.includes(token)) fail(`macOS sidebar selection must use the shared blue treatment: ${token}`);
 }
 const terminalRedesignStyles = read("src/workspace/terminal-redesign.css");
 const terminalPrimaryActionStyle = terminalRedesignStyles.match(/\.chTerminalEmptyState \.chTerminalPrimaryAction\s*\{[^}]*\}/)?.[0] ?? "";
@@ -2443,7 +2453,7 @@ for (const token of ["flex: 1 1 auto", "min-height: 0", "overflow-y: auto"]) {
 for (const token of ['.workspacePageBody[data-mode="transfers"]', ".workspacePageBody[data-mode=\"transfers\"] > .workspaceTransfersPanel"]) {
   if (!styles.includes(token)) fail(`missing bounded Transfers workspace token: ${token}`);
 }
-for (const token of ["titleBarSearchRegion", "captionGlyph::before", "appTitleBar", "captionButton", "modalHeader", "modalTitleIcon", "emojiIcon", "navIcon", "navGlyph", "navLabel", "navCompletionDot", "navCompletionDot[data-tone=\"error\"]", "commandBar", "commandGroup", "pillToggle", "pillToggleThumb", "translateX(22px)", "metricPrimary", "metricSecondary", "matrixHeader", "matrixEmptyState", "matrixEmptyIcon", ".hostMeta .badge"]) {
+for (const token of ["titleBarSearchRegion", "captionGlyph::before", "appTitleBar", "captionButton", "modalHeader", "modalTitleIcon", "emojiIcon", "navIcon", "navGlyph", "navLabel", "navCompletionDot", "navCompletionDot[data-tone=\"error\"]", "commandBar", "commandGroup", "pillToggle", "pillToggleThumb", "translateX(22px)", "metricPrimary", "metricSecondary", "matrixHeader", "matrixSummary", "hostCardFooter", "hostConnectButton", "matrixEmptyState", "matrixEmptyIcon", ".hostMeta .badge"]) {
   if (!styles.includes(token)) fail(`missing dashboard home polish style token: ${token}`);
 }
 for (const token of ["setupGuideModal", "setupGuideLanguage", "setupGuideLanguageOption", "setupGuideHostList", "setupGuideHostHeader", "setupGuideActions", "emptyListState", "emptyListIcon", "emptyListActions"]) {

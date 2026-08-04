@@ -886,6 +886,10 @@ dd {
   grid-column: 1 / -1;
 }
 
+.dashboardPage {
+  gap: 18px;
+}
+
 .cardGrid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   max-width: var(--app-content-max);
@@ -962,11 +966,11 @@ dd {
 
 .metricCard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
-  min-height: 116px;
-  padding: 16px 24px;
+  gap: 18px;
+  min-height: 120px;
+  padding: 18px 22px;
   --metric-accent: #2f80ed;
   --metric-icon-bg: rgba(47, 128, 237, 0.1);
 }
@@ -1030,8 +1034,8 @@ dd {
 
 .metricIcon {
   display: grid;
-  width: 72px;
-  height: 72px;
+  width: 68px;
+  height: 68px;
   place-items: center;
   border-radius: 12px;
   color: var(--metric-accent);
@@ -1075,10 +1079,53 @@ dd {
 
 .matrixHeader {
   align-items: center;
+  margin-bottom: 20px;
 }
 
 .matrixHeader h2 {
   margin-top: 0;
+}
+
+.matrixHeading {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.matrixSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.matrixSummary > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  background: var(--surface-solid);
+}
+
+.matrixSummary > span::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--gray);
+  content: "";
+}
+
+.matrixSummary > span[data-tone="green"]::before { background: var(--green); }
+.matrixSummary > span[data-tone="red"]::before { background: var(--red); }
+.matrixSummary > span[data-tone="orange"]::before { background: var(--yellow); }
+.matrixSummary > span[data-tone="blue"]::before { background: var(--blue); }
+
+.matrixSummary b {
+  color: var(--text);
+  font-size: 0.84rem;
 }
 
 .matrixGrid {
@@ -1089,12 +1136,14 @@ dd {
 
 .hostCard {
   display: grid;
-  gap: 14px;
-  min-height: 228px;
+  grid-template-rows: auto auto auto;
+  gap: 12px;
+  min-height: 218px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 17px;
   background: var(--surface-solid);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .hostHeader {
@@ -1124,6 +1173,81 @@ dd {
 
 .hostMeta {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hostMetaPrimary {
+  grid-template-columns: minmax(0, 1.45fr) minmax(68px, 0.7fr) minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
+}
+
+.hostCardFooter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.hostFooterMetric {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+
+.hostFooterMetric dt {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.hostFooterMetric dd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hostFooterSkill {
+  border-left: 1px solid var(--border);
+  padding-left: 14px;
+}
+
+.hostFooterSkill .navGlyph {
+  width: 17px;
+  height: 17px;
+  color: var(--text-muted);
+  stroke-width: 1.8;
+}
+
+.hostMetricDot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gray);
+}
+
+.hostMetricDot[data-tone="green"] { background: var(--green); }
+.hostMetricDot[data-tone="yellow"] { background: var(--yellow); }
+.hostMetricDot[data-tone="red"] { background: var(--red); }
+.hostMetricDot[data-tone="blue"] { background: var(--blue); }
+
+.hostConnectButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 86px;
+  height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .hostMeta div,

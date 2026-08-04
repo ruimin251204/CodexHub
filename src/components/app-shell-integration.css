@@ -103,19 +103,26 @@
   transform: translateY(-1px);
 }
 
-.codexHubSidebarUtility[data-active="true"] { position: relative; border-color: transparent; color: var(--ch-text); background: var(--ch-surface); }
+.codexHubSidebarUtility[data-active="true"] { position: relative; border-color: color-mix(in srgb, var(--ch-accent) 22%, var(--ch-border)); color: var(--ch-accent-strong); background: var(--ch-accent-soft); }
 .codexHubSidebarUtility[data-active="true"]::before { position: absolute; top: 50%; left: 0; width: 3px; height: 20px; border-radius: 0 999px 999px 0; pointer-events: none; background: var(--ch-accent); content: ""; transform: translateY(-50%); }
+.codexHubSidebarUtility[data-active="true"] .codexHubSidebarUtility__label { font-weight: 780; }
+.codexHubSidebarUtility[data-active="true"] svg { color: var(--ch-accent-strong); stroke-width: 2.1; }
 
-/* Mac uses a clean white selection surface instead of the left accent marker. */
-:root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"],
-:root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"] {
-  border-color: transparent;
-  color: var(--ch-text);
-  background: var(--surface-solid);
+/* macOS uses the blue selection treatment without a left marker or inset arc. */
+:root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"] {
+  border-color: color-mix(in srgb, var(--ch-accent) 22%, var(--ch-border));
+  color: var(--ch-accent-strong);
+  background: var(--ch-accent-soft);
   box-shadow: none;
 }
 
-:root[data-platform="macos"] .ch-sidebar .ch-sidebar__item[data-active="true"]::before,
+:root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"] {
+  border-color: color-mix(in srgb, var(--ch-accent) 22%, var(--ch-border));
+  color: var(--ch-accent-strong);
+  background: var(--ch-accent-soft);
+  box-shadow: none;
+}
+
 :root[data-platform="macos"] .codexHubSidebarUtility[data-active="true"]::before {
   display: none;
 }

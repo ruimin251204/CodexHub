@@ -538,6 +538,12 @@ export const uiCopy = {
       enabled: "Enabled",
       success: "Success",
       serverMatrix: "Host Matrix",
+      matrixOnline: "Online",
+      matrixAbnormal: "Abnormal",
+      matrixAverageLatency: "Avg latency",
+      matrixSkills: "Total skills",
+      api: "API",
+      connect: "Connect",
       system: "System",
       noHosts: "No hosts yet",
       noHostsBody: "Add the first SSH target to populate the host matrix.",
@@ -1427,6 +1433,12 @@ export const uiCopy = {
       enabled: "启用",
       success: "成功",
       serverMatrix: "主机矩阵",
+      matrixOnline: "在线",
+      matrixAbnormal: "异常",
+      matrixAverageLatency: "平均延迟",
+      matrixSkills: "技能总数",
+      api: "API",
+      connect: "连接",
       system: "系统",
       noHosts: "还没有主机",
       noHostsBody: "添加第一个 SSH 目标后会填充主机矩阵。",
@@ -4630,6 +4642,10 @@ function App() {
             successfulTaskCount={successfulTaskCount}
             profileById={profileById}
             onAddServer={handleAddHost}
+            onConnectHost={(hostAlias) => {
+              requestWorkspaceTerminalHost(hostAlias);
+              selectWorkspaceMode("terminal");
+            }}
             onTestAllSshHosts={() => handleTestAllSshHosts().catch((error) => {
               setErrorNotice(formatError(error), taskIdForError(error));
               return { ok: false };
@@ -4840,10 +4856,15 @@ function App() {
     };
   };
   const sidebarGroups: SidebarGroup[] = [
+    // 主页是全局入口，独立于具体工作区工具。
+    {
+      id: "home",
+      items: [makeSidebarItem("dashboard")]
+    },
     {
       id: "workspace",
       label: copy.common.mainNavigation,
-      items: (["dashboard", "terminal", "files", "transfers"] as SectionId[]).map(makeSidebarItem)
+      items: (["terminal", "files", "transfers"] as SectionId[]).map(makeSidebarItem)
     },
     {
       id: "management",
@@ -5574,6 +5595,7 @@ function DashboardView({
   tasks,
   successfulTaskCount,
   onAddServer,
+  onConnectHost,
   onTestAllSshHosts
 }: {
   appliedProfileCount: number;
@@ -5590,11 +5612,12 @@ function DashboardView({
   tasks: TaskRun[];
   successfulTaskCount: number;
   onAddServer: () => void;
+  onConnectHost: (hostAlias: string) => void;
   onTestAllSshHosts: () => Promise<unknown>;
 }) {
   const labelFor = (id: SectionId) => copy.navItems.find((item) => item.id === id)?.label ?? id;
   return (
-    <div className="pageGrid">
+    <div className="pageGrid dashboardPage">
       <section className="summaryStrip" aria-label={copy.dashboard.summaryLabel}>
         <MetricCard icon="hosts" label={labelFor("hosts")} tone="blue" value={String(hosts.length)} detailLabel={copy.dashboard.online} detailValue={String(onlineCount)} />
         <MetricCard icon="profiles" label={labelFor("profiles")} tone="green" value={String(profiles.length)} detailLabel={copy.dashboard.applied} detailValue={String(appliedProfileCount)} />
@@ -5611,6 +5634,7 @@ function DashboardView({
         profileById={profileById}
         sshConfigHosts={sshConfigHosts}
         onAddServer={onAddServer}
+        onConnectHost={onConnectHost}
         onTestAllSshHosts={onTestAllSshHosts}
       />
     </div>
@@ -5634,6 +5658,9 @@ function MetricCard({
 }) {
   return (
     <article className="metricCard" data-tone={tone}>
+      <div className="metricIcon" aria-hidden="true">
+        <WindowsIcon id={icon} />
+      </div>
       <div className="metricPrimary">
         <span>{label}</span>
         <strong>{value}</strong>
@@ -5641,9 +5668,6 @@ function MetricCard({
           <span>{detailLabel}</span>
           <b>{detailValue}</b>
         </div>
-      </div>
-      <div className="metricIcon" aria-hidden="true">
-        <WindowsIcon id={icon} />
       </div>
     </article>
   );
@@ -6443,6 +6467,7 @@ function ServerMatrix({
   profileById,
   sshConfigHosts,
   onAddServer,
+  onConnectHost,
   onTestAllSshHosts
 }: {
   copy: UICopy;
@@ -6453,6 +6478,7 @@ function ServerMatrix({
   profileById: Map<string, Profile>;
   sshConfigHosts: SshConfigHost[];
   onAddServer: () => void;
+  onConnectHost: (hostAlias: string) => void;
   onTestAllSshHosts: () => Promise<unknown>;
 }) {
   const personalInfo = usePersonalInfoMasking();
@@ -6460,14 +6486,29 @@ function ServerMatrix({
   const testingAll = sshConfigHosts.length > 0 && sshConfigHosts.every((host) => hostBusy[host.alias] === "test");
   const hostInventoryByAlias = new Map(inventoryStatus.hostInventories.map((inventory) => [inventory.hostAlias.toLowerCase(), inventory]));
   const skillCounts = hosts.map((host) => dashboardHostSkillCount(host, hostInventoryByAlias.get(host.hostAlias.toLowerCase())));
+  const onlineHostCount = hosts.filter((host) => host.status === "online").length;
+  const abnormalHostCount = hosts.length - onlineHostCount;
+  const measuredLatencies = hosts.flatMap((host) => typeof host.latencyMs === "number" ? [host.latencyMs] : []);
+  const averageLatency = measuredLatencies.length > 0
+    ? `${Math.round(measuredLatencies.reduce((total, latency) => total + latency, 0) / measuredLatencies.length)} ms`
+    : copy.hosts.unknown;
+  const totalSkillCount = skillCounts.reduce<number>((total, count) => total + (typeof count === "number" ? count : 0), 0);
 
   return (
-    <section className="panel spanWide">
+    <section className="panel spanWide dashboardMatrixPanel">
       <div className="panelHeader matrixHeader">
-        <TitleWithIcon icon="hosts" level={2}>{copy.dashboard.serverMatrix}</TitleWithIcon>
+        <div className="matrixHeading">
+          <TitleWithIcon icon="hosts" level={2}>{copy.dashboard.serverMatrix}</TitleWithIcon>
+          <div className="matrixSummary" aria-label={copy.dashboard.serverMatrix}>
+            <span data-tone="green">{copy.dashboard.matrixOnline} <b>{onlineHostCount}</b></span>
+            <span data-tone={abnormalHostCount > 0 ? "red" : "gray"}>{copy.dashboard.matrixAbnormal} <b>{abnormalHostCount}</b></span>
+            <span data-tone="orange">{copy.dashboard.matrixAverageLatency} <b>{averageLatency}</b></span>
+            <span data-tone="blue">{copy.dashboard.matrixSkills} <b>{totalSkillCount}</b></span>
+          </div>
+        </div>
         <CommandBar ariaLabel={copy.dashboard.serverMatrix} className="topActions">
           <button className="primaryButton pageActionButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
-            <ActionIcon name="refresh" />
+            <ActionIcon name="test" />
             <span>{testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}</span>
           </button>
         </CommandBar>
@@ -6499,11 +6540,7 @@ function ServerMatrix({
                 <HostStatusIndicator copy={copy} status={host.status} />
               </div>
 
-              <dl className="hostMeta">
-                <div>
-                  <dt>{copy.hosts.source}</dt>
-                  <dd><Badge tone={host.source === "managed" ? "blue" : "gray"}>{hostSourceLabel(copy, host)}</Badge></dd>
-                </div>
+              <dl className="hostMeta hostMetaPrimary">
                 <div>
                   <dt>{copy.dashboard.system}</dt>
                   <dd><Badge tone={knownValueTone(host.os, copy)}>{systemLabel}</Badge></dd>
@@ -6513,18 +6550,29 @@ function ServerMatrix({
                   <dd><Badge tone={codexStatus.tone}>{codexStatus.label}</Badge></dd>
                 </div>
                 <div>
-                  <dt>{copy.hosts.configExists}</dt>
+                  <dt>{copy.dashboard.api}</dt>
                   <dd><HostApiConfigBadge copy={copy} host={host} profileById={profileById} /></dd>
                 </div>
-                <div>
-                  <dt>{copy.hosts.latency}</dt>
-                  <dd><Badge tone={latencyTone(host.latencyMs, hosts)}>{formatLatency(host.latencyMs, copy)}</Badge></dd>
-                </div>
-                <div>
-                  <dt>{copy.hosts.skills}</dt>
-                  <dd><Badge tone={skillCountBadgeTone}>{skillCountLabel}</Badge></dd>
-                </div>
               </dl>
+              <div className="hostCardFooter">
+                <dl className="hostFooterMetric">
+                  <dt>{copy.hosts.latency}</dt>
+                  <dd><span className="hostMetricDot" data-tone={latencyTone(host.latencyMs, hosts)} />{formatLatency(host.latencyMs, copy)}</dd>
+                </dl>
+                <dl className="hostFooterMetric hostFooterSkill">
+                  <dt>{copy.hosts.skills}</dt>
+                  <dd data-tone={skillCountBadgeTone}><NavIcon id="skills" />{skillCountLabel}</dd>
+                </dl>
+                <button
+                  className="secondaryButton hostConnectButton"
+                  type="button"
+                  aria-label={`${copy.dashboard.connect} ${personalInfo.maskText(host.name)}`}
+                  onClick={() => onConnectHost(host.hostAlias)}
+                >
+                  <span>{copy.dashboard.connect}</span>
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
             </article>
             );
           })}
@@ -6669,7 +6717,7 @@ function HostsView({
               <span>{detectHostsBusy ? copy.setupGuide.detecting : copy.hosts.detect}</span>
             </button>
             <button className="secondaryButton pageActionButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
-              <ActionIcon name="refresh" />
+              <ActionIcon name="test" />
               <span>{testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}</span>
             </button>
             <button className="primaryButton pageActionButton" disabled={outdatedCodexAliases.length === 0 || anyHostBusy} type="button" onClick={() => void onUpdateOutdatedCodexHosts(outdatedCodexAliases)}>
@@ -11339,14 +11387,20 @@ function formatWatts(value: number | null | undefined, copy: UICopy) {
   return typeof value === "number" ? `${value.toFixed(0)} W` : copy.hosts.unknown;
 }
 
-function formatDuration(value: number | null | undefined, copy: UICopy) {
+export function formatDuration(value: number | null | undefined, copy: UICopy) {
   if (typeof value !== "number") return copy.hosts.unknown;
-  if (value >= 3600) {
-    const hours = value / 3600;
+  const seconds = Math.max(0, value);
+  if (seconds >= 24 * 3600) {
+    const days = Math.floor(seconds / (24 * 3600));
+    const remainingHours = Math.floor((seconds % (24 * 3600)) / 3600);
+    return `${days}d${remainingHours > 0 ? `${remainingHours}h` : ""}`;
+  }
+  if (seconds >= 3600) {
+    const hours = seconds / 3600;
     return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)} h`;
   }
-  if (value >= 60) return `${Math.round(value / 60)} min`;
-  return `${Math.max(0, Math.round(value))} s`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)} min`;
+  return `${Math.round(seconds)} s`;
 }
 
 function formatProcessCount(value: number, copy: UICopy) {

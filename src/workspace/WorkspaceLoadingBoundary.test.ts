@@ -45,10 +45,11 @@ test("Workspace uses sidebar navigation and removes the unused four-button title
   expect(appSource).toContain("onModeChange={selectWorkspaceMode}");
 });
 
-test("Workspace does not auto-select a host and keeps Hosts first in Management", () => {
+test("Workspace does not auto-select a host and keeps Home standalone before Workspace", () => {
   expect(appSource).toContain('if (!current) return "";');
   expect(appSource).toContain('return hosts.some((host) => host.hostAlias === current) ? current : "";');
-  expect(appSource).toContain('items: (["dashboard", "terminal", "files", "transfers"] as SectionId[]).map(makeSidebarItem)');
+  expect(appSource).toContain('items: [makeSidebarItem("dashboard")]');
+  expect(appSource).toContain('items: (["terminal", "files", "transfers"] as SectionId[]).map(makeSidebarItem)');
   expect(appSource).toContain('items: (["hosts", "monitor", "profiles", "skills", "tasks"] as SectionId[]).map(makeSidebarItem)');
 });
 

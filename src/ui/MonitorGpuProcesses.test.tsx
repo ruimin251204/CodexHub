@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
-import { MonitorGpuBlock, sortMonitorGpuProcesses, uiCopy } from "../App";
+import { formatDuration, MonitorGpuBlock, sortMonitorGpuProcesses, uiCopy } from "../App";
 import type { HostResourceSnapshot } from "../models";
 import { createPersonalInfoMasker } from "../personalInfo";
 import { PersonalInfoMaskingProvider } from "./PersonalInfoMasking";
@@ -77,6 +77,15 @@ function renderGpu(sampledAt = "2026-07-27T10:00:00+08:00", processes = samplePr
 }
 
 describe("GPU process details", () => {
+  test("promotes process runtime to days with remaining hours as the highest precision", () => {
+    expect(formatDuration(23 * 3600, uiCopy.en)).toBe("23 h");
+    expect(formatDuration(24 * 3600, uiCopy.en)).toBe("1d");
+    expect(formatDuration(25 * 3600, uiCopy.en)).toBe("1d1h");
+    expect(formatDuration((6 * 24 + 13) * 3600, uiCopy.en)).toBe("6d13h");
+    expect(formatDuration(7 * 24 * 3600, uiCopy.en)).toBe("7d");
+    expect(formatDuration(30 * 24 * 3600, uiCopy.en)).toBe("30d");
+  });
+
   test("expands users independently and renders only safe per-user process fields", async () => {
     const user = userEvent.setup();
     renderGpu();

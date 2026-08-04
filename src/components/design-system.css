@@ -198,7 +198,7 @@
   display: flex;
   align-items: center;
   min-height: 42px;
-  margin: 0 4px 16px;
+  margin: 0 4px 12px;
   overflow: hidden;
 }
 
@@ -210,6 +210,11 @@
 
 .ch-sidebar__group + .ch-sidebar__group {
   margin-top: 18px;
+}
+
+/* 主页紧邻品牌区，工作区标题与全局入口之间留出清晰层级。 */
+.ch-sidebar__group[data-group="home"] + .ch-sidebar__group[data-group="workspace"] {
+  margin-top: 24px;
 }
 
 .ch-sidebar__group-label {
@@ -258,10 +263,22 @@
 }
 
 .ch-sidebar__item[data-active="true"] {
-  border-color: color-mix(in srgb, var(--ch-accent) 16%, var(--ch-border));
+  border-color: color-mix(in srgb, var(--ch-accent) 22%, var(--ch-border));
   color: var(--ch-accent-strong);
   background: var(--ch-accent-soft);
   box-shadow: inset 3px 0 0 var(--ch-accent);
+}
+
+.ch-sidebar__item[data-active="true"] .ch-sidebar__label {
+  font-weight: 780;
+}
+
+.ch-sidebar__item[data-active="true"] .ch-sidebar__icon {
+  color: var(--ch-accent-strong);
+}
+
+.ch-sidebar__item[data-active="true"] .navGlyph {
+  stroke-width: 2.1;
 }
 
 .ch-sidebar__item:disabled {
@@ -429,16 +446,14 @@
 }
 
 .ch-sidebar[data-collapsed="true"] .ch-sidebar__item[data-active="true"] {
-  /* Icon-only navigation keeps the same platform selection treatment as its expanded state. */
-  box-shadow: none;
+  box-shadow: inset 3px 0 0 var(--ch-accent);
 }
 
-/* Windows uses the compact accent marker rather than a coloured rounded selection. */
+/* Windows keeps its compact accent marker with the shared blue selection treatment. */
 :root[data-platform="windows"] .ch-sidebar .ch-sidebar__item[data-active="true"] {
-  border-color: transparent;
-  color: var(--ch-text);
-  /* Uses the shared surface token: white in light mode and readable in dark mode. */
-  background: var(--ch-surface);
+  border-color: color-mix(in srgb, var(--ch-accent) 22%, var(--ch-border));
+  color: var(--ch-accent-strong);
+  background: var(--ch-accent-soft);
   box-shadow: none;
 }
 
@@ -1088,7 +1103,7 @@
   .ch-sidebar__badge,
   .ch-sidebar__collapse-label { display: none; }
   .ch-sidebar__item { justify-content: center; padding-inline: 8px; }
-  .ch-sidebar__item[data-active="true"] { box-shadow: inset 0 -3px 0 var(--ch-accent); }
+  .ch-sidebar__item[data-active="true"] { box-shadow: inset 3px 0 0 var(--ch-accent); }
   .ch-sidebar__indicator { position: absolute; top: 7px; right: 7px; margin: 0; }
 
   .ch-page__header { align-items: flex-start; }
