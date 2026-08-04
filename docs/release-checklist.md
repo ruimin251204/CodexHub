@@ -1,7 +1,7 @@
 # CodexHub Release Checklist
 
-Date: 2026-07-31
-Version baseline: v0.4.10
+Date: 2026-08-04
+Version baseline: v0.5.0
 
 Use this checklist before any public `stable` release. The checklist is a gate for local validation and owner acceptance only; it does not upload, tag, push, or create a GitHub Release.
 
@@ -60,6 +60,7 @@ Do not run live SSH acceptance by default. It requires an explicit sanitized tes
 - `scripts/validate-release.ps1 -Channel stable -UserTested` completes with zero failures.
 - The owner has manually tested the built app end to end.
 - Ordinary code pushes and pull requests have passed the lightweight `CI` workflow; release workflows have not been triggered automatically by the merge.
+- Each platform release workflow is dispatched from the exact release-tag commit; the normalized tag equals `v${package.version}`, and the workflow rejects any tag/version/HEAD mismatch before building or uploading.
 - The summary lists the stable executable or installer, updater feed, and `SHA256SUMS.txt` artifact paths.
 - If stable updater publication is enabled, the build environment injects `CODEXHUB_STABLE_UPDATE_ENDPOINT` and `CODEXHUB_STABLE_UPDATER_PUBKEY`; `TAURI_SIGNING_PRIVATE_KEY` is supplied only as a GitHub Actions secret or trusted local environment value.
 - If stable updater publication is not enabled, Settings Check may be clicked but must report pending configuration; the Update action must remain disabled rather than pretending updates are available or installable.
@@ -90,11 +91,11 @@ The updater foundation is stable-only. Windows signed updater assets are built b
 - The Windows, macOS, and Linux workflows upload updater assets to an existing GitHub Release only when manually dispatched with `upload_to_release=true`.
 - The Settings install button is disabled before an `available` result and uses Tauri signature verification before running the installer.
 - Signing private keys and passwords are supplied only through the trusted release environment.
-- Portable packaging remains manual/local for now; v0.4.10 Windows public Release keeps the updater-enabled setup installer as the only Windows app package.
+- Portable packaging remains manual/local for now; v0.5.0 Windows public Release keeps the updater-enabled setup installer as the only Windows app package.
 
 ## macOS Release Artifact
 
-The macOS workflow can build unsigned `.app`, `.dmg`, and updater `.app.tar.gz` artifacts on a GitHub-hosted macOS runner. The v0.4.10 public GitHub Release includes unsigned Apple Silicon macOS assets:
+The macOS workflow can build unsigned `.app`, `.dmg`, and updater `.app.tar.gz` artifacts on a GitHub-hosted macOS runner. The v0.5.0 public GitHub Release includes unsigned Apple Silicon macOS assets:
 
 ```text
 .github/workflows/build-macos-release.yml
@@ -134,8 +135,16 @@ The owner must test at least:
 - Add Server / bootstrap flow with one-time password handling on a safe test host.
 - Managed SSH config preview/write/rollback boundaries.
 - SSH alias test and remote Codex probe.
+- Workspace Terminal local shell and real SSH connection, normal exit, transport loss, reconnect, PTY resize, search, scrollback, screen-reader mode, and large-paste confirmation.
+- Workspace Files local and remote SFTP browsing, pagination, bounded search, text/binary preview, create, rename, and create-if-absent copy.
+- Files delete/overwrite/rename recovery cards, restore, collision behavior, and separately confirmed permanent purge.
+- Transfers upload/download, progress, pause, retry, cancel, destination conflict choices, restart interruption, local grant reauthorization, and matching-session rebind.
+- Split mode host selection, Terminal/Files coexistence, terminal-cwd follow, open-terminal-here, and explicit unavailable states for `RemoteCommand` or unverifiable paths.
 - Remote Codex install/update status and redacted task logs.
 - Profile create/edit/import, API env-var selection, preview apply, and apply result.
 - Skill import/download, target preview, install/uninstall, and task evidence.
 - Settings Version info table placement below Local keys, date-time formatting, stable check behavior, failure log dialog, Tasks replay, and gated update install behavior.
 - Codex App fallback instructions for `Settings > Codex > Connections`.
+- Windows, macOS, and Linux real-device layout/keyboard checks, plus screen-reader or equivalent assistive-technology checks on the release artifacts.
+
+Workspace live SSH and cross-platform device items remain `Not Verified` until a dedicated test alias and real target devices are supplied; automated coverage alone does not satisfy these owner-acceptance gates.

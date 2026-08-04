@@ -6,7 +6,7 @@ on:
       tag:
         description: "Existing GitHub Release tag to use for updater URLs and optional asset upload."
         required: true
-        default: "v0.4.10"
+        default: "v0.5.0"
       upload_to_release:
         description: "Upload Windows updater assets and latest.json to the existing GitHub Release."
         required: true
@@ -51,9 +51,24 @@ jobs:
           $tag = $env:INPUT_TAG
           if ([string]::IsNullOrWhiteSpace($tag)) {
             $tag = "v$($packageJson.version)"
+          } else {
+            $tag = $tag.Trim()
           }
           if (-not $tag.StartsWith("v")) {
             $tag = "v$tag"
+          }
+          $expectedTag = "v$($packageJson.version)"
+          if ($tag -ne $expectedTag) {
+            throw "Release tag $tag does not match package version $expectedTag."
+          }
+          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to fetch release tag $tag."
+          }
+          $headCommit = (git rev-parse HEAD).Trim()
+          $tagCommit = (git rev-list -n 1 "refs/tags/$tag").Trim()
+          if ([string]::IsNullOrWhiteSpace($tagCommit) -or $headCommit -ne $tagCommit) {
+            throw "Checked-out commit $headCommit does not match release tag $tag commit $tagCommit."
           }
           "version=$($packageJson.version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8

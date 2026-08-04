@@ -1,10 +1,10 @@
 # CodexHub Known Limitations
 
-Date: 2026-07-30
+Date: 2026-08-04
 
 ## macOS
 
-macOS release-build support is merged, and its real-device validation baseline was completed. The v0.4.10 artifact remains unsigned/ad-hoc until Apple Developer ID signing and notarization are configured. First launch may require Control-click > Open or Privacy & Security approval after the user confirms the file came from the project GitHub Release.
+macOS release-build support is merged, and its real-device validation baseline was completed. The v0.5.0 artifact remains unsigned/ad-hoc until Apple Developer ID signing and notarization are configured. First launch may require Control-click > Open or Privacy & Security approval after the user confirms the file came from the project GitHub Release.
 
 The following macOS limitations remain:
 
@@ -18,7 +18,7 @@ Linux desktop support targets Ubuntu/Debian x86_64 and arm64 `.deb` packages fir
 
 The following Linux desktop limitations remain:
 
-- rpm, AppImage, Snap, and Flatpak packages are not in scope for v0.4.10.
+- rpm, AppImage, Snap, and Flatpak packages are not in scope for v0.5.0.
 - Linux packages require real Ubuntu/Debian desktop validation before broad distribution.
 - Package-repository, Snap, Flatpak, and rpm upgrade paths remain later work.
 
@@ -39,7 +39,7 @@ If Codex App supports a public documented SSH deep link on the tester's machine,
 
 ## Workspace Terminal And Files
 
-Files uses the first live Terminal window's host when one exists. With no live Terminal, it opens the real local filesystem at `C:/` on Windows and `/` on macOS/Linux. Local browsing and mutations use Rust filesystem APIs with fresh entry references; local links and special files are visible but excluded from copy, move, delete, and recursive traversal.
+Files uses the first live Terminal window's host when one exists. With no live Terminal, it opens the real local filesystem at `C:/` on Windows and `/` on macOS/Linux. This is a user-operated file manager: it can browse, preview, copy, and transfer every file the current OS user can access, including sensitive files the user deliberately selects. Local browsing and mutations use Rust filesystem APIs with fresh entry references; local links and special files are visible but excluded from copy, move, delete, and recursive traversal.
 
 Workspace deliberately uses the local system OpenSSH client and the user's alias; it has no remote daemon, does not parse private keys, and cannot preserve a foreground process or terminal screen across a network loss. Reconnection always creates a new shell and never replays input. For aliases whose resolved `ssh -G` output has `remotecommand none`, CodexHub can validate the nonce-bound shell PID's `/proc/<pid>/cwd` through SFTP; if `/proc` is unavailable it may use a canonicalized OSC 7 candidate. A last verified cwd can be restored only under that same no-`RemoteCommand` condition. Aliases with `RemoteCommand`, an inspection failure, unsupported control characters in the path, or an unavailable SFTP session retain a clear unavailable state instead.
 

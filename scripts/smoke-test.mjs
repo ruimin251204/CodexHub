@@ -121,7 +121,7 @@ for (const file of requiredFiles) {
 }
 
 const packageJson = JSON.parse(read("package.json"));
-if (packageJson.version !== "0.4.10") fail("package version should be 0.4.10");
+if (packageJson.version !== "0.5.0") fail("package version should be 0.5.0");
 for (const script of ["tauri", "dev", "dev:web", "dev:mock", "build", "build:tauri", "build:tauri:dev", "build:linux:release", "build:linux:updater", "build:macos:release", "build:macos:updater", "build:installer:nsis", "build:installer:nsis:updater", "build:installer:nsis:dev", "build:installer:msi", "build:installer:msi:dev", "release:portable", "release:portable:dev", "release:updater-feed", "release:linux-updater-feed", "release:macos-updater-feed", "validate:release", "validate:release:dev", "audit:public", "smoke", "smoke:mock", "test"]) {
   if (!packageJson.scripts?.[script]) fail(`missing package script ${script}`);
 }
@@ -152,11 +152,11 @@ const devTauriConfig = JSON.parse(read("src-tauri/tauri.dev.conf.json"));
 const updaterTauriConfig = JSON.parse(read("src-tauri/tauri.updater.conf.json"));
 if (tauriConfig.productName !== "CodexHub") fail("stable productName should be CodexHub");
 if (tauriConfig.identifier !== "app.codexhub.desktop") fail("stable identifier should be app.codexhub.desktop");
-if (tauriConfig.version !== "0.4.10") fail("stable Tauri version should be 0.4.10");
+if (tauriConfig.version !== "0.5.0") fail("stable Tauri version should be 0.5.0");
 if (tauriConfig.app?.windows?.[0]?.title !== "CodexHub") fail("stable window title should be CodexHub");
 if (devTauriConfig.productName !== "CodexHub Dev") fail("dev productName should be CodexHub Dev");
 if (devTauriConfig.identifier !== "dev.codexhub.desktop") fail("dev identifier should be dev.codexhub.desktop");
-if (devTauriConfig.version !== "0.4.10") fail("dev Tauri version should be 0.4.10");
+if (devTauriConfig.version !== "0.5.0") fail("dev Tauri version should be 0.5.0");
 if (devTauriConfig.app?.windows?.[0]?.title !== "CodexHub Dev") fail("dev window title should be CodexHub Dev");
 if (tauriConfig.identifier === devTauriConfig.identifier) fail("stable and dev identifiers must differ for app data isolation");
 if (tauriConfig.identifier?.endsWith(".app")) fail("Tauri identifier should not end with .app");
@@ -260,15 +260,47 @@ const stableUpdater = read("docs/stable-updater.md");
 const security = read("SECURITY.md");
 const zhReadme = read("docs/zh-CN/README.md");
 
+for (const workflowPath of [
+  ".github/workflows/build-windows-release.yml",
+  ".github/workflows/build-macos-release.yml",
+  ".github/workflows/build-linux-release.yml"
+]) {
+  const workflow = read(workflowPath);
+  const metadataBlocks = workflow.split("name: Resolve release metadata").length - 1;
+  const isWindowsWorkflow = workflowPath.includes("windows");
+  const guards = [
+    'default: "v0.5.0"',
+    isWindowsWorkflow ? "$tag = $tag.Trim()" : 'process.env.INPUT_TAG ?? "").trim()',
+    isWindowsWorkflow ? '$expectedTag = "v$($packageJson.version)"' : 'EXPECTED_TAG="v$VERSION"',
+    'git fetch --force origin "refs/tags/',
+    "git rev-parse HEAD",
+    'git rev-list -n 1 "refs/tags/',
+    isWindowsWorkflow ? "$headCommit -ne $tagCommit" : '"$HEAD_COMMIT" != "$TAG_COMMIT"'
+  ];
+  if (metadataBlocks === 0) fail(`${workflowPath} should resolve release metadata`);
+  for (const guard of guards) {
+    const guardCount = workflow.split(guard).length - 1;
+    if (guard === 'default: "v0.5.0"' ? guardCount !== 1 : guardCount !== metadataBlocks) {
+      fail(`${workflowPath} should apply every release metadata guard: ${guard}`);
+    }
+  }
+}
+
 const requiredText = [
   [readme, "CodexHub is a desktop control console"],
   [zhReadme, "通用桌面控制台，支持 Windows、macOS 和 Linux"],
   [readme, "latest stable build"],
-  [readme, "CodexHub_0.4.10_aarch64.dmg"],
-  [readme, "CodexHub_0.4.10_amd64.deb"],
-  [readme, "CodexHub_0.4.10_arm64.deb"],
+  [readme, "CodexHub_0.5.0_aarch64.dmg"],
+  [readme, "CodexHub_0.5.0_amd64.deb"],
+  [readme, "CodexHub_0.5.0_arm64.deb"],
   [readme, "update checks fail"],
   [zhReadme, "检查更新失败"],
+  [readme, "Use Workspace Terminal, Files, Split, and Transfers"],
+  [zhReadme, "使用 Workspace Terminal、Files、Split 与 Transfers"],
+  [architecture, "Files is a separate user-operated file surface"],
+  [limitations, "including sensitive files the user deliberately selects"],
+  [releaseChecklist, "Workspace live SSH and cross-platform device items remain `Not Verified`"],
+  [releaseChecklist, "the workflow rejects any tag/version/HEAD mismatch"],
   [readme, "Settings > Codex > Connections"],
   [readme, "strictly matched Codex processes owned by the current remote SSH user"],
   [readme, "executable selected through `~/.codex/packages/standalone/current`"],
@@ -649,7 +681,7 @@ for (const token of ["remote_codex_proxy_tunnel_candidates", "preflight_remote_c
 for (const token of ["ReverseProxyTunnel", "ExitOnForwardFailure=yes", "run_ssh_script_with_reverse_proxy", "run_ssh_script_streaming_with_reverse_proxy", "127.0.0.1:{}:127.0.0.1:{}"]) {
   if (!sshRs.includes(token)) fail(`missing restricted SSH reverse-proxy token: ${token}`);
 }
-for (const token of ["mod resource_monitor", "sample_host_resources", "resource_monitor::sample_host_resources_with_progress", "HostResourceProgressEvent", "host-resource-progress", "RESOURCE_SAMPLE_CONCURRENCY", "query-compute-apps", "CH_GPU_PROCESS", "CH_SYSTEM_PRODUCT", "GpuMemoryMode", "classify_gpu_memory_mode", "nvidiadgxspark", "etimes"]) {
+for (const token of ["mod resource_monitor", "sample_host_resources", "resource_monitor::sample_host_resources_with_progress", "HostResourceProgressEvent", "host-resource-progress", "RESOURCE_SAMPLE_CONCURRENCY", "query-compute-apps", "CH_GPU_PROCESS", "CH_SYSTEM_PRODUCT", "GpuMemoryMode", "classify_gpu_memory_mode", "nvidiadgxspark", "etimes", "cpu_usage_percent", "process_cpu_percent", "delta / clock_ticks / elapsed * 100"]) {
   if (!rustBackend.includes(token)) fail(`missing resource monitor backend token: ${token}`);
 }
 for (const token of ["app_update_check_task", "app_update_install_task", "app_update_state_label", "record_task(&state, app_update_check_task(running, &status, &attempts))", "Install app update", "Check app update"]) {
@@ -1264,7 +1296,7 @@ const mockApiSource = read("src/api/mock.ts");
 const modalFrameSource = read("src/ui/ModalFrame.tsx");
 const operationProgressSource = read("src/ui/OperationProgress.tsx");
 const alertModalFrameSource = read("src/ui/AlertModalFrame.tsx");
-for (const token of ["MonitorView", "MonitorHostCard", "MonitorHostStatusIndicator", "CircularStatusIndicator", "HostStatusIndicator", "resolveMonitorHostIndicatorState", "resolveHostStatusIndicatorState", "applyRemoteProbeResultToHosts", "applyRemoteProbeBatchResultsToHosts", "resourcePendingHostAliases", "monitorBentoGrid", "ResizeObserver", "resourceMonitorAutoRefresh", "resourceMonitorRefreshSeconds", "resourceMonitorHostOrder", "monitorAutoRefreshControl", "pillToggle", "monitorDragHandle", "monitorSegmentedMeter", "aggregateGpuProcessUsers", "sortMonitorGpuProcesses", "expandedUsers", "aria-expanded={expanded}", "sampledAt={snapshot?.sampledAt", "elapsedSeconds", "copy.monitor.refreshNow", "copy.monitor.autoRefresh", "copy.monitor.gpuProcesses", "copy.monitor.unifiedMemory", "resolveMonitorGpuMemoryUsage", "hostMemoryTotalBytes", "sampleHostResources", "mergeHostResourceSnapshot", "resource-monitor-${Date.now()}", "监控", "onPointerDown", "previewMonitorHostOrder", "monitorDragGhost", "data-placeholder", "requestAnimationFrame", "stopMonitorAutoScroll", "MonitorMeterTone", "host.hostAlias", "formatCpuLoadSummary", "pendingReorderTimerRef", "monitorCpuPercent", "summarizeGpuMemory", 'aria-label={label}', 'role="img"', 'stroke="currentColor"']) {
+for (const token of ["MonitorView", "MonitorHostCard", "MonitorHostStatusIndicator", "CircularStatusIndicator", "HostStatusIndicator", "resolveMonitorHostIndicatorState", "resolveHostStatusIndicatorState", "applyRemoteProbeResultToHosts", "applyRemoteProbeBatchResultsToHosts", "resourcePendingHostAliases", "monitorBentoGrid", "ResizeObserver", "resourceMonitorAutoRefresh", "resourceMonitorRefreshSeconds", "resourceMonitorHostOrder", "monitorAutoRefreshControl", "pillToggle", "monitorDragHandle", "monitorSegmentedMeter", "aggregateGpuProcessUsers", "sortMonitorGpuProcesses", "expandedUsers", "aria-expanded={expanded}", "sampledAt={snapshot?.sampledAt", "elapsedSeconds", "cpuUsagePercent", "copy.monitor.processCpuLoad", "CPU 负载", "copy.monitor.refreshNow", "copy.monitor.autoRefresh", "copy.monitor.gpuProcesses", "copy.monitor.unifiedMemory", "resolveMonitorGpuMemoryUsage", "hostMemoryTotalBytes", "sampleHostResources", "mergeHostResourceSnapshot", "resource-monitor-${Date.now()}", "监控", "onPointerDown", "previewMonitorHostOrder", "monitorDragGhost", "data-placeholder", "requestAnimationFrame", "stopMonitorAutoScroll", "MonitorMeterTone", "host.hostAlias", "formatCpuLoadSummary", "pendingReorderTimerRef", "monitorCpuPercent", "summarizeGpuMemory", 'aria-label={label}', 'role="img"', 'stroke="currentColor"']) {
   if (!app.includes(token)) fail(`missing resource monitor UI token: ${token}`);
 }
 if (!/<th className="sshHostsAliasCol">[\s\S]*?<th className="sshHostsOnlineCol">[\s\S]*?<th className="sshHostsSourceCol">/.test(app)) {

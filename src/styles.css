@@ -1959,7 +1959,7 @@ tr:last-child td {
 .monitorProcessDetailsHeader,
 .monitorProcessDetailRow {
   display: grid;
-  grid-template-columns: minmax(56px, max-content) minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(56px, max-content) minmax(0, 1fr) minmax(64px, max-content) max-content;
   gap: 8px;
   align-items: center;
 }
@@ -1987,6 +1987,11 @@ tr:last-child td {
 
 .monitorProcessDetailRow > span {
   min-width: 0;
+}
+
+.monitorProcessDetailsHeader > span:nth-child(3),
+.monitorProcessDetailRow > span:nth-child(3) {
+  text-align: right;
 }
 
 .monitorProcessDetailsHeader > span:last-child,
@@ -2059,9 +2064,13 @@ tr:last-child td {
   }
 
   .monitorProcessDetailRow {
-    grid-template-columns: minmax(48px, max-content) minmax(0, 1fr) max-content;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     padding: 9px;
+  }
+
+  .monitorProcessDetailRow > span:nth-child(n + 3) {
+    text-align: left;
   }
 
   .monitorProcessDetailRow small {

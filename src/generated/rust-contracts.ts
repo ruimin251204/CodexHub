@@ -204,7 +204,7 @@ export type GpuStatusDto = "ok" | "detected" | "unavailable";
 
 export type GpuMemoryModeDto = "dedicated" | "unified" | "unknown";
 
-export type GpuProcessSnapshotDto = { gpuUuid: string | null, pid: number | null, name: string, usedMemoryBytes: number | null, user: string | null, elapsedSeconds: number | null, command: string | null, };
+export type GpuProcessSnapshotDto = { gpuUuid: string | null, pid: number | null, name: string, cpuUsagePercent: number | null, usedMemoryBytes: number | null, user: string | null, elapsedSeconds: number | null, command: string | null, };
 
 export type GpuSnapshotDto = { vendor: GpuVendorDto, index: string | null, uuid: string | null, name: string, status: GpuStatusDto, memoryMode: GpuMemoryModeDto, utilizationPercent: number | null, memoryUsedBytes: number | null, memoryTotalBytes: number | null, temperatureC: number | null, powerWatts: number | null, driverVersion: string | null, processes: Array<GpuProcessSnapshotDto>, };
 

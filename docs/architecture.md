@@ -49,7 +49,7 @@ flowchart LR
 
 ## Workspace Session Layer
 
-`WorkspaceManager` owns the short-lived interactive resources separately from the existing one-shot SSH executor. It starts no remote daemon and never reads, copies, or persists a private key. Every connection names the user's existing OpenSSH alias, so OpenSSH continues to resolve `Include`, `Match`, `ProxyJump`, `IdentityFile`, agent, and `known_hosts` behavior.
+`WorkspaceManager` owns the short-lived interactive resources separately from the existing one-shot SSH executor. It starts no remote daemon, and its Terminal/SSH connection path never parses, copies, or persists a private key; every connection names the user's existing OpenSSH alias, so OpenSSH continues to resolve `Include`, `Match`, `ProxyJump`, `IdentityFile`, agent, and `known_hosts` behavior. Files is a separate user-operated file surface and may read, preview, copy, or transfer any local file the current OS user explicitly selects and can access.
 
 - Terminal sessions use `portable-pty` with the system `ssh -tt` client, platform-native PTY support, `ServerAliveInterval=15`, `ServerAliveCountMax=3`, and TCP keepalive. A logical `term-<uuid>` survives reconnect while each PTY receives a strictly increasing generation. Raw output is Base64 framed at 32 KiB, coalesced for at most 16 ms, retained for replay until frontend ACK, and bounded by a 4 MiB unacknowledged buffer. Inputs, resize, and ACK require the current generation. Network failures retry at 1/2/5/10/30 seconds; authentication, host-key failures, normal shell exit, and explicit close do not retry.
 - Files sessions support two real desktop targets. Remote targets use `ssh -T -s <alias> sftp` with `openssh-sftp-client`; the local target uses Rust filesystem APIs and starts at `C:/` on Windows or `/` on macOS/Linux. Both targets provide pagination, bounded search, preview, copy, transfers, opaque entry references, and recovery-backed mutations. SFTP handles and local entry capabilities remain in memory; durable recovery records retain only the stable local/host identity needed to reopen the target safely.
@@ -204,7 +204,7 @@ type OperationLog = {
 
 ## Release Channel Data Isolation
 
-CodexHub v0.4.10 continues to define exactly two release channels: `stable` and `dev`.
+CodexHub v0.5.0 continues to define exactly two release channels: `stable` and `dev`.
 
 - `stable` is the public release channel. It uses `src-tauri/tauri.conf.json`, `productName: CodexHub`, `identifier: app.codexhub.desktop`, and window title `CodexHub`.
 - `dev` is for development, test runs, previews, and manual acceptance. It uses `src-tauri/tauri.dev.conf.json`, `productName: CodexHub Dev`, `identifier: dev.codexhub.desktop`, and window title `CodexHub Dev`.

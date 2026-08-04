@@ -354,13 +354,22 @@ async fn open_recovery_files(
     recovery: &RecoveryDto,
 ) -> Result<(String, String, String), String> {
     if recovery.host_id == "local" && recovery.host_alias.is_empty() {
-        let session = workspace.files.open(OpenFilesRequest {
-            local: true,
-            host_id: "local".into(),
-            host_name: "Local files".into(),
-            host_alias: String::new(),
-        }).await.map_err(|error| error.to_string())?.session;
-        return Ok(("local".into(), "Local files".into(), session.file_session_id));
+        let session = workspace
+            .files
+            .open(OpenFilesRequest {
+                local: true,
+                host_id: "local".into(),
+                host_name: "Local files".into(),
+                host_alias: String::new(),
+            })
+            .await
+            .map_err(|error| error.to_string())?
+            .session;
+        return Ok((
+            "local".into(),
+            "Local files".into(),
+            session.file_session_id,
+        ));
     }
     let host = host_for_alias(state, &recovery.host_alias)?;
     if host.id != recovery.host_id {
@@ -561,7 +570,10 @@ pub(crate) async fn workspace_open_files(
     match workspace.files.open(request).await {
         Ok(opened) if opened.reused => Ok(opened.session),
         Ok(opened) => {
-            let (host_id, host_name) = host.as_ref().map(|item| (item.id.as_str(), item.name.as_str())).unwrap_or(("local", "Local files"));
+            let (host_id, host_name) = host
+                .as_ref()
+                .map(|item| (item.id.as_str(), item.name.as_str()))
+                .unwrap_or(("local", "Local files"));
             let task_id = begin_workspace_files_task(
                 &state.task_store,
                 state.task_event_sink.as_ref(),
@@ -579,7 +591,10 @@ pub(crate) async fn workspace_open_files(
             Ok(opened.session)
         }
         Err(error) => {
-            let (host_id, host_name) = host.as_ref().map(|item| (item.id.as_str(), item.name.as_str())).unwrap_or(("local", "Local files"));
+            let (host_id, host_name) = host
+                .as_ref()
+                .map(|item| (item.id.as_str(), item.name.as_str()))
+                .unwrap_or(("local", "Local files"));
             let error_code = workspace_files_error_code(&error);
             let safe_message = WorkspaceFilesTaskOperation::Connect.failed_message(error_code);
             let task_id = begin_workspace_files_task(
@@ -704,11 +719,31 @@ pub(crate) async fn workspace_copy_file_entry(
     request: CopyFileEntryRequest,
 ) -> Result<RemoteFileEntry, String> {
     let workspace = manager(&state)?;
-    let (target_id, target_name) = workspace.files.operation_host_identity(&request.file_session_id)
+    let (target_id, target_name) = workspace
+        .files
+        .operation_host_identity(&request.file_session_id)
         .map_err(|error| error.to_string())?;
-    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Copy Workspace file")?;
-    let result = workspace.files.copy_entry(request).await.map_err(|error| error.to_string());
-    settle_workspace_file_task(&state, &task_id, result.is_ok(), if result.is_ok() { "Workspace file copy completed." } else { "Workspace file copy failed without replacing the destination." });
+    let task_id = begin_workspace_file_task_identity(
+        &state,
+        &target_id,
+        &target_name,
+        "Copy Workspace file",
+    )?;
+    let result = workspace
+        .files
+        .copy_entry(request)
+        .await
+        .map_err(|error| error.to_string());
+    settle_workspace_file_task(
+        &state,
+        &task_id,
+        result.is_ok(),
+        if result.is_ok() {
+            "Workspace file copy completed."
+        } else {
+            "Workspace file copy failed without replacing the destination."
+        },
+    );
     result
 }
 
@@ -801,7 +836,12 @@ pub(crate) async fn workspace_confirm_file_operation(
         }
         (host.id, host.name)
     };
-    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Workspace file operation")?;
+    let task_id = begin_workspace_file_task_identity(
+        &state,
+        &target_id,
+        &target_name,
+        "Workspace file operation",
+    )?;
     let result = workspace
         .operations
         .confirm(&workspace.files, request, Some(task_id.clone()))
@@ -830,8 +870,14 @@ pub(crate) async fn workspace_restore_recovery(
         .operations
         .get(&request.recovery_id)
         .map_err(|error| error.to_string())?;
-    let (target_id, target_name, file_session_id) = open_recovery_files(&state, workspace, &recovery).await?;
-    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Restore Workspace recovery")?;
+    let (target_id, target_name, file_session_id) =
+        open_recovery_files(&state, workspace, &recovery).await?;
+    let task_id = begin_workspace_file_task_identity(
+        &state,
+        &target_id,
+        &target_name,
+        "Restore Workspace recovery",
+    )?;
     let result = workspace
         .operations
         .restore(
@@ -878,8 +924,14 @@ pub(crate) async fn workspace_purge_recovery(
         .operations
         .prepared_purge_recovery(&request.purge_token)
         .map_err(|error| error.to_string())?;
-    let (target_id, target_name, file_session_id) = open_recovery_files(&state, workspace, &recovery).await?;
-    let task_id = begin_workspace_file_task_identity(&state, &target_id, &target_name, "Purge Workspace recovery")?;
+    let (target_id, target_name, file_session_id) =
+        open_recovery_files(&state, workspace, &recovery).await?;
+    let task_id = begin_workspace_file_task_identity(
+        &state,
+        &target_id,
+        &target_name,
+        "Purge Workspace recovery",
+    )?;
     let result = workspace
         .operations
         .purge(
@@ -988,18 +1040,21 @@ pub(crate) async fn workspace_enqueue_transfers(
     let workspace = manager(&state)?;
     for draft in &mut request.items {
         if draft.host_id == "local" && draft.host_alias.is_empty() {
-            workspace.files.assert_host(&request.file_session_id, "local").map_err(|error| error.to_string())?;
+            workspace
+                .files
+                .assert_host(&request.file_session_id, "local")
+                .map_err(|error| error.to_string())?;
         } else {
-        let host = host_for_alias(&state, &draft.host_alias)?;
-        if host.id != draft.host_id || host.name != draft.host_name {
-            return Err(
-                "Workspace transfer host identity no longer matches the saved host.".into(),
-            );
-        }
-        workspace
-            .files
-            .assert_host(&request.file_session_id, &host.id)
-            .map_err(|error| error.to_string())?;
+            let host = host_for_alias(&state, &draft.host_alias)?;
+            if host.id != draft.host_id || host.name != draft.host_name {
+                return Err(
+                    "Workspace transfer host identity no longer matches the saved host.".into(),
+                );
+            }
+            workspace
+                .files
+                .assert_host(&request.file_session_id, &host.id)
+                .map_err(|error| error.to_string())?;
         }
         if draft.direction == TransferDirection::Upload {
             let name = workspace

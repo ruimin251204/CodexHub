@@ -6,7 +6,7 @@ on:
       tag:
         description: "Existing GitHub Release tag to use for optional deb asset upload."
         required: true
-        default: "v0.4.10"
+        default: "v0.5.0"
       upload_to_release:
         description: "Upload Linux deb assets and merged SHA256SUMS.txt to the existing GitHub Release."
         required: true
@@ -74,7 +74,7 @@ jobs:
           INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          TAG="$INPUT_TAG"
+          TAG=$(node -e 'process.stdout.write((process.env.INPUT_TAG ?? "").trim())')
           if [ -z "$TAG" ]; then
             TAG="v$VERSION"
           fi
@@ -82,6 +82,18 @@ jobs:
             v*) ;;
             *) TAG="v$TAG" ;;
           esac
+          EXPECTED_TAG="v$VERSION"
+          if [ "$TAG" != "$EXPECTED_TAG" ]; then
+            echo "Release tag $TAG does not match package version $EXPECTED_TAG." >&2
+            exit 1
+          fi
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          HEAD_COMMIT=$(git rev-parse HEAD)
+          TAG_COMMIT=$(git rev-list -n 1 "refs/tags/$TAG")
+          if [ -z "$TAG_COMMIT" ] || [ "$HEAD_COMMIT" != "$TAG_COMMIT" ]; then
+            echo "Checked-out commit $HEAD_COMMIT does not match release tag $TAG commit $TAG_COMMIT." >&2
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
@@ -171,7 +183,7 @@ jobs:
           INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          TAG="$INPUT_TAG"
+          TAG=$(node -e 'process.stdout.write((process.env.INPUT_TAG ?? "").trim())')
           if [ -z "$TAG" ]; then
             TAG="v$VERSION"
           fi
@@ -179,6 +191,18 @@ jobs:
             v*) ;;
             *) TAG="v$TAG" ;;
           esac
+          EXPECTED_TAG="v$VERSION"
+          if [ "$TAG" != "$EXPECTED_TAG" ]; then
+            echo "Release tag $TAG does not match package version $EXPECTED_TAG." >&2
+            exit 1
+          fi
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          HEAD_COMMIT=$(git rev-parse HEAD)
+          TAG_COMMIT=$(git rev-list -n 1 "refs/tags/$TAG")
+          if [ -z "$TAG_COMMIT" ] || [ "$HEAD_COMMIT" != "$TAG_COMMIT" ]; then
+            echo "Checked-out commit $HEAD_COMMIT does not match release tag $TAG commit $TAG_COMMIT." >&2
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 

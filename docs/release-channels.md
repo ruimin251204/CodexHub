@@ -1,7 +1,7 @@
 # CodexHub Release Channels
 
-Date: 2026-07-27
-Version baseline: v0.4.10
+Date: 2026-08-04
+Version baseline: v0.5.0
 
 CodexHub uses exactly two release channels: `dev` and `stable`.
 
@@ -78,7 +78,7 @@ Platform release workflows are manual-only:
 - `.github/workflows/build-macos-release.yml`
 - `.github/workflows/build-linux-release.yml`
 
-Run those workflows with `workflow_dispatch` only after the owner has approved a stable publication. Public Release assets are uploaded only when the manual run sets `upload_to_release=true` and targets an existing GitHub Release tag.
+Run those workflows with `workflow_dispatch` only after the owner has approved a stable publication. Each workflow normalizes the input tag, requires it to equal `v${package.version}`, fetches the tag, and requires the checked-out HEAD to equal the tag commit before any build proceeds. Public Release assets are uploaded only when the manual run sets `upload_to_release=true` and targets that existing GitHub Release tag.
 
 ## Stable Updater Boundary
 
@@ -86,6 +86,6 @@ Only `stable` may use the Tauri updater. The current foundation wires the update
 
 `dev` must not auto-update from any feed. Dev builds are local source runs, preview packages, or test artifacts only.
 
-`pnpm release:portable` remains available for manual/local packaging, but the v0.4.10 Windows public Release keeps only the signed updater-enabled setup installer. macOS uses an unsigned/ad-hoc Apple Silicon `.dmg` for user installation and `.app.tar.gz` for updater delivery; its real-device validation baseline is complete and must be repeated after relevant lifecycle or packaging changes. Linux uses Ubuntu/Debian `amd64` and `arm64` `.deb` packages for installation and signed updater feed entries after Linux validation. Portable builds do not participate in automatic update feeds unless a separate portable update story is designed and tested.
+`pnpm release:portable` remains available for manual/local packaging, but the v0.5.0 Windows public Release keeps only the signed updater-enabled setup installer. macOS uses an unsigned/ad-hoc Apple Silicon `.dmg` for user installation and `.app.tar.gz` for updater delivery; its real-device validation baseline is complete and must be repeated after relevant lifecycle or packaging changes. Linux uses Ubuntu/Debian `amd64` and `arm64` `.deb` packages for installation and signed updater feed entries after Linux validation. Portable builds do not participate in automatic update feeds unless a separate portable update story is designed and tested.
 
 See [stable updater details](stable-updater.md).

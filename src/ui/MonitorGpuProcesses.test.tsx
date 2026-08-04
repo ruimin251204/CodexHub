@@ -33,6 +33,7 @@ const sampleProcesses: Gpu["processes"] = [
     gpuUuid: "GPU-test",
     pid: 202,
     name: longProcessName,
+    cpuUsagePercent: 412.7,
     usedMemoryBytes: 8 * 1024 ** 3,
     user: "amax",
     elapsedSeconds: 7_200,
@@ -42,6 +43,7 @@ const sampleProcesses: Gpu["processes"] = [
     gpuUuid: "GPU-test",
     pid: 101,
     name: "python-small",
+    cpuUsagePercent: 4,
     usedMemoryBytes: 0,
     user: "amax",
     elapsedSeconds: 45,
@@ -51,6 +53,7 @@ const sampleProcesses: Gpu["processes"] = [
     gpuUuid: "GPU-test",
     pid: null,
     name: "jupyter-lab",
+    cpuUsagePercent: null,
     usedMemoryBytes: null,
     user: "jy",
     elapsedSeconds: null,
@@ -88,10 +91,12 @@ describe("GPU process details", () => {
     expect(amaxRows).toHaveLength(2);
     expect(amaxRows[0]).toHaveTextContent("202");
     expect(amaxRows[0]).toHaveTextContent(longProcessName);
+    expect(amaxRows[0]).toHaveTextContent("412.7%");
     expect(amaxRows[0]).toHaveTextContent("8.0 GB");
     expect(amaxRegion).not.toHaveTextContent("Runtime");
     expect(amaxRegion).not.toHaveTextContent("2.0 h");
     expect(amaxRows[1]).toHaveTextContent("101");
+    expect(amaxRows[1]).toHaveTextContent("4%");
     expect(amaxRows[1]).toHaveTextContent("0 B");
     expect(amaxRegion).not.toHaveTextContent("jupyter-lab");
     expect(amaxRegion).not.toHaveTextContent("should-not-render");

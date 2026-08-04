@@ -189,6 +189,7 @@ pub(crate) struct GpuProcessSnapshot {
     gpu_uuid: Option<String>,
     pid: Option<u32>,
     name: String,
+    cpu_usage_percent: Option<f64>,
     #[ts(type = "number | null")]
     used_memory_bytes: Option<u64>,
     user: Option<String>,
@@ -515,12 +516,91 @@ fn resource_probe_script() -> &'static str {
 sanitize_monitor_field() {
   printf '%s' "$1" | tr '\r\n|' '   ' | cut -c 1-180
 }
+read_process_cpu_stat() {
+  process_pid="$1"
+  [ -n "$process_pid" ] && [ -r "/proc/$process_pid/stat" ] || return 0
+  process_stat=$(sed -n '1p' "/proc/$process_pid/stat" 2>/dev/null) || return 0
+  case "$process_stat" in
+    *') '*) process_stat_tail=${process_stat##*) } ;;
+    *) return 0 ;;
+  esac
+  printf '%s\n' "$process_stat_tail" | awk '
+    NF >= 20 && $12 ~ /^[0-9]+$/ && $13 ~ /^[0-9]+$/ && $20 ~ /^[0-9]+$/ {
+      printf "%.0f|%.0f\n", $20, $12 + $13
+    }
+  '
+}
+# Keep each uptime timestamp beside its /proc stat read so process count cannot skew the window.
+read_process_cpu_sample() {
+  process_pid="$1"
+  process_stat=$(read_process_cpu_stat "$process_pid")
+  process_uptime=$(awk '{ print $1; exit }' /proc/uptime 2>/dev/null)
+  [ -n "$process_stat" ] && [ -n "$process_uptime" ] || return 0
+  printf '%s|%s\n' "$process_stat" "$process_uptime"
+}
+process_cpu_percent() {
+  process_pid="$1"
+  first_stat=$(printf '%s\n' "$gpu_process_cpu_first" | awk -F'|' -v target="$process_pid" '$1 == target { print $2 "|" $3 "|" $4; exit }')
+  second_stat=$(printf '%s\n' "$gpu_process_cpu_second" | awk -F'|' -v target="$process_pid" '$1 == target { print $2 "|" $3 "|" $4; exit }')
+  [ -n "$first_stat" ] && [ -n "$second_stat" ] || return 0
+  first_start=${first_stat%%|*}
+  first_tail=${first_stat#*|}
+  first_ticks=${first_tail%%|*}
+  first_uptime=${first_tail#*|}
+  second_start=${second_stat%%|*}
+  second_tail=${second_stat#*|}
+  second_ticks=${second_tail%%|*}
+  second_uptime=${second_tail#*|}
+  [ "$first_start" = "$second_start" ] || return 0
+  # One saturated logical core is 100%; multithreaded processes may exceed 100%.
+  awk -v first_ticks="$first_ticks" -v second_ticks="$second_ticks" \
+      -v first_uptime="$first_uptime" -v second_uptime="$second_uptime" \
+      -v clock_ticks="$monitor_clock_ticks" 'BEGIN {
+    elapsed = second_uptime - first_uptime
+    delta = second_ticks - first_ticks
+    if (elapsed > 0 && delta >= 0 && clock_ticks > 0) {
+      printf "%.1f", delta / clock_ticks / elapsed * 100
+    }
+  }'
+}
 cpu_line() {
   awk '/^cpu / { idle=$5+$6; total=0; for (i=2; i<=NF; i++) total += $i; printf "%s|%s\n", total, idle; exit }' /proc/stat 2>/dev/null
 }
+gpu_process_rows=''
+gpu_process_cpu_first=''
+gpu_process_cpu_second=''
+monitor_clock_ticks=''
+if command -v nvidia-smi >/dev/null 2>&1; then
+  gpu_process_rows=$(nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null)
+  monitor_clock_ticks=$(getconf CLK_TCK 2>/dev/null || printf '')
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    pid=$(printf '%s\n' "$row" | awk -F, '{ gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }')
+    process_sample=$(read_process_cpu_sample "$pid")
+    if [ -n "$pid" ] && [ -n "$process_sample" ]; then
+      gpu_process_cpu_first="${gpu_process_cpu_first}${pid}|${process_sample}
+"
+    fi
+  done <<EOF
+$gpu_process_rows
+EOF
+fi
 first_cpu=$(cpu_line)
 sleep 0.2 2>/dev/null || sleep 1
 second_cpu=$(cpu_line)
+if [ -n "$gpu_process_cpu_first" ]; then
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    pid=$(printf '%s\n' "$row" | awk -F, '{ gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }')
+    process_sample=$(read_process_cpu_sample "$pid")
+    if [ -n "$pid" ] && [ -n "$process_sample" ]; then
+      gpu_process_cpu_second="${gpu_process_cpu_second}${pid}|${process_sample}
+"
+    fi
+  done <<EOF
+$gpu_process_rows
+EOF
+fi
 printf 'CH_CPU_FIRST=%s\n' "$first_cpu"
 printf 'CH_CPU_SECOND=%s\n' "$second_cpu"
 awk '{ printf "CH_LOAD=%s|%s|%s\n", $1, $2, $3; exit }' /proc/loadavg 2>/dev/null
@@ -535,14 +615,17 @@ printf 'CH_SYSTEM_PRODUCT=%s\n' "$(sanitize_monitor_field "$system_product")"
 if command -v nvidia-smi >/dev/null 2>&1; then
   printf 'CH_GPU_TOOL=nvidia-smi\n'
   nvidia-smi --query-gpu=index,uuid,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,driver_version --format=csv,noheader,nounits 2>/dev/null | sed 's/^/CH_GPU_NVIDIA|/'
-  nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null | while IFS= read -r row; do
+  printf '%s\n' "$gpu_process_rows" | while IFS= read -r row; do
+    [ -n "$row" ] || continue
     pid=$(printf '%s\n' "$row" | awk -F, '{ gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }')
     user=''
     elapsed=''
+    cpu=''
     command=''
     if [ -n "$pid" ]; then
       user=$(ps -o user= -p "$pid" 2>/dev/null | awk 'NR==1 { gsub(/^[ \t]+|[ \t]+$/, ""); print; exit }')
       elapsed=$(ps -o etimes= -p "$pid" 2>/dev/null | awk 'NR==1 { gsub(/^[ \t]+|[ \t]+$/, ""); print; exit }')
+      cpu=$(process_cpu_percent "$pid")
       if [ -r "/proc/$pid/cmdline" ]; then
         command=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
       fi
@@ -550,7 +633,7 @@ if command -v nvidia-smi >/dev/null 2>&1; then
         command=$(ps -o args= -p "$pid" 2>/dev/null | awk 'NR==1 { gsub(/^[ \t]+|[ \t]+$/, ""); print; exit }')
       fi
     fi
-    printf 'CH_GPU_PROCESS|%s|%s|%s|%s\n' "$row" "$(sanitize_monitor_field "$user")" "$(sanitize_monitor_field "$elapsed")" "$(sanitize_monitor_field "$command")"
+    printf 'CH_GPU_PROCESS|%s|%s|%s|%s|%s\n' "$row" "$(sanitize_monitor_field "$user")" "$(sanitize_monitor_field "$elapsed")" "$(sanitize_monitor_field "$cpu")" "$(sanitize_monitor_field "$command")"
   done
 elif command -v rocm-smi >/dev/null 2>&1; then
   printf 'CH_GPU_TOOL=rocm-smi\n'
@@ -630,15 +713,18 @@ fn parse_nvidia_row(row: &str) -> Option<GpuSnapshot> {
 }
 
 fn parse_nvidia_process_row(row: &str) -> Option<GpuProcessSnapshot> {
-    let mut sections = row.splitn(4, '|');
-    let csv = sections.next()?;
-    let user = sections.next().and_then(nonempty);
-    let third = sections.next();
-    let fourth = sections.next();
-    let (elapsed_seconds, command) = if let Some(command) = fourth {
-        (third.and_then(parse_u64), nonempty(command))
-    } else {
-        (None, third.and_then(nonempty))
+    let sections = row.splitn(5, '|').collect::<Vec<_>>();
+    let csv = *sections.first()?;
+    let user = sections.get(1).and_then(|value| nonempty(value));
+    let (elapsed_seconds, cpu_usage_percent, command) = match sections.as_slice() {
+        [_, _, elapsed, cpu, command] => (
+            parse_u64(elapsed),
+            parse_nonnegative_f64(cpu).map(round1),
+            nonempty(command),
+        ),
+        [_, _, elapsed, command] => (parse_u64(elapsed), None, nonempty(command)),
+        [_, _, command] => (None, None, nonempty(command)),
+        _ => (None, None, None),
     };
     let parts = csv.split(',').map(|part| part.trim()).collect::<Vec<_>>();
     if parts.len() < 4 {
@@ -648,6 +734,7 @@ fn parse_nvidia_process_row(row: &str) -> Option<GpuProcessSnapshot> {
         gpu_uuid: nonempty(parts[0]),
         pid: parse_u32(parts[1]),
         name: nonempty(parts[2]).unwrap_or_else(|| "GPU process".into()),
+        cpu_usage_percent,
         used_memory_bytes: parse_mb_to_bytes(parts[3]),
         user,
         elapsed_seconds,
@@ -860,6 +947,11 @@ fn parse_f64(value: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok()
 }
 
+fn parse_nonnegative_f64(value: &str) -> Option<f64> {
+    let value = parse_f64(value)?;
+    (value.is_finite() && value >= 0.0).then_some(value)
+}
+
 fn parse_u64(value: &str) -> Option<u64> {
     value.trim().parse::<u64>().ok()
 }
@@ -909,7 +1001,7 @@ CH_CPU_CORES=8
 CH_CPU_MODEL=AMD EPYC
 CH_GPU_TOOL=nvidia-smi
 CH_GPU_NVIDIA|0, GPU-aaaa, NVIDIA RTX 4090, 73, 1234, 24576, 66, 320.5, 550.54
-CH_GPU_PROCESS|GPU-aaaa, 4242, python, 2048|amax|3661|python train.py
+CH_GPU_PROCESS|GPU-aaaa, 4242, python, 2048|amax|3661|412.7|python train.py
 ";
         let snapshot = parse_resource_stdout("gpu-host", output, 123);
         assert!(matches!(snapshot.status, HostResourceStatus::Ok));
@@ -932,6 +1024,7 @@ CH_GPU_PROCESS|GPU-aaaa, 4242, python, 2048|amax|3661|python train.py
         );
         assert_eq!(snapshot.gpus[0].processes[0].user.as_deref(), Some("amax"));
         assert_eq!(snapshot.gpus[0].processes[0].elapsed_seconds, Some(3661));
+        assert_eq!(snapshot.gpus[0].processes[0].cpu_usage_percent, Some(412.7));
     }
 
     #[test]
@@ -995,7 +1088,7 @@ CH_GPU_NVIDIA|0, GPU-unknown, NVIDIA GB10, 2, [N/A], [N/A], [N/A], 13, 580.95
             parse_nvidia_row("1, GPU-b, RTX 4090, 20, 100, 200, 41, 91, 550.54").unwrap(),
         ];
         let processes = vec![
-            parse_nvidia_process_row("GPU-b, 2002, python, 512|amax|90|python b.py").unwrap(),
+            parse_nvidia_process_row("GPU-b, 2002, python, 512|amax|90|400|python b.py").unwrap(),
             parse_nvidia_process_row("GPU-a, 1001, python, 256|root|120|python a.py").unwrap(),
         ];
         attach_nvidia_processes(&mut gpus, processes);
@@ -1004,17 +1097,20 @@ CH_GPU_NVIDIA|0, GPU-unknown, NVIDIA GB10, 2, [N/A], [N/A], [N/A], 13, 580.95
         assert_eq!(gpus[1].processes.len(), 1);
         assert_eq!(gpus[1].processes[0].pid, Some(2002));
         assert_eq!(gpus[1].processes[0].elapsed_seconds, Some(90));
+        assert_eq!(gpus[1].processes[0].cpu_usage_percent, Some(400.0));
+        assert_eq!(gpus[0].processes[0].cpu_usage_percent, None);
     }
 
     #[test]
     fn parses_nvidia_process_rows_with_missing_optional_fields() {
-        let process = parse_nvidia_process_row("GPU-a, 1001, [Not Found], N/A|||").unwrap();
+        let process = parse_nvidia_process_row("GPU-a, 1001, [Not Found], N/A||||").unwrap();
         assert_eq!(process.gpu_uuid.as_deref(), Some("GPU-a"));
         assert_eq!(process.pid, Some(1001));
         assert_eq!(process.name, "[Not Found]");
         assert_eq!(process.used_memory_bytes, None);
         assert_eq!(process.user, None);
         assert_eq!(process.elapsed_seconds, None);
+        assert_eq!(process.cpu_usage_percent, None);
         assert_eq!(process.command, None);
     }
 
@@ -1024,7 +1120,52 @@ CH_GPU_NVIDIA|0, GPU-unknown, NVIDIA GB10, 2, [N/A], [N/A], [N/A], 13, 580.95
             .expect("legacy process row");
         assert_eq!(process.user.as_deref(), Some("root"));
         assert_eq!(process.elapsed_seconds, None);
+        assert_eq!(process.cpu_usage_percent, None);
         assert_eq!(process.command.as_deref(), Some("python a.py"));
+    }
+
+    #[test]
+    fn process_cpu_percent_accepts_multicore_values_and_rejects_invalid_values() {
+        let multicore =
+            parse_nvidia_process_row("GPU-a, 1001, python, 256|root|120|437.86|python a.py")
+                .unwrap();
+        let negative =
+            parse_nvidia_process_row("GPU-a, 1002, python, 256|root|120|-1|python b.py").unwrap();
+        let not_finite =
+            parse_nvidia_process_row("GPU-a, 1003, python, 256|root|120|NaN|python c.py").unwrap();
+
+        assert_eq!(multicore.cpu_usage_percent, Some(437.9));
+        assert_eq!(negative.cpu_usage_percent, None);
+        assert_eq!(not_finite.cpu_usage_percent, None);
+    }
+
+    #[test]
+    fn resource_probe_script_is_posix_and_keeps_per_core_process_cpu_semantics() {
+        use std::io::Write as _;
+        use std::process::Stdio;
+
+        let script = resource_probe_script();
+        assert!(script.contains("/proc/$process_pid/stat"));
+        assert!(script.contains("read_process_cpu_sample"));
+        assert!(script.contains("gpu_process_cpu_second"));
+        assert!(script.contains("delta / clock_ticks / elapsed * 100"));
+
+        let mut child = match std::process::Command::new("sh")
+            .arg("-n")
+            .stdin(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) => panic!("could not start sh -n: {error}"),
+        };
+        child
+            .stdin
+            .take()
+            .expect("sh stdin")
+            .write_all(script.as_bytes())
+            .expect("write resource probe script to sh");
+        assert!(child.wait().expect("wait for sh -n").success());
     }
 
     #[test]

@@ -21,7 +21,7 @@
   </p>
 
   <p>
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.4.10-2563eb" />
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.5.0-2563eb" />
     <img alt="License" src="https://img.shields.io/badge/license-MIT-16a34a" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%2B%20macOS%20%2B%20Linux-0078D4" />
     <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB" />
@@ -38,6 +38,7 @@ CodexHub is a desktop control console for one practical workflow: prepare a Wind
 * Bootstrap new Linux hosts with a one-time password, then switch to key login.
 * Probe remote Codex, config, shell, PATH, and skill state before changing anything.
 * Preview and apply Codex profiles and skills with explicit confirmations and redacted logs.
+* Open local or SSH terminals, browse local/SFTP files, use linked split panes, and track resumable transfers from one Workspace.
 * Hand the verified SSH alias back to Codex App through `Settings > Codex > Connections`.
 
 ## 🖼️ Screenshots
@@ -45,7 +46,7 @@ CodexHub is a desktop control console for one practical workflow: prepare a Wind
 | View | Windows | macOS |
 | --- | --- | --- |
 | **Dashboard**<br>Review every managed host at a glance, including SSH reachability, remote Codex status, profile alignment, skill inventory, and recent task results. | ![CodexHub Dashboard on Windows showing managed hosts and status checks](figs/Dashboard-en-win.png) | ![CodexHub Dashboard on macOS showing managed hosts and status checks](figs/Dashboard-en-mac.jpg) |
-| **Monitor**<br>Watch remembered hosts with page-active CPU, memory, and GPU snapshots, then expand each GPU user row to inspect PID, process name, and memory usage. | ![CodexHub Monitor page on Windows showing host CPU, memory, and GPU resource cards](figs/monitor-en-win.png) | ![CodexHub Monitor page on macOS showing host CPU, memory, and GPU resource cards](figs/monitor-en-mac.jpg) |
+| **Monitor**<br>Watch remembered hosts with page-active CPU, memory, and GPU snapshots, then expand each GPU user row to inspect PID, process name, CPU load, and GPU memory usage. | ![CodexHub Monitor page on Windows showing host CPU, memory, and GPU resource cards](figs/monitor-en-win.png) | ![CodexHub Monitor page on macOS showing host CPU, memory, and GPU resource cards](figs/monitor-en-mac.jpg) |
 | **Hosts**<br>Add or inspect SSH hosts with guided key setup, one-time password bootstrap, connection tests, and remote Codex probes. | ![CodexHub Hosts page on Windows showing SSH host management](figs/Host-en-win.png) | ![CodexHub Hosts page on macOS showing SSH host management](figs/Host-en-mac.jpg) |
 | **API & Profiles**<br>Keep local API configuration names and profile templates organized before previewing or applying remote config changes. | ![CodexHub API and profile configuration page on Windows](figs/API-en-win.png) | ![CodexHub API and profile configuration page on macOS](figs/API-en-mac.jpg) |
 | **Skills**<br>Import local or GitHub skill packs, check target inventories, preview installed skill tags, and download or remove skills with task-log evidence. | ![CodexHub Skills page on Windows showing local libraries and install targets](figs/Skills-en-win.png) | ![CodexHub Skills page on macOS showing local libraries and install targets](figs/Skills-en-mac.jpg) |
@@ -65,6 +66,10 @@ CodexHub is a desktop control console for one practical workflow: prepare a Wind
 * After a confirmed profile apply, can gracefully reload strictly matched Codex processes owned by the current remote SSH user; the recommended mode preserves interactive CLI and exec sessions.
 * Imports local or GitHub skill directories containing `SKILL.md`.
 * Shows read-only, page-active CPU, memory, and GPU resource snapshots for remembered hosts, with expandable per-user GPU process details.
+* Runs local and SSH terminal tabs with reconnect, resize, search, configurable scrollback, screen-reader mode, and large-paste confirmation.
+* Browses local and remote SFTP files with pagination, search, preview, creation, rename/copy, and recoverable destructive operations.
+* Tracks uploads and downloads with pause, retry, cancel, conflict handling, retained recovery cards, and explicit reauthorization after restart.
+* Links Terminal and Files through split panes so the selected host and working directory can move together.
 * Persists the latest 100 redacted task records across restarts and keeps each retained task's complete diagnostics available on the Tasks page.
 * Keeps dialogs keyboard-contained with Escape close, trigger-focus restoration, scoped live announcements, and reduced-motion support.
 * Keeps a Windows tray / macOS menu bar / Linux tray status icon. The first window close asks whether future closes exit CodexHub or minimize it to the tray, and the choice can be changed later in Settings.
@@ -76,7 +81,8 @@ CodexHub is designed to be conservative by default:
 
 * It never stores SSH private keys, passphrases, one-time passwords, or OpenAI API keys in plaintext app files.
 * One-time passwords and stored API keys can be revealed only by an explicit user action for verification or copying; they remain transient in the UI and are never written to browser storage or task logs.
-* For SSH key material, it returns and copies public key text only.
+* SSH setup and key-status flows return and copy public key text only; they do not open or display private-key contents.
+* Workspace Files is an explicit user-operated local file tool. It can browse, preview, copy, and transfer any file the current OS user can access, including sensitive files the user deliberately selects.
 * It does not edit unmanaged SSH config blocks.
 * It writes only marked blocks between `# >>> CodexHub managed host: <alias>` and `# <<< CodexHub managed host: <alias>`.
 * It does not write Codex App private files, databases, sockets, caches, or undocumented state.
@@ -114,11 +120,11 @@ For the Linux desktop app:
 
 For everyday use, download the latest stable build from this repository's Releases page.
 
-* Windows: download and run `CodexHub_0.4.10_x64-setup.exe`; signed stable installers can check and install future Windows updates from Settings.
-* macOS Apple Silicon: download `CodexHub_0.4.10_aarch64.dmg`, open it, and move `CodexHub.app` to Applications. The v0.4.10 macOS artifact is unsigned/ad-hoc, so macOS may require Control-click > Open or Privacy & Security approval the first time. Only trust files downloaded from this repository's Release page.
+* Windows: download and run `CodexHub_0.5.0_x64-setup.exe`; signed stable installers can check and install future Windows updates from Settings.
+* macOS Apple Silicon: download `CodexHub_0.5.0_aarch64.dmg`, open it, and move `CodexHub.app` to Applications. The v0.5.0 macOS artifact is unsigned/ad-hoc, so macOS may require Control-click > Open or Privacy & Security approval the first time. Only trust files downloaded from this repository's Release page.
 * The `.app.tar.gz` asset is for the in-app updater. macOS users should install from the `.dmg`, not by manually extracting the updater archive.
-* Linux Ubuntu/Debian x86_64: install `CodexHub_0.4.10_amd64.deb`. Linux uses the macOS-style appearance by default and can be switched in Settings. Validated Linux stable builds participate in the signed updater feed.
-* Linux Ubuntu/Debian arm64: install `CodexHub_0.4.10_arm64.deb`. Validated Linux stable builds participate in the signed updater feed.
+* Linux Ubuntu/Debian x86_64: install `CodexHub_0.5.0_amd64.deb`. Linux uses the macOS-style appearance by default and can be switched in Settings. Validated Linux stable builds participate in the signed updater feed.
+* Linux Ubuntu/Debian arm64: install `CodexHub_0.5.0_arm64.deb`. Validated Linux stable builds participate in the signed updater feed.
 * If Settings update checks fail, CodexHub opens a log dialog and records the run in Tasks for later review.
 
 ## ⚡ Quick Start
@@ -129,11 +135,13 @@ For everyday use, download the latest stable build from this repository's Releas
 4. Add a server with host, user, port, and identity file.
 5. Use one-time password setup when the remote does not already accept your key.
 6. Test the SSH alias and probe the remote host.
-7. Install or update remote Codex.
-8. Create a profile, preview it, then apply it to the host.
-9. Import a skill and install it to local or remote targets.
-10. Open Tasks to inspect redacted logs.
-11. In Codex App, go to `Settings > Codex > Connections` and add or enable the verified SSH alias.
+7. Select the verified alias in Terminal, then open Files or Split to work in the same host and directory context.
+8. Upload or download files and monitor conflicts, pause/retry/cancel actions, and recovery state in Transfers.
+9. Install or update remote Codex.
+10. Create a profile, preview it, then apply it to the host.
+11. Import a skill and install it to local or remote targets.
+12. Open Tasks to inspect redacted logs.
+13. In Codex App, go to `Settings > Codex > Connections` and add or enable the verified SSH alias.
 
 ## 📘 Guided Workflows
 
@@ -155,6 +163,14 @@ For everyday use, download the latest stable build from this repository's Releas
 * After a successful install or update method, CodexHub keeps a verified standalone target on the canonical executable selected through `~/.codex/packages/standalone/current`: `bin/codex` for local and current official package releases, including the official package's exact `codex -> bin/codex` compatibility link, or `codex` for the legacy official layout. It verifies that the target, managed launcher, and login-shell `codex` command report the same version. Each writer takes a current-user PID/starttime lock, re-reads the runtime after locking, and rejects both the candidate and post-write state below the highest verified version floor.
 * After final verification, Install and Profile apply remove only obsolete, strictly marked managed releases. Update additionally adopts every direct `releases/<entry>` version that has one canonical executable layout, matches its binary-reported version, and is strictly older than the newly verified version. The exact official `codex -> bin/codex` compatibility link counts as the same canonical package layout; independent or noncanonical second paths remain ambiguous. Each eligible release, launcher capture, and known residual launcher/helper link is moved into `~/.codex-hub/deletion-backups/update-<UTC>-<PID>/`. The task result reports the safe backup ID; the backup is retained for manual inspection, so disk space is not reclaimed until that backup is explicitly deleted. Current, targeted, same/newer, invalid-marker, raced, active, or otherwise uncertain releases stay in place. All cleanup shares the runtime writer lock, rechecks current-UID processes, requires a same-filesystem no-replace move, and never overwrites an existing backup. Only this reversible staged-Update path may tolerate an unreadable `/proc/<pid>/exe` for a stable, double-read current-user `sshd`, `(sd-pam)`, `sftp-server`, or `fusermount3` session helper; an exact `/usr/lib/systemd/systemd --user` or `/lib/systemd/systemd --user` process with no extra argument; or a zombie with state `Z`, an empty command line, `Threads: 1`, and only its leader TID. PID/starttime/state/comm/full-command-line identity and the zombie task proof where applicable must remain stable at every candidate check, and the task summary reports the ignored process count. Install/Profile cleanup remains strict, while any new, changed, unknown, multi-thread zombie, or Codex-like process still defers cleanup.
 
+### Use Workspace Terminal, Files, Split, and Transfers
+
+* Terminal opens local shells or existing SSH aliases in tabs. Disconnects stay visible and can be reconnected; resize, search, scrollback, screen-reader mode, and large-paste confirmation are available from the workspace and Settings.
+* Files browses the local machine or the selected host over SFTP. Directory paging and search are explicit; preview, create, rename, copy, overwrite, and delete actions use the current location and confirmation rules.
+* Delete, overwrite, and rename recovery records can be restored from Files or Transfers. A permanent purge remains a separate confirmed action.
+* Transfers tracks upload/download progress, pause, retry, cancel, and conflict choices. After an app restart, local file access grants must be explicitly reauthorized before affected queued work can continue.
+* Split keeps Terminal and Files visible together and can synchronize the active terminal working directory with the file browser when the backend reports a canonical path.
+
 ### Apply a Profile
 
 * Profiles render to TOML.
@@ -175,8 +191,8 @@ For everyday use, download the latest stable build from this repository's Releas
 
 ## ⚠️ Known Limitations
 
-* The v0.4.10 macOS artifact remains unsigned/ad-hoc; Developer ID signing and notarization are not configured yet.
-* Linux desktop packages target Ubuntu/Debian x86_64 and arm64 `.deb` first; rpm, AppImage, Snap, and Flatpak are not in scope for v0.4.10.
+* The v0.5.0 macOS artifact remains unsigned/ad-hoc; Developer ID signing and notarization are not configured yet.
+* Linux desktop packages target Ubuntu/Debian x86_64 and arm64 `.deb` first; rpm, AppImage, Snap, and Flatpak are not in scope for v0.5.0.
 * CodexHub does not automatically register SSH hosts inside Codex App.
 * CodexHub can reload the current SSH user's remote Codex processes after profile apply, but it cannot force the local ChatGPT/Codex App to reconnect or use private app IPC.
 * Remote reload is available only inside profile apply; there is no standalone Host reload button.

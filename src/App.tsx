@@ -89,7 +89,7 @@ import type { ActionIconName } from "./components/UI/ActionIcon";
 import type { StatusTone } from "./components/UI";
 import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/types";
 import { searchGlobalEntries } from "./search/globalSearch";
-import { createGlobalSearchCatalog } from "./search/globalSearchCatalog";
+import { createGlobalSearchCatalog, hostSearchAliasesCopy } from "./search/globalSearchCatalog";
 import type { CodexHubSearchEntry, SearchSectionId } from "./search/globalSearchCatalog";
 import "./components/design-system.css";
 import "./components/app-shell-integration.css";
@@ -574,6 +574,7 @@ export const uiCopy = {
       noGpuProcesses: "No GPU processes",
       processCount: "Processes",
       processCountShort: (count: number) => `${count} proc`,
+      processCpuLoad: "CPU load",
       processMemory: "Process memory",
       processName: "Process name",
       processDetails: (user: string) => `GPU process details for ${user}`,
@@ -1462,6 +1463,7 @@ export const uiCopy = {
       noGpuProcesses: "无 GPU 进程",
       processCount: "进程数",
       processCountShort: (count: number) => `${count} 进程`,
+      processCpuLoad: "CPU 负载",
       processMemory: "进程显存",
       processName: "进程名",
       processDetails: (user: string) => `${user} 的 GPU 进程详情`,
@@ -4857,7 +4859,7 @@ function App() {
       detail: personalInfoMasker.maskText(host.name),
       section: "terminal" as const,
       hostAlias: host.hostAlias,
-      keywords: [host.hostAlias, host.name, "host", "server", "ssh", "主机", "服务器"],
+      keywords: [host.hostAlias, host.name, ...hostSearchAliasesCopy],
       priority: 15
     }))
   ], [copy, hosts, personalInfoMasker]);
@@ -6284,6 +6286,7 @@ export function MonitorGpuBlock({
                     <div className="monitorProcessDetailsHeader">
                       <span>{copy.monitor.pid}</span>
                       <span>{copy.monitor.processName}</span>
+                      <span>{copy.monitor.processCpuLoad}</span>
                       <span>{copy.monitor.processMemory}</span>
                     </div>
                     <div className="monitorProcessDetailsList" role="list">
@@ -6300,6 +6303,10 @@ export function MonitorGpuBlock({
                           <span>
                             <small>{copy.monitor.processName}</small>
                             <strong title={process.name}>{process.name || copy.hosts.unknown}</strong>
+                          </span>
+                          <span>
+                            <small>{copy.monitor.processCpuLoad}</small>
+                            <strong>{formatCompactPercent(process.cpuUsagePercent, copy)}</strong>
                           </span>
                           <span>
                             <small>{copy.monitor.processMemory}</small>

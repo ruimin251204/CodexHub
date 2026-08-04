@@ -1,7 +1,7 @@
 # CodexHub Stable Updater Foundation
 
-Date: 2026-07-27
-Version baseline: v0.4.10
+Date: 2026-08-04
+Version baseline: v0.5.0
 
 This document records the internal updater foundation. Public user-facing install instructions stay in `README.md`.
 
@@ -46,6 +46,7 @@ Before enabling a public stable update feed:
 3. Generate or retrieve the Tauri updater signing key pair from secure storage.
 4. Inject only the public key and stable feed URL into the stable build environment.
 5. Run the Windows, macOS, or Linux release workflow, or the matching local updater build with `TAURI_SIGNING_PRIVATE_KEY` supplied by the trusted environment. Linux public upload builds use the updater signing key for `.deb` signatures.
+   The manual workflow must run from the exact release-tag commit; its tag/version/HEAD guard must pass before any artifact is produced.
 6. Generate or merge `latest.json` with the platform-specific feed script.
 7. Upload only the approved public assets to the GitHub Release. Windows publishes the stable setup installer; macOS publishes the Apple Silicon `.dmg` and `.app.tar.gz` updater archive; Linux publishes Ubuntu/Debian `amd64` and `arm64` `.deb` packages. Standalone `.sig` files are not published because signature values are embedded in `latest.json`.
 8. Verify the Settings stable check reports either `up-to-date` or `available` against the public feed.
@@ -57,4 +58,4 @@ The Windows, macOS, and Linux release workflows only upload updater assets to an
 
 `dev` does not use automatic updates because it represents local development, previews, and acceptance artifacts that should never become a public update source.
 
-Portable packaging remains manual/local for now. The v0.4.10 Windows public Release keeps the signed updater-enabled setup installer as the only Windows app package. The v0.4.10 macOS public artifact remains unsigned/ad-hoc and is documented only in README, docs, and Release notes; its real-device validation baseline is complete, and the app UI must not display unsigned or notarization warnings.
+Portable packaging remains manual/local for now. The v0.5.0 Windows public Release keeps the signed updater-enabled setup installer as the only Windows app package. The v0.5.0 macOS public artifact remains unsigned/ad-hoc and is documented only in README, docs, and Release notes; its real-device validation baseline is complete, and the app UI must not display unsigned or notarization warnings.
