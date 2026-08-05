@@ -1343,7 +1343,7 @@ export function FilesPanel({
           {contextMenu.entry.kind === "directory" ? <button role="menuitem" type="button" onClick={() => { void upload(contextMenu.entry.canonicalPath); setContextMenu(null); }}>{copy.uploadHere}</button> : null}
           <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("rename", contextMenu.entry); setContextMenu(null); }}>{copy.rename}</button>
           <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { askOperation("copy", contextMenu.entry); setContextMenu(null); }}>{copy.copyEntry}</button>
-          <button role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { requestDelete([contextMenu.entry]); setContextMenu(null); }}>{copy.delete}</button>
+          <button className="workspaceDangerButton" role="menuitem" type="button" disabled={!contextMenu.entry.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { requestDelete([contextMenu.entry]); setContextMenu(null); }}>{copy.delete}</button>
           <button role="menuitem" type="button" onClick={() => { void navigator.clipboard.writeText(contextMenu.entry.canonicalPath).catch(reportError); setContextMenu(null); }}>{copy.copyPath}</button>
           <button
             disabled={!fileSession || fileSession.targetKind === "local"}

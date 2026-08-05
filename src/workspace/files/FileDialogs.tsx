@@ -28,7 +28,7 @@ export function FileDeleteModeDialog({ copy, count, onCancel, onChoose }: {
         <p>{copy.deleteModeBody.replace("{count}", String(count))}</p>
         <div className="workspaceDeleteModeChoices">
           <button className="workspaceDangerButton" type="button" onClick={() => onChoose("direct")}>{copy.directDelete}</button>
-          <button type="button" onClick={() => onChoose("backup")}>{copy.backupDelete}</button>
+          <button className="workspaceDangerButton" type="button" onClick={() => onChoose("backup")}>{copy.backupDelete}</button>
           <button type="button" onClick={onCancel}>{copy.cancel}</button>
         </div>
       </section>
@@ -132,7 +132,7 @@ export function FileOperationDialog({
         <div className="workspaceDialogActions">
           <button disabled={busy} type="button" onClick={onCancel}>{copy.cancel}</button>
           {!preview ? <button className="workspacePrimaryButton" disabled={busy || !nameValid} type="button" onClick={onPrepare}>{busy ? copy.busy : pending.operation === "copy" ? copy.copyEntry : pending.operation === "create-directory" ? copy.confirmOperation : copy.preview}</button> : null}
-          {preview ? <button className="workspaceDangerButton" disabled={busy} type="button" onClick={onConfirm}>{busy ? copy.busy : copy.confirmOperation}</button> : null}
+          {preview ? <button className="workspacePrimaryButton" disabled={busy} type="button" onClick={onConfirm}>{busy ? copy.busy : copy.confirmOperation}</button> : null}
         </div>
       </section>
     </div>

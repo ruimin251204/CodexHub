@@ -84,7 +84,7 @@ export function FileDetailsPanel({
               <button type="button" onClick={() => onPreview(entry)}>{copy.preview}</button>
               <button type="button" onClick={() => onDownload(entry)}>{copy.download}</button>
               <button disabled={!canMutate} type="button" onClick={() => onRename(entry)}>{copy.rename}</button>
-              <button disabled={!canMutate} type="button" onClick={() => onDelete(entry)}>{copy.delete}</button>
+              <button className="workspaceDangerButton" disabled={!canMutate} type="button" onClick={() => onDelete(entry)}>{copy.delete}</button>
               <button type="button" onClick={() => onCopyPath(entry)}>{copy.copyPath}</button>
             </div>
           </details>

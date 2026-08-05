@@ -6507,7 +6507,7 @@ function ServerMatrix({
           </div>
         </div>
         <CommandBar ariaLabel={copy.dashboard.serverMatrix} className="topActions">
-          <button className="primaryButton pageActionButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
+          <button className="primaryButton pageActionButton" data-action-tone="test" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
             <ActionIcon name="test" />
             <span>{testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}</span>
           </button>
@@ -6712,15 +6712,15 @@ function HostsView({
             <TitleWithIcon icon="hosts" level={2}>{copy.hosts.detectedSshHosts}</TitleWithIcon>
           </div>
           <CommandBar ariaLabel={copy.hosts.detectedSshHosts} className="topActions">
-            <button className="secondaryButton pageActionButton" disabled={detectHostsBusy || anyHostBusy} type="button" onClick={() => void handleDetectLocalHosts().catch(reportActionError)}>
+            <button className="secondaryButton pageActionButton listToolbarAction" data-action-tone="detect" disabled={detectHostsBusy || anyHostBusy} type="button" onClick={() => void handleDetectLocalHosts().catch(reportActionError)}>
               <ActionIcon name="scan" />
               <span>{detectHostsBusy ? copy.setupGuide.detecting : copy.hosts.detect}</span>
             </button>
-            <button className="secondaryButton pageActionButton" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
+            <button className="secondaryButton pageActionButton listToolbarAction" data-action-tone="test" disabled={sshConfigHosts.length === 0 || anyHostBusy} type="button" onClick={() => void onTestAllSshHosts()}>
               <ActionIcon name="test" />
               <span>{testingAll ? copy.hosts.testingAll : copy.hosts.refreshDetected}</span>
             </button>
-            <button className="primaryButton pageActionButton" disabled={outdatedCodexAliases.length === 0 || anyHostBusy} type="button" onClick={() => void onUpdateOutdatedCodexHosts(outdatedCodexAliases)}>
+            <button className="primaryButton pageActionButton listToolbarAction" data-action-tone="update" disabled={outdatedCodexAliases.length === 0 || anyHostBusy} type="button" onClick={() => void onUpdateOutdatedCodexHosts(outdatedCodexAliases)}>
               <ActionIcon name="update" />
               <span>{updatingOutdated ? copy.hosts.updatingOutdatedCodex : copy.hosts.updateOutdatedCodex}</span>
             </button>
@@ -7543,9 +7543,10 @@ export function ProfilesView({
             <TitleWithIcon icon="profiles" level={2}>{copy.profiles.library}</TitleWithIcon>
           </div>
           <CommandBar ariaLabel={copy.profiles.library} className="topActions profileLibraryActions">
-            <button className="secondaryButton pageActionButton" type="button" onClick={() => importInputRef.current?.click()}><ActionIcon name="upload" /><span>{copy.profiles.import}</span></button>
+            <button className="secondaryButton pageActionButton listToolbarAction" data-action-tone="import" type="button" onClick={() => importInputRef.current?.click()}><ActionIcon name="upload" /><span>{copy.profiles.import}</span></button>
             <button
-              className={`${canImportCcSwitchDetection ? "primaryButton" : "secondaryButton"} pageActionButton ccSwitchActionButton`}
+              className={`${canImportCcSwitchDetection ? "primaryButton" : "secondaryButton"} pageActionButton listToolbarAction ccSwitchActionButton`}
+              data-action-tone={canImportCcSwitchDetection ? "import" : "detect"}
               disabled={canImportCcSwitchDetection ? busy === "import-cc" : busy === "detect"}
               type="button"
               onClick={() => void (canImportCcSwitchDetection ? handleImportDetected() : handleDetectCcSwitch())}
@@ -8790,19 +8791,19 @@ export function SkillsView({
         <div className="panelHeader compact">
           <TitleWithIcon icon="skills" level={2}>{copy.skills.library}</TitleWithIcon>
           <CommandBar ariaLabel={copy.skills.library} className="skillLibraryActions">
-            <button className="secondaryButton pageActionButton" disabled={busy === "detect"} type="button" onClick={handleDetectClick}>
+            <button className="secondaryButton pageActionButton listToolbarAction" data-action-tone="detect" disabled={busy === "detect"} type="button" onClick={handleDetectClick}>
               <ActionIcon name="scan" />
               <span>{busy === "detect" ? copy.skills.detecting : copy.skills.detect}</span>
             </button>
-            <button className="secondaryButton pageActionButton" disabled={busy === "refresh"} type="button" onClick={() => void handleRefresh().catch(reportActionError)}>
+            <button className="secondaryButton pageActionButton listToolbarAction" data-action-tone="refresh" disabled={busy === "refresh"} type="button" onClick={() => void handleRefresh().catch(reportActionError)}>
               <ActionIcon name="refresh" />
               <span>{busy === "refresh" ? copy.skills.refreshing : copy.skills.refresh}</span>
             </button>
-            <button className="secondaryButton pageActionButton" disabled={busy === "import"} type="button" onClick={() => void handleImport().catch(reportActionError)}>
+            <button className="secondaryButton pageActionButton listToolbarAction" data-action-tone="import" disabled={busy === "import"} type="button" onClick={() => void handleImport().catch(reportActionError)}>
               <ActionIcon name="upload" />
               <span>{copy.skills.importDirectory}</span>
             </button>
-            <button className="primaryButton pageActionButton" disabled={busy === "download"} type="button" onClick={openDownload}>
+            <button className="primaryButton pageActionButton listToolbarAction" data-action-tone="download" disabled={busy === "download"} type="button" onClick={openDownload}>
               <ActionIcon name="download" />
               <span>{copy.skills.download}</span>
             </button>
@@ -8860,7 +8861,7 @@ export function SkillsView({
                         <button className="miniButton" disabled={Boolean(busy)} type="button" onClick={() => void openTargets(skill, "install")}>
                           {copy.skills.install}
                         </button>
-                        <button className="miniButton" disabled={Boolean(busy) || skill.applications.length === 0} type="button" onClick={() => void openTargets(skill, "uninstall")}>
+                        <button className="miniButton danger" disabled={Boolean(busy) || skill.applications.length === 0} type="button" onClick={() => void openTargets(skill, "uninstall")}>
                           {copy.skills.uninstall}
                         </button>
                         <button className="miniButton danger" disabled={Boolean(busy)} type="button" onClick={() => setDeleteSkill(skill)}>
@@ -9773,7 +9774,7 @@ function SkillTargetsModal({
           <button className="secondaryButton" disabled={busy || selectableCount === 0} type="button" onClick={onSelectAll}>
             {copy.skills.selectAll}
           </button>
-          <button className="primaryButton" disabled={busy || selectedCount === 0} type="button" onClick={onSubmit}>
+          <button className={mode === "uninstall" ? "primaryButton dangerButton" : "primaryButton"} disabled={busy || selectedCount === 0} type="button" onClick={onSubmit}>
             {actionLabel}
           </button>
         </ModalActions>
@@ -9852,7 +9853,7 @@ function SkillDeleteModal({
           <button className="secondaryButton dangerButton" disabled={busy} type="button" onClick={() => onDelete(false)}>
             {copy.skills.directDelete}
           </button>
-          <button className="primaryButton" disabled={busy} type="button" onClick={() => onDelete(true)}>
+          <button className="primaryButton dangerButton" disabled={busy} type="button" onClick={() => onDelete(true)}>
             {copy.skills.uninstallAndDelete}
           </button>
         </ModalActions>

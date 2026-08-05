@@ -286,7 +286,14 @@
 .transferRecoveryItem span { grid-column: 1 / -1; overflow: hidden; color: var(--text-muted); font-size: 0.67rem; text-overflow: ellipsis; white-space: nowrap; }
 .transferRecoveryActions { gap: 6px; flex-wrap: wrap; }
 .transferRecoveryActions button { min-height: 28px; padding-inline: 9px; font-size: 0.68rem; }
-.transferRecoveryActions .transferDangerAction { color: var(--transfer-red); }
+.transferRecoveryActions .transferDangerAction {
+  border-color: transparent;
+  color: var(--danger-action-text);
+  background: var(--danger-action-background);
+  box-shadow: var(--danger-action-shadow);
+}
+.transferRecoveryActions .transferDangerAction:hover:not(:disabled) { border-color: transparent; color: var(--danger-action-text); background: var(--danger-action-hover-background); box-shadow: var(--danger-action-shadow); }
+.transferRecoveryActions .transferDangerAction:focus-visible { outline-color: var(--danger-action-accent); }
 .transferRecentItem { gap: 9px; min-width: 0; padding: 11px 16px; border-bottom: 1px solid var(--border); }
 .transferRecentItem > div { display: grid; flex: 1; min-width: 0; }
 .transferRecentItem strong { overflow: hidden; color: var(--text); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }

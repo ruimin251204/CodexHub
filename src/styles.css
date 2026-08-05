@@ -22,10 +22,21 @@
   --primary-action-accent: #2f6df6;
   --primary-action-background: linear-gradient(135deg, #3374f6, #1f5ce1);
   --primary-action-shadow: 0 7px 18px color-mix(in srgb, var(--primary-action-accent) 24%, transparent);
+  /* Destructive actions mirror the primary CTA treatment with a red palette. */
+  --danger-action-accent: #d92d20;
+  --danger-action-background: linear-gradient(135deg, #dc3a2e, #b42318);
+  --danger-action-hover-background: linear-gradient(135deg, #e3483b, #c1281c);
+  --danger-action-shadow: 0 7px 18px color-mix(in srgb, var(--danger-action-accent) 26%, transparent);
+  --danger-action-text: #ffffff;
   --green: #248a3d;
   --yellow: #a66200;
   --red: #d92d20;
   --gray: #687083;
+  --action-detect: #0f766e;
+  --action-test: #4f46e5;
+  --action-update: #b45309;
+  --action-import: #7e22ce;
+  --action-primary-text: #ffffff;
   --app-content-max: 1220px;
   --content-max: var(--app-content-max);
   --page-title-size: 1.8rem;
@@ -68,7 +79,17 @@
   --green: #6fca82;
   --yellow: #f6bd63;
   --red: #ff776c;
+  --danger-action-accent: #e5484d;
+  --danger-action-background: linear-gradient(135deg, #d63f46, #ad202a);
+  --danger-action-hover-background: linear-gradient(135deg, #e34b52, #bd2832);
+  --danger-action-shadow: 0 7px 18px color-mix(in srgb, var(--danger-action-accent) 32%, transparent);
+  --danger-action-text: #ffffff;
   --gray: #a3a9b6;
+  --action-detect: #5eead4;
+  --action-test: #a5b4fc;
+  --action-update: #fbbf24;
+  --action-import: #d8b4fe;
+  --action-primary-text: #172033;
   --chrome-glass: rgba(35, 37, 40, 0.76);
   --chrome-edge: rgba(255, 255, 255, 0.07);
   --chrome-separator: rgba(255, 255, 255, 0.1);
@@ -186,7 +207,17 @@
     --green: #6fca82;
     --yellow: #f6bd63;
     --red: #ff776c;
-  --gray: #a3a9b6;
+    --danger-action-accent: #e5484d;
+    --danger-action-background: linear-gradient(135deg, #d63f46, #ad202a);
+    --danger-action-hover-background: linear-gradient(135deg, #e34b52, #bd2832);
+    --danger-action-shadow: 0 7px 18px color-mix(in srgb, var(--danger-action-accent) 32%, transparent);
+    --danger-action-text: #ffffff;
+    --gray: #a3a9b6;
+    --action-detect: #5eead4;
+    --action-test: #a5b4fc;
+    --action-update: #fbbf24;
+    --action-import: #d8b4fe;
+    --action-primary-text: #172033;
   --chrome-glass: rgba(35, 37, 40, 0.76);
   --chrome-edge: rgba(255, 255, 255, 0.07);
   --chrome-separator: rgba(255, 255, 255, 0.1);
@@ -924,7 +955,6 @@ dd {
   flex: 0 0 168px;
   width: 168px;
   min-width: 168px;
-  height: 38px;
   white-space: nowrap;
   text-align: center;
 }
@@ -1329,6 +1359,48 @@ dd {
   align-items: center;
   justify-content: center;
   gap: 7px;
+}
+
+/* List toolbar actions share one height and one color per operation semantic. */
+.listToolbarAction {
+  height: 38px;
+  min-height: 38px;
+  padding-block: 0;
+}
+
+.pageActionButton[data-action-tone="detect"] { --list-action-color: var(--action-detect); }
+.pageActionButton[data-action-tone="test"] { --list-action-color: var(--action-test); }
+.pageActionButton[data-action-tone="update"] { --list-action-color: var(--action-update); }
+.pageActionButton[data-action-tone="import"] { --list-action-color: var(--action-import); }
+.pageActionButton[data-action-tone="refresh"] { --list-action-color: var(--blue); }
+.pageActionButton[data-action-tone="download"] { --list-action-color: var(--green); }
+
+.secondaryButton.pageActionButton[data-action-tone] {
+  border-color: color-mix(in srgb, var(--list-action-color) 38%, var(--border));
+  color: var(--list-action-color);
+  background: color-mix(in srgb, var(--list-action-color) 9%, var(--surface-solid));
+}
+
+.secondaryButton.pageActionButton[data-action-tone]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--list-action-color) 58%, var(--border));
+  background: color-mix(in srgb, var(--list-action-color) 15%, var(--surface-solid));
+}
+
+.primaryButton.pageActionButton[data-action-tone] {
+  border-color: color-mix(in srgb, var(--list-action-color) 88%, transparent);
+  color: var(--action-primary-text);
+  background: color-mix(in srgb, var(--list-action-color) 86%, #172033);
+  box-shadow: 0 6px 15px color-mix(in srgb, var(--list-action-color) 22%, transparent);
+}
+
+.primaryButton.pageActionButton[data-action-tone]:not(.dangerButton):hover:not(:disabled) {
+  border-color: var(--list-action-color);
+  background: color-mix(in srgb, var(--list-action-color) 92%, #172033);
+  box-shadow: 0 7px 17px color-mix(in srgb, var(--list-action-color) 28%, transparent);
+}
+
+.pageActionButton[data-action-tone]:focus-visible {
+  outline-color: var(--list-action-color);
 }
 
 .pageActionIcon {
@@ -2345,8 +2417,25 @@ tr:last-child td {
   font-size: 0.8rem;
 }
 
-.miniButton.danger {
-  color: var(--red);
+.miniButton.danger,
+.dangerButton {
+  border-color: transparent;
+  color: var(--danger-action-text);
+  background: var(--danger-action-background);
+  box-shadow: var(--danger-action-shadow);
+}
+
+.miniButton.danger:hover:not(:disabled),
+.dangerButton:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--danger-action-text);
+  background: var(--danger-action-hover-background);
+  box-shadow: var(--danger-action-shadow);
+}
+
+.miniButton.danger:focus-visible,
+.dangerButton:focus-visible {
+  outline-color: var(--danger-action-accent);
 }
 
 .skillCard {
@@ -2643,15 +2732,11 @@ tr:last-child td {
   width: min(620px, 100%);
 }
 
-.dangerButton {
-  color: var(--red);
-}
-
 .primaryButton.dangerButton {
-  border-color: color-mix(in srgb, var(--red) 72%, var(--border));
-  color: #ffffff;
-  background: var(--red);
-  box-shadow: none;
+  border-color: transparent;
+  color: var(--danger-action-text);
+  background: var(--danger-action-background);
+  box-shadow: var(--danger-action-shadow);
 }
 
 .skillMessage {
@@ -7346,7 +7431,9 @@ td code {
 .workspaceRecoveryCard strong { color: var(--text); font-size: 0.84rem; text-transform: capitalize; }
 
 .workspacePrimaryButton { border-color: transparent !important; color: #fff !important; background: var(--primary-action-background) !important; box-shadow: var(--primary-action-shadow) !important; }
-.workspaceDangerButton { border-color: color-mix(in srgb, var(--red) 68%, var(--border)) !important; color: #fff !important; background: var(--red) !important; }
+.workspaceDangerButton { border-color: transparent !important; color: var(--danger-action-text) !important; background: var(--danger-action-background) !important; box-shadow: var(--danger-action-shadow) !important; }
+.workspaceDangerButton:hover:not(:disabled) { border-color: transparent !important; color: var(--danger-action-text) !important; background: var(--danger-action-hover-background) !important; box-shadow: var(--danger-action-shadow) !important; }
+.workspaceDangerButton:focus-visible { outline-color: var(--danger-action-accent) !important; }
 
 .workspaceInlineDialogBackdrop {
   position: fixed;

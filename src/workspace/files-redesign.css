@@ -172,7 +172,12 @@
 
 .workspaceFilesMoreMenu > button:hover:not(:disabled) { background: var(--surface-muted); }
 .workspaceFilesMoreMenu > .workspaceToggleButton[aria-pressed="true"] { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, var(--surface-muted)); }
-.workspaceFilesMoreMenu > .workspaceFilesDeleteButton { color: var(--red); }
+.workspaceFilesMoreMenu > .workspaceFilesDeleteButton {
+  color: var(--danger-action-text);
+  background: var(--danger-action-background);
+  box-shadow: var(--danger-action-shadow);
+}
+.workspaceFilesMoreMenu > .workspaceFilesDeleteButton:hover:not(:disabled) { color: var(--danger-action-text); background: var(--danger-action-hover-background); }
 .workspaceFilesMoreMenu > button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .workspaceFilesMoreSelect { justify-content: space-between; color: var(--text-muted); }

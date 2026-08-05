@@ -2518,8 +2518,32 @@ for (const removedToken of [
   if (styles.includes(removedToken)) fail(`removed Skills style token should not remain: ${removedToken}`);
 }
 const ccSwitchActionButtonStyle = styles.match(/\.ccSwitchActionButton\s*\{[^}]*\}/)?.[0] ?? "";
-for (const token of ["flex: 0 0 168px", "width: 168px", "height: 38px", "white-space: nowrap"]) {
+for (const token of ["flex: 0 0 168px", "width: 168px", "white-space: nowrap"]) {
   if (!ccSwitchActionButtonStyle.includes(token)) fail(`missing fixed one-line cc-switch action button style token: ${token}`);
+}
+const listToolbarActionStyle = styles.match(/\.listToolbarAction\s*\{[^}]*\}/)?.[0] ?? "";
+for (const token of ["height: 38px", "min-height: 38px", "padding-block: 0"]) {
+  if (!listToolbarActionStyle.includes(token)) fail(`list toolbar actions must share one control height: ${token}`);
+}
+for (const tone of ["detect", "test", "update", "import", "refresh", "download"]) {
+  if (!styles.includes(`.pageActionButton[data-action-tone="${tone}"]`)) fail(`missing semantic list action color: ${tone}`);
+}
+for (const token of [
+  "--danger-action-background: linear-gradient",
+  "--danger-action-hover-background: linear-gradient",
+  "--danger-action-shadow",
+  ".miniButton.danger,",
+  ".dangerButton:hover:not(:disabled)",
+  ".workspaceDangerButton:hover:not(:disabled)"
+]) {
+  if (!styles.includes(token)) fail(`missing shared destructive action style token: ${token}`);
+}
+for (const token of [
+  'className="miniButton danger" disabled={uninstallDisabled}',
+  'className={mode === "uninstall" ? "primaryButton dangerButton" : "primaryButton"}',
+  'className="secondaryButton dangerButton pageActionButton"'
+]) {
+  if (!app.includes(token)) fail(`missing destructive action button class: ${token}`);
 }
 for (const token of [".profileApplyPanel .tableWrap", "overflow-x: hidden", ".profileApplyTable .sshHostsAliasCol", ".profileApplyTable .miniButton"]) {
   if (!styles.includes(token)) fail(`missing responsive profile apply table token: ${token}`);
