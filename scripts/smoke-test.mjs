@@ -268,6 +268,9 @@ for (const workflowPath of [
   const workflow = read(workflowPath);
   const metadataBlocks = workflow.split("name: Resolve release metadata").length - 1;
   const isWindowsWorkflow = workflowPath.includes("windows");
+  if (isWindowsWorkflow && !workflow.includes('git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"')) {
+    fail("Windows release metadata fetch must brace the PowerShell tag variable before the refspec colon");
+  }
   const guards = [
     'default: "v0.5.0"',
     isWindowsWorkflow ? "$tag = $tag.Trim()" : 'process.env.INPUT_TAG ?? "").trim()',

@@ -61,7 +61,8 @@ jobs:
           if ($tag -ne $expectedTag) {
             throw "Release tag $tag does not match package version $expectedTag."
           }
-          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
+          # Braces keep PowerShell from parsing `$tag:` as a scoped variable.
+          git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to fetch release tag $tag."
           }
