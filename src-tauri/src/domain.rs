@@ -799,6 +799,16 @@ pub(crate) struct RemoteCodexMaintenanceResult {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename = "RemoteCodexProcessKindDto")]
+pub(crate) enum RemoteCodexProcessKind {
+    AppServer,
+    AppServerProxy,
+    CodexSession,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "RemoteCodexProcessIdentityDto")]
 pub(crate) struct RemoteCodexProcessIdentity {
@@ -806,6 +816,7 @@ pub(crate) struct RemoteCodexProcessIdentity {
     // Linux starttime may exceed JavaScript's safe integer range, so keep it textual.
     pub(crate) start_time: String,
     pub(crate) process_name: String,
+    pub(crate) process_kind: RemoteCodexProcessKind,
     pub(crate) version: String,
     pub(crate) release_path: String,
 }

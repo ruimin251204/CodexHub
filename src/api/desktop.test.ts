@@ -54,6 +54,7 @@ test("desktop batch update keeps process preview and execution as separate comma
       pid: 42,
       startTime: "1234",
       processName: "codex",
+      processKind: "app-server" as const,
       version: "0.145.0",
       releasePath: "/home/u/.codex/packages/standalone/releases/0.145.0"
     }]

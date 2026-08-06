@@ -166,7 +166,9 @@ export type HostOperationProgressEventDto = { requestId: string, taskId: string,
 
 export type RemoteCodexMaintenanceResultDto = { hostAlias: string, ok: boolean, action: RemoteCodexActionDto, beforeVersion: string | null, afterVersion: string | null, codexPath: string | null, codexCommandAvailable: boolean, installMethod: string | null, pathChanged: boolean, shellConfigPath: string | null, backupPath: string | null, message: string, task: TaskRun, };
 
-export type RemoteCodexProcessIdentityDto = { pid: number, startTime: string, processName: string, version: string, releasePath: string, };
+export type RemoteCodexProcessKindDto = "app-server" | "app-server-proxy" | "codex-session" | "unknown";
+
+export type RemoteCodexProcessIdentityDto = { pid: number, startTime: string, processName: string, processKind: RemoteCodexProcessKindDto, version: string, releasePath: string, };
 
 export type RemoteCodexProcessPreflightItemDto = { hostAlias: string, ok: boolean, processes: Array<RemoteCodexProcessIdentityDto>, message: string, };
 

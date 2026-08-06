@@ -138,7 +138,7 @@ fn parse_remote_codex_process_preflight(
             continue;
         };
         let fields = value.split('\t').collect::<Vec<_>>();
-        if fields.len() != 5 {
+        if fields.len() != 6 {
             return Err("Remote process preflight returned a malformed process row.".into());
         }
         let pid = fields[0]
@@ -149,8 +149,15 @@ fn parse_remote_codex_process_preflight(
             return Err("Remote process preflight returned an invalid identity.".into());
         }
         let process_name = decode_hex(fields[2])?;
-        let version = decode_hex(fields[3])?;
-        let release_path = decode_hex(fields[4])?;
+        let process_kind = match fields[3] {
+            "app-server" => RemoteCodexProcessKind::AppServer,
+            "app-server-proxy" => RemoteCodexProcessKind::AppServerProxy,
+            "codex-session" => RemoteCodexProcessKind::CodexSession,
+            "unknown" => RemoteCodexProcessKind::Unknown,
+            _ => return Err("Remote process preflight returned an invalid process kind.".into()),
+        };
+        let version = decode_hex(fields[4])?;
+        let release_path = decode_hex(fields[5])?;
         if process_name.is_empty()
             || process_name.len() > 128
             || process_name.contains(['\n', '\r', '\t'])
@@ -166,6 +173,7 @@ fn parse_remote_codex_process_preflight(
             pid,
             start_time: fields[1].into(),
             process_name,
+            process_kind,
             version,
             release_path,
         });
@@ -192,6 +200,7 @@ fn validate_approved_processes(processes: &[RemoteCodexProcessIdentity]) -> Resu
             || !process.start_time.bytes().all(|byte| byte.is_ascii_digit())
             || process.process_name.is_empty()
             || process.process_name.contains(['\n', '\r', '\t'])
+            || process.process_kind == RemoteCodexProcessKind::Unknown
             || process.release_path.is_empty()
             || process.release_path.contains(['\n', '\r', '\t'])
         {
@@ -273,15 +282,25 @@ fn remote_codex_process_termination_script(processes: &[RemoteCodexProcessIdenti
         .iter()
         .map(|process| {
             format!(
-                "printf '%s\\t%s\\t%s\\t%s\\n' {} {} {} {} >>\"$approved_file\"\n",
+                "printf '%s\\t%s\\t%s\\t%s\\t%s\\n' {} {} {} {} {} >>\"$approved_file\"\n",
                 shell_single_quote(&process.pid.to_string()),
                 shell_single_quote(&process.start_time),
                 shell_single_quote(&process.release_path),
                 shell_single_quote(&process.process_name),
+                shell_single_quote(process_kind_wire_value(&process.process_kind)),
             )
         })
         .collect::<String>();
     complete_termination_template().replace("__APPROVED_ROWS__", &approved_rows)
+}
+
+fn process_kind_wire_value(kind: &RemoteCodexProcessKind) -> &'static str {
+    match kind {
+        RemoteCodexProcessKind::AppServer => "app-server",
+        RemoteCodexProcessKind::AppServerProxy => "app-server-proxy",
+        RemoteCodexProcessKind::CodexSession => "codex-session",
+        RemoteCodexProcessKind::Unknown => "unknown",
+    }
 }
 
 const PROCESS_DISCOVERY_FUNCTIONS: &str = r#"
@@ -308,6 +327,16 @@ find_managed_release() {
     fi
   done
   return 1
+}
+
+classify_cmdline_hex() {
+  cmdline_hex=$1
+  managed_kind=unknown
+  case "$cmdline_hex" in
+    *006170702d7365727665720070726f787900) managed_kind=app-server-proxy ;;
+    *006170702d736572766572002d2d6c697374656e00*) managed_kind=app-server ;;
+    ?*) managed_kind=codex-session ;;
+  esac
 }
 
 read_managed_process() {
@@ -337,6 +366,12 @@ read_managed_process() {
   [ "$candidate_comm_after" = "$candidate_comm" ] || return 2
   find_managed_release "$candidate_dir" || return 2
   [ "$matched_release" = "$first_release" ] || return 2
+  # Classification exposes only a bounded label; raw argv never leaves the host.
+  managed_kind=unknown
+  if [ -r "$candidate_dir/cmdline" ]; then
+    cmdline_hex=$(od -An -v -tx1 "$candidate_dir/cmdline" 2>/dev/null | tr -d '[:space:]' || true)
+    classify_cmdline_hex "$cmdline_hex"
+  fi
   managed_pid=$candidate_pid
   managed_start=$first_start
   managed_comm=$candidate_comm
@@ -352,7 +387,7 @@ scan_managed_processes() {
     read_managed_process "$candidate_dir"
     candidate_status=$?
     case "$candidate_status" in
-      0) printf '%s\t%s\t%s\t%s\n' "$managed_pid" "$managed_start" "$managed_release" "$managed_comm" >>"$destination" || return 2 ;;
+      0) printf '%s\t%s\t%s\t%s\t%s\n' "$managed_pid" "$managed_start" "$managed_release" "$managed_comm" "$managed_kind" >>"$destination" || return 2 ;;
       1) ;;
       *) return 2 ;;
     esac
@@ -397,7 +432,7 @@ for candidate_dir in "$proc_root"/[0-9]*; do
       version=${managed_release##*/}
       version_hex=$(printf '%s' "$version" | od -An -v -tx1 | tr -d '[:space:]') || { emit_result failed version-unavailable; exit 4; }
       release_hex=$(printf '%s' "$managed_release" | od -An -v -tx1 | tr -d '[:space:]') || { emit_result failed release-path-unavailable; exit 4; }
-      printf 'CODEXHUB_PROCESS=%s\t%s\t%s\t%s\t%s\n' "$managed_pid" "$managed_start" "$comm_hex" "$version_hex" "$release_hex"
+      printf 'CODEXHUB_PROCESS=%s\t%s\t%s\t%s\t%s\t%s\n' "$managed_pid" "$managed_start" "$comm_hex" "$managed_kind" "$version_hex" "$release_hex"
       ;;
     1) ;;
     *) emit_result failed process-identity-unknown; exit 4 ;;
@@ -424,7 +459,7 @@ emit_result() {
 }
 cleanup() { rm -f "$approved_file" "$current_file" "$second_file"; rmdir "$work_dir" 2>/dev/null || true; }
 trap cleanup EXIT HUP INT TERM
-for tool in id awk sed readlink grep kill sleep; do
+for tool in id awk sed readlink grep kill sleep od tr; do
   command -v "$tool" >/dev/null 2>&1 || { emit_result failed required-tool-unavailable; exit 4; }
 done
 [ -d "$proc_root" ] || { emit_result failed proc-unavailable; exit 4; }
@@ -442,16 +477,16 @@ targeted=$(awk 'END { print NR + 0 }' "$approved_file" 2>/dev/null) || { emit_re
 [ "$targeted" -gt 0 ] && [ "$targeted" -le 128 ] || { emit_result failed approval-invalid; exit 4; }
 scan_managed_processes "$current_file" || { emit_result failed process-identity-unknown; exit 4; }
 tab_character=$(printf '\t')
-while IFS="$tab_character" read -r pid start release comm; do
-  grep -F -x "$pid$tab_character$start$tab_character$release$tab_character$comm" "$approved_file" >/dev/null 2>&1 || { emit_result failed process-impact-changed; exit 4; }
+while IFS="$tab_character" read -r pid start release comm kind; do
+  grep -F -x "$pid$tab_character$start$tab_character$release$tab_character$comm$tab_character$kind" "$approved_file" >/dev/null 2>&1 || { emit_result failed process-impact-changed; exit 4; }
 done <"$current_file"
 scan_managed_processes "$second_file" || { emit_result failed process-identity-unknown; exit 4; }
 while IFS= read -r row; do grep -F -x "$row" "$second_file" >/dev/null 2>&1 || { emit_result failed process-impact-changed; exit 4; }; done <"$current_file"
 while IFS= read -r row; do grep -F -x "$row" "$current_file" >/dev/null 2>&1 || { emit_result failed process-impact-changed; exit 4; }; done <"$second_file"
-while IFS="$tab_character" read -r pid start release comm; do
+while IFS="$tab_character" read -r pid start release comm kind; do
   [ -n "$pid" ] || continue
   read_managed_process "$proc_root/$pid" || { emit_result failed process-impact-changed; exit 4; }
-  [ "$managed_start" = "$start" ] && [ "$managed_release" = "$release" ] && [ "$managed_comm" = "$comm" ] || { emit_result failed process-impact-changed; exit 4; }
+  [ "$managed_start" = "$start" ] && [ "$managed_release" = "$release" ] && [ "$managed_comm" = "$comm" ] && [ "$managed_kind" = "$kind" ] && [ "$kind" != unknown ] || { emit_result failed process-impact-changed; exit 4; }
   kill -TERM "$pid" 2>/dev/null || { emit_result failed term-failed; exit 4; }
 done <"$second_file"
 elapsed=0
@@ -508,10 +543,21 @@ mod tests {
         true
     }
 
+    fn run_posix_shell(script: &str) -> Option<String> {
+        match Command::new("sh").arg("-c").arg(script).output() {
+            Ok(output) => {
+                assert!(output.status.success());
+                Some(String::from_utf8(output.stdout).expect("shell output"))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("could not execute sh: {error}"),
+        }
+    }
+
     #[test]
     fn process_preflight_parser_returns_compact_safe_metadata() {
         let output = concat!(
-            "CODEXHUB_PROCESS=42\t1234\t636f646578\t302e3134352e30\t2f686f6d652f752f2e636f6465782f7061636b616765732f7374616e64616c6f6e652f72656c65617365732f302e3134352e30\n",
+            "CODEXHUB_PROCESS=42\t1234\t636f646578\tapp-server\t302e3134352e30\t2f686f6d652f752f2e636f6465782f7061636b616765732f7374616e64616c6f6e652f72656c65617365732f302e3134352e30\n",
             "CODEXHUB_PROCESS_PREFLIGHT_STATUS=ready\n",
             "CODEXHUB_PROCESS_PREFLIGHT_COUNT=1\n",
             "CODEXHUB_PROCESS_PREFLIGHT_REASON=scan-complete\n"
@@ -519,6 +565,7 @@ mod tests {
         let parsed = parse_remote_codex_process_preflight(output).expect("process preflight");
         assert_eq!(parsed[0].pid, 42);
         assert_eq!(parsed[0].process_name, "codex");
+        assert_eq!(parsed[0].process_kind, RemoteCodexProcessKind::AppServer);
         assert_eq!(parsed[0].version, "0.145.0");
     }
 
@@ -528,6 +575,7 @@ mod tests {
             pid: 42,
             start_time: "1234".into(),
             process_name: "codex\tworker".into(),
+            process_kind: RemoteCodexProcessKind::CodexSession,
             version: "0.145.0".into(),
             release_path: "/home/u/.codex/packages/standalone/releases/0.145.0".into(),
         };
@@ -540,16 +588,31 @@ mod tests {
             pid: 42,
             start_time: "1234".into(),
             process_name: "codex-code-mode".into(),
+            process_kind: RemoteCodexProcessKind::AppServer,
             version: "0.145.0".into(),
             release_path: "/home/u/.codex/packages/standalone/releases/0.145.0".into(),
         };
         let script = remote_codex_process_termination_script(&[process]);
         assert!(script.contains("kill -TERM \"$pid\""));
         assert!(script.contains("managed_start"));
+        assert!(script.contains("managed_kind"));
         assert!(script.contains("process-impact-changed"));
         for forbidden in ["pkill", "killall", "SIGKILL", "kill -9", "kill -TERM -"] {
             assert!(!script.contains(forbidden), "unexpected {forbidden}");
         }
+    }
+
+    #[test]
+    fn unknown_process_kind_cannot_be_approved_for_termination() {
+        let process = RemoteCodexProcessIdentity {
+            pid: 42,
+            start_time: "1234".into(),
+            process_name: "codex".into(),
+            process_kind: RemoteCodexProcessKind::Unknown,
+            version: "0.145.0".into(),
+            release_path: "/home/u/.codex/packages/standalone/releases/0.145.0".into(),
+        };
+        assert!(validate_approved_processes(&[process]).is_err());
     }
 
     #[test]
@@ -561,11 +624,37 @@ mod tests {
     }
 
     #[test]
+    fn process_kind_classification_matches_app_services_and_sessions() {
+        let cases = [
+            (
+                "2f62696e2f636f646578006170702d7365727665720070726f787900",
+                "app-server-proxy",
+            ),
+            (
+                "2f62696e2f636f646578002d630066656174757265732e636f64655f6d6f64655f686f73743d74727565006170702d736572766572002d2d6c697374656e00756e69783a2f2f00",
+                "app-server",
+            ),
+            ("2f62696e2f636f64657800726573756d6500", "codex-session"),
+            ("", "unknown"),
+        ];
+        for (cmdline_hex, expected) in cases {
+            let script = format!(
+                "{PROCESS_DISCOVERY_FUNCTIONS}\nclassify_cmdline_hex '{cmdline_hex}'\nprintf '%s' \"$managed_kind\""
+            );
+            let Some(actual) = run_posix_shell(&script) else {
+                return;
+            };
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
     fn process_gate_scripts_are_posix_shell_syntax() {
         let process = RemoteCodexProcessIdentity {
             pid: 42,
             start_time: "1234".into(),
             process_name: "codex-code-mode".into(),
+            process_kind: RemoteCodexProcessKind::AppServerProxy,
             version: "0.145.0".into(),
             release_path: "/home/u/.codex/packages/standalone/releases/0.145.0".into(),
         };

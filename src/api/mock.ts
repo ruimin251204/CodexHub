@@ -1161,6 +1161,7 @@ function mockBatchRemoteCodexProcessPreflight(
           pid: 4100 + index,
           startTime: `${9000 + index}`,
           processName: index % 2 === 0 ? "codex" : "codex-code-mode",
+          processKind: index % 2 === 0 ? "app-server" : "app-server-proxy",
           version: "0.31.0",
           releasePath: `/home/mock/.codex/packages/standalone/releases/0.31.0`
         }] : [],

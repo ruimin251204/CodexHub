@@ -1824,6 +1824,7 @@ for (const token of [
   "applyHostOperationProgressConnectivityToHosts",
   "api.previewBatchRemoteCodexUpdate(uniqueAliases, 120000, requestId)",
   "api.batchRemoteUpdateCodex(plans, 120000, requestId",
+  "handleUpdateOutdatedCodexHosts([hostAlias])",
   "applyHostOperationProgressEvent(current, event)",
   "aggregateOperationStatus(current.hosts)",
   'status: hostIndex < 6 ? "running" : "pending"',

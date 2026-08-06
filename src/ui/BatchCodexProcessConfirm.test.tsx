@@ -55,8 +55,8 @@ describe("BatchCodexProcessConfirmModal", () => {
                 ok: true,
                 message: "Two processes",
                 processes: [
-                  { pid: 41, startTime: "100", processName: "codex", version: "0.145.0", releasePath: "/home/a/releases/0.145.0" },
-                  { pid: 42, startTime: "101", processName: "codex-code-mode", version: "0.145.0", releasePath: "/home/a/releases/0.145.0" }
+                  { pid: 41, startTime: "100", processName: "codex", processKind: "app-server", version: "0.145.0", releasePath: "/home/a/releases/0.145.0" },
+                  { pid: 42, startTime: "101", processName: "codex-code-mode", processKind: "app-server-proxy", version: "0.145.0", releasePath: "/home/a/releases/0.145.0" }
                 ]
               },
               {
@@ -64,7 +64,7 @@ describe("BatchCodexProcessConfirmModal", () => {
                 ok: true,
                 message: "One process",
                 processes: [
-                  { pid: 51, startTime: "200", processName: "codex", version: "0.145.0", releasePath: "/home/b/releases/0.145.0" }
+                  { pid: 51, startTime: "200", processName: "codex", processKind: "codex-session", version: "0.145.0", releasePath: "/home/b/releases/0.145.0" }
                 ]
               },
               { hostAlias: "clear-c", ok: true, message: "Clear", processes: [] }
@@ -77,7 +77,8 @@ describe("BatchCodexProcessConfirmModal", () => {
     );
 
     expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
-    expect(screen.getByText("PID 42 · codex-code-mode · 0.145.0")).toBeVisible();
+    expect(screen.getByText("PID 42 · Codex App SSH proxy · 0.145.0")).toBeVisible();
+    expect(screen.getAllByText(/temporarily disconnects this host/)).not.toHaveLength(0);
     expect(screen.getByText("Continues automatically")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Select all affected hosts" }));
     const checkboxes = screen.getAllByRole("checkbox");
@@ -87,5 +88,43 @@ describe("BatchCodexProcessConfirmModal", () => {
     fireEvent.click(checkboxes[1]);
     fireEvent.click(screen.getByRole("button", { name: "Continue with selection" }));
     expect(onConfirm).toHaveBeenCalledWith(["busy-a"]);
+  });
+
+  test("blocks a single host when any process classification is unknown", () => {
+    const onConfirm = vi.fn();
+    render(
+      <BatchCodexProcessConfirmModal
+        copy={uiCopy.en}
+        hosts={[host("unknown-a", "Unknown host")]}
+        request={{
+          requestId: "single-process-1",
+          preview: {
+            requestId: "single-process-1",
+            results: [{
+              hostAlias: "unknown-a",
+              ok: true,
+              message: "One unclassified process",
+              processes: [{
+                pid: 61,
+                startTime: "300",
+                processName: "codex",
+                processKind: "unknown",
+                version: "0.145.0",
+                releasePath: "/home/a/releases/0.145.0"
+              }]
+            }]
+          }
+        }}
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />
+    );
+
+    expect(screen.getByText("PID 61 · Unclassified Codex process · 0.145.0")).toBeVisible();
+    expect(screen.getByText(/could not be safely classified/)).toBeVisible();
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Select all affected hosts" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Continue with selection" }));
+    expect(onConfirm).toHaveBeenCalledWith([]);
   });
 });

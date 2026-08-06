@@ -31,6 +31,7 @@ import type {
   RemoteCodexAction,
   RemoteCodexBatchHostPlan,
   RemoteCodexMaintenanceResult,
+  RemoteCodexProcessIdentity,
   RemoteCodexProcessPreflightResult,
   RemoteCodexReloadMode,
   RemoteCodexReloadStatus,
@@ -892,7 +893,9 @@ export const uiCopy = {
       started: "Started remote maintenance.",
       testStarted: "Testing this host and its remote Codex environment.",
       batchTestStarted: (count: number) => `Testing ${count} hosts with up to six running at once.`,
-      batchUpdateStarted: (count: number) => `Updating Codex on ${count} hosts with up to six running at once.`,
+      batchUpdateStarted: (count: number) => count === 1
+        ? "Updating Codex on this host."
+        : `Updating Codex on ${count} hosts with up to six running at once.`,
       batchProcessPreflight: (count: number) => `Checking running Codex processes on ${count} hosts before any remote change.`,
       batchProcessConfirmTitle: "Confirm affected Codex processes",
       batchProcessConfirmBody: (hosts: number, processes: number) =>
@@ -903,9 +906,17 @@ export const uiCopy = {
       batchProcessAutoContinue: "Continues automatically",
       batchProcessNoImpact: "No running managed-release process; this host will continue automatically.",
       batchProcessUnavailable: "Process identity could not be verified; this host will fail without starting installation or update.",
+      batchProcessUnknown: "At least one process could not be safely classified. CodexHub will not stop processes on this host.",
+      batchProcessReconnectWarning: "Stopping Codex App services or proxies temporarily disconnects this host. Reconnect after the update to use the new version.",
       batchProcessDeclined: "Unselected hosts will fail without remote mutation. Exit their related processes manually, then retry.",
       batchProcessCount: (count: number) => `${count} process${count === 1 ? "" : "es"} will be stopped`,
-      batchProcessItem: (pid: number, name: string, version: string) => `PID ${pid} · ${name} · ${version}`,
+      batchProcessKind: (kind: RemoteCodexProcessIdentity["processKind"]) => ({
+        "app-server": "Codex App background service",
+        "app-server-proxy": "Codex App SSH proxy",
+        "codex-session": "Codex CLI/session",
+        unknown: "Unclassified Codex process"
+      })[kind],
+      batchProcessItem: (pid: number, kind: string, version: string) => `PID ${pid} · ${kind} · ${version}`,
       waiting: "Waiting for remote output...",
       installHint: "Install tries the official installer, remote native mirror, remote npm mirror, local upload, then final verification.",
       updateHint: "Update tries the official installer, remote native mirror, remote npm mirror, local upload, then final verification and staged backup of verified older runtimes under ~/.codex-hub/deletion-backups/.",
@@ -926,7 +937,7 @@ export const uiCopy = {
         api: ["API configuration", "Check remote Codex configuration and credential environment readiness."],
         skills: ["Skills", "Check the remote Codex skills directory and inventory."],
         preparation: ["Preparation", "Check SSH, the current Codex state, platform, tools, and user paths."],
-        "process-impact": ["Running process safety", "Verify the unified batch approval and stop only strictly matched managed-release processes."],
+        "process-impact": ["Running process safety", "Verify the approved process identities and stop only strictly matched managed-release processes."],
         "path-repair": ["Shell PATH", "Verify ~/.local/bin and repair the remote user's shell PATH when required."],
         "official-installer": ["Official installer", "Try the official Codex installer with strict TLS verification."],
         "remote-native-mirror": ["Remote native mirror package", "Download and verify the matching native package on the host."],
@@ -1787,7 +1798,9 @@ export const uiCopy = {
       started: "已开始远端维护。",
       testStarted: "正在测试主机及其远端 Codex 环境。",
       batchTestStarted: (count: number) => `正在测试 ${count} 台主机，同时最多运行 6 台。`,
-      batchUpdateStarted: (count: number) => `正在更新 ${count} 台主机的 Codex，同时最多运行 6 台。`,
+      batchUpdateStarted: (count: number) => count === 1
+        ? "正在更新该主机的 Codex。"
+        : `正在更新 ${count} 台主机的 Codex，同时最多运行 6 台。`,
       batchProcessPreflight: (count: number) => `正在并行检查 ${count} 台主机的 Codex 进程，检查完成前不会修改远端。`,
       batchProcessConfirmTitle: "确认受影响的 Codex 进程",
       batchProcessConfirmBody: (hosts: number, processes: number) =>
@@ -1798,9 +1811,17 @@ export const uiCopy = {
       batchProcessAutoContinue: "自动继续",
       batchProcessNoImpact: "没有运行中的托管版本进程，将自动继续。",
       batchProcessUnavailable: "无法安全确认进程身份；该主机不会开始安装或更新，并会记录失败任务。",
+      batchProcessUnknown: "至少有一个进程无法安全分类，CodexHub 不会终止该主机上的任何进程。",
+      batchProcessReconnectWarning: "终止 Codex App 后台服务或 SSH 代理会暂时断开该主机；更新完成后请重新连接以使用新版本。",
       batchProcessDeclined: "未勾选的主机不会发生远端修改，并会记录失败；请手动退出相关进程后重试。",
       batchProcessCount: (count: number) => `将终止 ${count} 个进程`,
-      batchProcessItem: (pid: number, name: string, version: string) => `PID ${pid} · ${name} · ${version}`,
+      batchProcessKind: (kind: RemoteCodexProcessIdentity["processKind"]) => ({
+        "app-server": "Codex App 后台服务",
+        "app-server-proxy": "Codex App SSH 代理",
+        "codex-session": "Codex CLI/会话",
+        unknown: "无法分类的 Codex 进程"
+      })[kind],
+      batchProcessItem: (pid: number, kind: string, version: string) => `PID ${pid} · ${kind} · ${version}`,
       waiting: "正在等待远端输出...",
       installHint: "安装会依次尝试官方安装器、远端原生镜像、远端 npm 镜像、本地上传，然后最终验证。",
       updateHint: "更新会依次尝试官方安装器、远端原生镜像、远端 npm 镜像、本地上传，完成最终验证后将已确认的旧运行时移入 ~/.codex-hub/deletion-backups/。",
@@ -1821,7 +1842,7 @@ export const uiCopy = {
         api: ["API 配置", "检查远端 Codex 配置及凭据环境是否就绪。"],
         skills: ["Skills", "检查远端 Codex skills 目录和技能数量。"],
         preparation: ["前期准备", "检查 SSH、当前 Codex、平台、必要工具和用户目录。"],
-        "process-impact": ["运行进程安全确认", "复核统一批量授权，仅终止严格匹配的托管 release 进程。"],
+        "process-impact": ["运行进程安全确认", "复核已批准的进程身份，仅终止严格匹配的托管 release 进程。"],
         "path-repair": ["Shell PATH", "检查 ~/.local/bin，必要时修复远端用户的 Shell PATH。"],
         "official-installer": ["官方安装器", "使用严格 TLS 校验尝试官方 Codex 安装器。"],
         "remote-native-mirror": ["远端镜像原生包", "在主机上下载并校验匹配架构的原生包。"],
@@ -3972,6 +3993,16 @@ function App() {
       });
       return { ok: true };
     }
+    if (action === "update") {
+      // Single-host updates use the same preview and approval protocol as batch updates.
+      try {
+        return await handleUpdateOutdatedCodexHosts([hostAlias]);
+      } catch (error) {
+        const errorMessage = formatError(error);
+        setErrorNotice(`${target?.name ?? hostAlias}: ${errorMessage}`, taskIdForError(error));
+        return { ok: false, message: errorMessage };
+      }
+    }
     return runRemoteCodexAction(hostAlias, action);
   };
 
@@ -5466,7 +5497,9 @@ export function BatchCodexProcessConfirmModal({
   );
   const selectableAliases = useMemo(
     () => request.preview.results
-      .filter((item) => item.ok && item.processes.length > 0)
+      .filter((item) => item.ok
+        && item.processes.length > 0
+        && item.processes.every((process) => process.processKind !== "unknown"))
       .map((item) => item.hostAlias),
     [request.preview.results]
   );
@@ -5505,7 +5538,11 @@ export function BatchCodexProcessConfirmModal({
 
       <div className="batchProcessHostList">
         {request.preview.results.map((item) => {
-          const selectable = item.ok && item.processes.length > 0;
+          const hasUnknownProcess = item.processes.some((process) => process.processKind === "unknown");
+          const hasAppService = item.processes.some((process) => (
+            process.processKind === "app-server" || process.processKind === "app-server-proxy"
+          ));
+          const selectable = item.ok && item.processes.length > 0 && !hasUnknownProcess;
           const selected = selectedSet.has(item.hostAlias);
           return (
             <label
@@ -5524,9 +5561,11 @@ export function BatchCodexProcessConfirmModal({
                 <span className="batchProcessHostHeading">
                   <strong>{hostNames.get(item.hostAlias.toLowerCase()) ?? item.hostAlias}</strong>
                   <code>{item.hostAlias}</code>
-                  <Badge tone={!item.ok ? "red" : selectable ? "yellow" : "green"}>
+                  <Badge tone={!item.ok || hasUnknownProcess ? "red" : selectable ? "yellow" : "green"}>
                     {!item.ok
                       ? copy.codexOperation.failed
+                      : hasUnknownProcess
+                        ? copy.codexOperation.failed
                       : selectable
                         ? copy.codexOperation.batchProcessCount(item.processes.length)
                         : copy.codexOperation.batchProcessAutoContinue}
@@ -5540,11 +5579,21 @@ export function BatchCodexProcessConfirmModal({
                   <span className="batchProcessItems">
                     {item.processes.map((process) => (
                       <small key={`${process.pid}-${process.startTime}`}>
-                        {copy.codexOperation.batchProcessItem(process.pid, process.processName, process.version)}
+                        {copy.codexOperation.batchProcessItem(
+                          process.pid,
+                          copy.codexOperation.batchProcessKind(process.processKind),
+                          process.version
+                        )}
                       </small>
                     ))}
                   </span>
                 )}
+                {hasUnknownProcess ? (
+                  <small>{copy.codexOperation.batchProcessUnknown}</small>
+                ) : null}
+                {hasAppService && !hasUnknownProcess ? (
+                  <small>{copy.codexOperation.batchProcessReconnectWarning}</small>
+                ) : null}
               </span>
             </label>
           );

@@ -319,6 +319,7 @@ mod tests {
             HostOperationKind::decl(&config),
             HostOperationProgressEvent::decl(&config),
             RemoteCodexMaintenanceResult::decl(&config),
+            RemoteCodexProcessKind::decl(&config),
             RemoteCodexProcessIdentity::decl(&config),
             RemoteCodexProcessPreflightItem::decl(&config),
             RemoteCodexProcessPreflightResult::decl(&config),
