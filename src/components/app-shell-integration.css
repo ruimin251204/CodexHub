@@ -14,10 +14,15 @@
 }
 
 .codexHubMain {
-  /* This is the single owner of the detail-surface corner and background. */
+  /* This is the single owner of the raised detail-surface edge, corner, and background. */
+  position: relative;
+  z-index: 1;
   overflow: hidden;
+  border-top: 1px solid var(--ch-main-surface-border);
+  border-left: 1px solid var(--ch-main-surface-border);
   border-top-left-radius: var(--radius-lg);
   background: var(--surface-solid);
+  box-shadow: var(--ch-main-surface-side-shadow);
 }
 
 .codexHubContent {
@@ -37,7 +42,9 @@
 }
 
 .desktopFrame[data-custom-titlebar="true"] .appTitleBar::after {
-  display: none;
+  display: block;
+  background: transparent;
+  box-shadow: var(--ch-main-surface-top-shadow);
 }
 
 .codexHubSidebarBrand {

@@ -16,6 +16,9 @@
   --ch-border-strong: var(--border-strong, rgba(15, 23, 42, 0.18));
   --ch-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
   --ch-shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --ch-main-surface-border: rgba(15, 23, 42, 0.11);
+  --ch-main-surface-side-shadow: -6px 0 18px rgba(15, 23, 42, 0.045);
+  --ch-main-surface-top-shadow: 0 -5px 14px rgba(15, 23, 42, 0.08);
   --ch-radius-sm: 8px;
   --ch-radius-md: 10px;
   --ch-radius-lg: 12px;
@@ -35,6 +38,9 @@
   --ch-info: #7eb2ff;
   --ch-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.16);
   --ch-shadow-md: 0 12px 34px rgba(0, 0, 0, 0.28);
+  --ch-main-surface-border: rgba(255, 255, 255, 0.08);
+  --ch-main-surface-side-shadow: -6px 0 20px rgba(0, 0, 0, 0.18);
+  --ch-main-surface-top-shadow: 0 -5px 16px rgba(0, 0, 0, 0.24);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +54,9 @@
     --ch-info: #7eb2ff;
     --ch-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.16);
     --ch-shadow-md: 0 12px 34px rgba(0, 0, 0, 0.28);
+    --ch-main-surface-border: rgba(255, 255, 255, 0.08);
+    --ch-main-surface-side-shadow: -6px 0 20px rgba(0, 0, 0, 0.18);
+    --ch-main-surface-top-shadow: 0 -5px 16px rgba(0, 0, 0, 0.24);
   }
 }
 
