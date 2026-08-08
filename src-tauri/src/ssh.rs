@@ -785,12 +785,45 @@ pub fn list_ssh_config_hosts() -> Result<Vec<SshConfigHost>, String> {
 }
 
 pub fn upsert_ssh_config_host(draft: SshHostDraft) -> Result<SshConfigWriteResult, String> {
+    upsert_ssh_config_host_from(draft, None)
+}
+
+/// Renames an existing SSH Host when `original_alias` differs from the draft alias.
+/// The complete config is backed up once before the rewritten block is persisted.
+pub fn upsert_ssh_config_host_from(
+    draft: SshHostDraft,
+    original_alias: Option<String>,
+) -> Result<SshConfigWriteResult, String> {
     let draft = normalize_draft(draft)?;
+    let original_alias = original_alias
+        .as_deref()
+        .map(validate_ssh_alias)
+        .transpose()?
+        .unwrap_or_else(|| draft.alias.clone());
     let path = config_path()?;
     let (existing, existed) = read_optional_config(&path)?;
     let managed_exists = find_managed_host_block(&existing, &draft.alias)?.is_some();
     let local_exists = find_local_host_block(&existing, &draft.alias)?.is_some();
-    let next = if managed_exists {
+    let renaming = !original_alias.eq_ignore_ascii_case(&draft.alias);
+    let original_managed = find_managed_host_block(&existing, &original_alias)?.is_some();
+    let original_local = find_local_host_block(&existing, &original_alias)?.is_some();
+    if renaming && (managed_exists || local_exists) {
+        return Err(format!(
+            "Host {} already exists in SSH config.",
+            draft.alias
+        ));
+    }
+    if renaming && !original_managed && !original_local {
+        return Err(format!(
+            "Host {original_alias} was not found in SSH config."
+        ));
+    }
+
+    let next = if renaming && original_managed {
+        rename_managed_host_block(&existing, &original_alias, &draft)?
+    } else if renaming && original_local {
+        rename_local_host_block(&existing, &original_alias, &draft)?
+    } else if managed_exists {
         upsert_managed_host_block(&existing, &draft)?
     } else if local_exists {
         upsert_local_host_block(&existing, &draft)?
@@ -815,7 +848,11 @@ pub fn upsert_ssh_config_host(draft: SshHostDraft) -> Result<SshConfigWriteResul
     }
 
     let backup_path = write_config_with_backup(&path, &next, existed)?;
-    let (action, host, source_label) = if managed_exists {
+    let (action, host, source_label) = if renaming && original_managed {
+        ("renamed", host_from_draft(&draft), "CodexHub-managed")
+    } else if renaming && original_local {
+        ("local_renamed", local_host_from_draft(&draft), "local")
+    } else if managed_exists {
         ("updated", host_from_draft(&draft), "CodexHub-managed")
     } else if local_exists {
         ("local_updated", local_host_from_draft(&draft), "local")
@@ -830,8 +867,9 @@ pub fn upsert_ssh_config_host(draft: SshHostDraft) -> Result<SshConfigWriteResul
         backup_path: backup_path.as_ref().map(|item| path_string(item)),
         host: Some(host),
         message: format!(
-            "Host {} was updated in the {source_label} SSH config block.",
-            draft.alias
+            "Host {} was {} in the {source_label} SSH config block.",
+            draft.alias,
+            if renaming { "renamed" } else { "updated" }
         ),
     })
 }
@@ -2212,6 +2250,24 @@ fn upsert_managed_host_block(content: &str, draft: &SshHostDraft) -> Result<Stri
     }
 }
 
+fn rename_managed_host_block(
+    content: &str,
+    original_alias: &str,
+    draft: &SshHostDraft,
+) -> Result<String, String> {
+    let block = find_managed_host_block(content, original_alias)?
+        .ok_or_else(|| format!("Host {original_alias} was not found in managed SSH config."))?;
+    let lines = split_lines_inclusive(content);
+    let mut next = String::new();
+    next.push_str(&lines[..block.range.start].concat());
+    next.push_str(&render_managed_block_with_newline(
+        draft,
+        detect_newline(content),
+    ));
+    next.push_str(&lines[block.range.end..].concat());
+    Ok(next)
+}
+
 fn upsert_local_host_block(content: &str, draft: &SshHostDraft) -> Result<String, String> {
     let block = find_local_host_block(content, &draft.alias)?
         .ok_or_else(|| format!("Host {} was not found in local SSH config.", draft.alias))?;
@@ -2230,6 +2286,48 @@ fn upsert_local_host_block(content: &str, draft: &SshHostDraft) -> Result<String
             .aliases
             .iter()
             .filter(|alias| !alias.eq_ignore_ascii_case(&draft.alias))
+            .cloned()
+            .collect::<Vec<_>>();
+        next.push_str(&rewrite_local_host_block(
+            block_lines,
+            &remaining_aliases,
+            None,
+        ));
+        if !next.ends_with('\n') {
+            next.push('\n');
+        }
+        next.push_str(&rewrite_local_host_block(
+            block_lines,
+            &[draft.alias.clone()],
+            Some(draft),
+        ));
+    }
+    next.push_str(&lines[block.range.end..].concat());
+    Ok(next)
+}
+
+fn rename_local_host_block(
+    content: &str,
+    original_alias: &str,
+    draft: &SshHostDraft,
+) -> Result<String, String> {
+    let block = find_local_host_block(content, original_alias)?
+        .ok_or_else(|| format!("Host {original_alias} was not found in local SSH config."))?;
+    let lines = split_lines_inclusive(content);
+    let block_lines = &lines[block.range.clone()];
+    let mut next = String::new();
+    next.push_str(&lines[..block.range.start].concat());
+    if block.aliases.len() == 1 {
+        next.push_str(&rewrite_local_host_block(
+            block_lines,
+            &[draft.alias.clone()],
+            Some(draft),
+        ));
+    } else {
+        let remaining_aliases = block
+            .aliases
+            .iter()
+            .filter(|alias| !alias.eq_ignore_ascii_case(original_alias))
             .cloned()
             .collect::<Vec<_>>();
         next.push_str(&rewrite_local_host_block(
@@ -2693,6 +2791,22 @@ mod tests {
     }
 
     #[test]
+    fn rename_managed_block_rewrites_markers_and_alias_in_place() {
+        let content =
+            upsert_managed_host_block("Host github.com\n    User git\n", &draft("6")).expect("add");
+        let renamed =
+            rename_managed_host_block(&content, "6", &draft("server-6")).expect("rename managed");
+
+        assert!(renamed.contains("Host github.com\n    User git\n"));
+        assert!(renamed.contains("# >>> CodexHub managed host: server-6\nHost server-6\n"));
+        assert!(!renamed.contains("managed host: 6"));
+        assert_eq!(
+            parse_managed_hosts(&renamed).expect("parse")[0].alias,
+            "server-6"
+        );
+    }
+
+    #[test]
     fn update_local_single_alias_block_in_place() {
         let content = "Host lab\n    HostName old.example\n    ProxyJump bastion\n";
         let mut changed = draft("lab");
@@ -2722,6 +2836,20 @@ mod tests {
         assert!(next.contains("HostName shared.example"));
         assert!(next.contains("HostName 10.9.8.7"));
         assert!(next.contains("User codex"));
+        assert_eq!(next.matches("ProxyJump bastion").count(), 2);
+    }
+
+    #[test]
+    fn rename_local_multi_alias_block_preserves_other_aliases() {
+        let content = "Host lab 6 other\n    HostName shared.example\n    User shared\n    ProxyJump bastion\n";
+        let mut changed = draft("server-6");
+        changed.host_name = "10.9.8.7".into();
+        let next = rename_local_host_block(content, "6", &changed).expect("rename local");
+
+        assert!(next.contains("Host lab other\n"));
+        assert!(next.contains("Host server-6\n"));
+        assert!(!next.contains("Host lab 6 other"));
+        assert!(next.contains("HostName 10.9.8.7"));
         assert_eq!(next.matches("ProxyJump bastion").count(), 2);
     }
 

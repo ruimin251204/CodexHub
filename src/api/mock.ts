@@ -1524,7 +1524,7 @@ export const mockApi: CodexHubApi = {
     throw new Error("The Tauri desktop backend is required to generate SSH keys.");
   },
   listSshConfigHosts: async () => clone(fallbackSshConfigHosts),
-  upsertSshConfigHost: async (_draft: SshHostDraft) => {
+  upsertSshConfigHost: async (_draft: SshHostDraft, _originalAlias?: string) => {
     throw new Error("The Tauri desktop backend is required to write SSH config.");
   },
   deleteSshConfigHost: async (alias: string): Promise<SshConfigDeleteResult> => {

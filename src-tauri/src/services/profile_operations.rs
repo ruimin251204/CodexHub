@@ -1287,6 +1287,7 @@ load_process() {{
   proc_argv0=$(tr '\000' '\n' <"$proc_dir/cmdline" 2>/dev/null | sed -n '1p')
   proc_arg1=$(tr '\000' '\n' <"$proc_dir/cmdline" 2>/dev/null | sed -n '2p')
   proc_arg2=$(tr '\000' '\n' <"$proc_dir/cmdline" 2>/dev/null | sed -n '3p')
+  proc_arg3=$(tr '\000' '\n' <"$proc_dir/cmdline" 2>/dev/null | sed -n '4p')
   [ -n "$proc_argv0" ] || return 1
   proc_base=${{proc_argv0##*/}}
   proc_arg1_base=${{proc_arg1##*/}}
@@ -1325,6 +1326,12 @@ is_app_service() {{
     codex:codex:app-server|codex:codex:remote-control) return 0 ;;
     codex-app-server:codex-app-server:*|codex-app-server:codex-app-serve:*) return 0 ;;
     codex-remote-control:codex-remote-control:*|codex-remote-control:codex-remote-co:*) return 0 ;;
+  esac
+  # Codex may place one inline config override before the service subcommand.
+  case "$proc_base:$proc_comm:$proc_arg1:$proc_arg3" in
+    codex:codex:-c:app-server|codex:codex:-c:remote-control|codex:codex:--config:app-server|codex:codex:--config:remote-control)
+      [ -n "$proc_arg2" ] && return 0
+      ;;
   esac
   return 1
 }}

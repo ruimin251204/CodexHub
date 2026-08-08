@@ -191,7 +191,8 @@ export const desktopApi: CodexHubApi = {
   getSshStatus: () => requiredInvoke<SshStatusDto>("get_ssh_status"),
   generateEd25519Key: () => requiredInvoke<SshKeyGenerationResultDto>("generate_ed25519_key"),
   listSshConfigHosts: () => requiredInvoke<SshConfigHostDto[]>("list_ssh_config_hosts"),
-  upsertSshConfigHost: (draft: SshHostDraft) => requiredInvoke<SshConfigWriteResultDto>("upsert_ssh_config_host", { draft }),
+  upsertSshConfigHost: (draft: SshHostDraft, originalAlias?: string) =>
+    requiredInvoke<SshConfigWriteResultDto>("upsert_ssh_config_host", { draft, originalAlias }),
   deleteSshConfigHost: (alias: string): Promise<SshConfigDeleteResult> =>
     requiredInvoke<SshConfigDeleteResultDto>("delete_ssh_config_host", { alias: requireHostAlias("delete_ssh_config_host", alias) }),
   listHosts: () => requiredInvoke<HostDto[]>("list_hosts").then((hosts) => hosts.map(normalizeHost)),

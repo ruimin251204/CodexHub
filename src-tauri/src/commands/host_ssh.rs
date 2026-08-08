@@ -19,8 +19,9 @@ pub(crate) async fn list_ssh_config_hosts() -> Result<Vec<ssh::SshConfigHost>, S
 pub(crate) fn upsert_ssh_config_host(
     app: AppHandle,
     draft: ssh::SshHostDraft,
+    original_alias: Option<String>,
 ) -> Result<ssh::SshConfigWriteResult, String> {
-    services::host_use_cases::execute_upsert_ssh_config_host(app, draft)
+    services::host_use_cases::execute_upsert_ssh_config_host(app, draft, original_alias)
 }
 
 #[tauri::command]

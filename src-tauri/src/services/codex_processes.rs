@@ -7,6 +7,7 @@ pub(crate) enum RemoteCodexProcessGate {
     Bypass,
     ExpectClear,
     Terminate(Vec<RemoteCodexProcessIdentity>),
+    ForceTerminate(Vec<RemoteCodexProcessIdentity>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,14 +87,16 @@ pub(crate) fn enforce_remote_codex_process_gate(
                 message: "No running managed-release process requires termination.".into(),
             })
         }
-        RemoteCodexProcessGate::Terminate(processes) => {
+        RemoteCodexProcessGate::Terminate(processes)
+        | RemoteCodexProcessGate::ForceTerminate(processes) => {
+            let force = matches!(gate, RemoteCodexProcessGate::ForceTerminate(_));
             validate_approved_processes(processes)?;
-            let script = remote_codex_process_termination_script(processes);
+            let script = remote_codex_process_termination_script(processes, force);
             let output =
                 ssh::run_ssh_script(alias, &script, timeout_ms.max(30_000)).map_err(|error| {
                     format!("Could not terminate approved Codex processes: {error}")
                 })?;
-            let result = parse_remote_codex_process_termination(&output)?;
+            let result = parse_remote_codex_process_termination(&output, force)?;
             if result.targeted != processes.len() {
                 return Err(
                     "Remote process termination returned an inconsistent approval count.".into(),
@@ -212,6 +215,7 @@ fn validate_approved_processes(processes: &[RemoteCodexProcessIdentity]) -> Resu
 
 fn parse_remote_codex_process_termination(
     output: &ssh::SshCommandOutput,
+    force: bool,
 ) -> Result<RemoteCodexProcessGateResult, String> {
     let status = marker_value(&output.stdout, "CODEXHUB_PROCESS_TERMINATION_STATUS")
         .unwrap_or_else(|| "failed".into());
@@ -220,7 +224,8 @@ fn parse_remote_codex_process_termination(
         .unwrap_or_else(|| "identity-unavailable".into());
     let targeted = marker_usize(&output.stdout, "CODEXHUB_PROCESS_TERMINATION_TARGETED")?;
     let stopped = marker_usize(&output.stdout, "CODEXHUB_PROCESS_TERMINATION_STOPPED")?;
-    if status != "stopped" || !output.success() || stopped > targeted {
+    let forced = marker_usize(&output.stdout, "CODEXHUB_PROCESS_TERMINATION_FORCED")?;
+    if status != "stopped" || !output.success() || stopped > targeted || (!force && forced != 0) {
         return Err(format!(
             "Approved Codex processes were not safely stopped ({reason}); installation/update was not started."
         ));
@@ -228,7 +233,13 @@ fn parse_remote_codex_process_termination(
     Ok(RemoteCodexProcessGateResult {
         targeted,
         stopped,
-        message: format!("Stopped {stopped}/{targeted} approved Codex process(es) with SIGTERM."),
+        message: if force {
+            format!(
+                "Force-cleared {stopped}/{targeted} approved Codex process(es); SIGKILL was required {forced} time(s) for stubborn or restarted processes."
+            )
+        } else {
+            format!("Stopped {stopped}/{targeted} approved Codex process(es) with SIGTERM.")
+        },
     })
 }
 
@@ -277,7 +288,10 @@ fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-fn remote_codex_process_termination_script(processes: &[RemoteCodexProcessIdentity]) -> String {
+fn remote_codex_process_termination_script(
+    processes: &[RemoteCodexProcessIdentity],
+    force: bool,
+) -> String {
     let approved_rows = processes
         .iter()
         .map(|process| {
@@ -291,7 +305,7 @@ fn remote_codex_process_termination_script(processes: &[RemoteCodexProcessIdenti
             )
         })
         .collect::<String>();
-    complete_termination_template().replace("__APPROVED_ROWS__", &approved_rows)
+    complete_termination_template(force).replace("__APPROVED_ROWS__", &approved_rows)
 }
 
 fn process_kind_wire_value(kind: &RemoteCodexProcessKind) -> &'static str {
@@ -451,10 +465,12 @@ current_file="$work_dir/current"
 second_file="$work_dir/second"
 targeted=0
 stopped=0
+forced=0
 emit_result() {
   printf 'CODEXHUB_PROCESS_TERMINATION_STATUS=%s\n' "$1"
   printf 'CODEXHUB_PROCESS_TERMINATION_TARGETED=%s\n' "$targeted"
   printf 'CODEXHUB_PROCESS_TERMINATION_STOPPED=%s\n' "$stopped"
+  printf 'CODEXHUB_PROCESS_TERMINATION_FORCED=%s\n' "$forced"
   printf 'CODEXHUB_PROCESS_TERMINATION_REASON=%s\n' "$2"
 }
 cleanup() { rm -f "$approved_file" "$current_file" "$second_file"; rmdir "$work_dir" 2>/dev/null || true; }
@@ -504,16 +520,134 @@ stopped=$(awk 'END { print NR + 0 }' "$second_file" 2>/dev/null) || { emit_resul
 emit_result stopped completed
 "#;
 
+const REMOTE_CODEX_PROCESS_FORCE_TERMINATION_TAIL: &str = r#"
+targeted=$(awk 'END { print NR + 0 }' "$approved_file" 2>/dev/null) || { emit_result failed approval-unavailable; exit 4; }
+[ "$targeted" -gt 0 ] && [ "$targeted" -le 128 ] || { emit_result failed approval-invalid; exit 4; }
+
+# Explicit Update authorization permits exact-PID escalation only inside approved releases.
+approved_release_contains() {
+  wanted_release=$1
+  while IFS="$(printf '\t')" read -r approved_pid approved_start approved_release approved_comm approved_kind; do
+    [ "$approved_release" = "$wanted_release" ] && return 0
+  done <"$approved_file"
+  return 1
+}
+
+validate_force_snapshot() {
+  snapshot_file=$1
+  snapshot_count=0
+  while IFS="$(printf '\t')" read -r pid start release comm kind; do
+    [ -n "$pid" ] || continue
+    [ "$kind" != unknown ] || return 2
+    approved_release_contains "$release" || return 3
+    snapshot_count=$((snapshot_count + 1))
+    [ "$snapshot_count" -le 128 ] || return 2
+  done <"$snapshot_file"
+  return 0
+}
+
+snapshots_match() {
+  left_file=$1
+  right_file=$2
+  while IFS= read -r row; do grep -F -x "$row" "$right_file" >/dev/null 2>&1 || return 1; done <"$left_file"
+  while IFS= read -r row; do grep -F -x "$row" "$left_file" >/dev/null 2>&1 || return 1; done <"$right_file"
+  return 0
+}
+
+stable_force_scan() {
+  scan_managed_processes "$current_file" || return 2
+  scan_managed_processes "$second_file" || return 2
+  snapshots_match "$current_file" "$second_file" || return 4
+  validate_force_snapshot "$second_file"
+}
+
+term_force_snapshot() {
+  while IFS="$(printf '\t')" read -r pid start release comm kind; do
+    [ -n "$pid" ] || continue
+    read_managed_process "$proc_root/$pid"
+    identity_status=$?
+    case "$identity_status" in
+      0)
+        [ "$managed_start" = "$start" ] && [ "$managed_release" = "$release" ] && [ "$managed_comm" = "$comm" ] && [ "$managed_kind" = "$kind" ] && [ "$kind" != unknown ] || continue
+        kill -TERM "$pid" 2>/dev/null || { [ ! -d "$proc_root/$pid" ] || return 2; }
+        ;;
+      1) ;;
+      *) return 2 ;;
+    esac
+  done <"$second_file"
+  return 0
+}
+
+kill_force_snapshot() {
+  while IFS="$(printf '\t')" read -r pid start release comm kind; do
+    [ -n "$pid" ] || continue
+    read_managed_process "$proc_root/$pid"
+    identity_status=$?
+    case "$identity_status" in
+      0)
+        [ "$managed_start" = "$start" ] && [ "$managed_release" = "$release" ] && [ "$managed_comm" = "$comm" ] && [ "$managed_kind" = "$kind" ] && [ "$kind" != unknown ] || continue
+        kill -KILL "$pid" 2>/dev/null || { [ ! -d "$proc_root/$pid" ] || return 2; }
+        forced=$((forced + 1))
+        ;;
+      1) ;;
+      *) return 2 ;;
+    esac
+  done <"$second_file"
+  return 0
+}
+
+cycles=0
+empty_checks=0
+# Require two stable empty observations so an App-triggered replacement cannot race installation.
+while [ "$cycles" -lt 6 ]; do
+  stable_force_scan
+  scan_status=$?
+  case "$scan_status" in
+    0) ;;
+    3) emit_result failed process-outside-approved-release; exit 4 ;;
+    4) sleep 1; cycles=$((cycles + 1)); continue ;;
+    *) emit_result failed process-identity-unknown; exit 4 ;;
+  esac
+  if [ "$snapshot_count" -eq 0 ]; then
+    empty_checks=$((empty_checks + 1))
+    [ "$empty_checks" -ge 2 ] && { stopped=$targeted; emit_result stopped force-completed; exit 0; }
+    sleep 1
+    continue
+  fi
+  empty_checks=0
+  term_force_snapshot || { emit_result failed term-failed; exit 4; }
+  sleep 1
+  stable_force_scan
+  scan_status=$?
+  case "$scan_status" in
+    0) ;;
+    3) emit_result failed process-outside-approved-release; exit 4 ;;
+    4) cycles=$((cycles + 1)); continue ;;
+    *) emit_result failed process-identity-unknown; exit 4 ;;
+  esac
+  if [ "$snapshot_count" -gt 0 ]; then
+    kill_force_snapshot || { emit_result failed kill-failed; exit 4; }
+    sleep 1
+  fi
+  cycles=$((cycles + 1))
+done
+emit_result failed force-stop-respawn-limit
+exit 4
+"#;
+
 fn complete_preflight_script() -> String {
     format!(
         "{REMOTE_CODEX_PROCESS_PREFLIGHT_SCRIPT}{PROCESS_DISCOVERY_FUNCTIONS}{REMOTE_CODEX_PROCESS_PREFLIGHT_TAIL}"
     )
 }
 
-fn complete_termination_template() -> String {
-    format!(
-        "{REMOTE_CODEX_PROCESS_TERMINATION_TEMPLATE}{PROCESS_DISCOVERY_FUNCTIONS}{REMOTE_CODEX_PROCESS_TERMINATION_TAIL}"
-    )
+fn complete_termination_template(force: bool) -> String {
+    let tail = if force {
+        REMOTE_CODEX_PROCESS_FORCE_TERMINATION_TAIL
+    } else {
+        REMOTE_CODEX_PROCESS_TERMINATION_TAIL
+    };
+    format!("{REMOTE_CODEX_PROCESS_TERMINATION_TEMPLATE}{PROCESS_DISCOVERY_FUNCTIONS}{tail}")
 }
 
 // Keep the exported constants small while assembling shared process-discovery code once.
@@ -526,6 +660,34 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::process::{Command, Stdio};
+
+    #[cfg(unix)]
+    fn write_fake_process(
+        proc_root: &std::path::Path,
+        release_binary: &std::path::Path,
+        pid: u32,
+        start_time: &str,
+    ) {
+        use std::os::unix::fs::{symlink, MetadataExt};
+
+        let process_dir = proc_root.join(pid.to_string());
+        std::fs::create_dir_all(&process_dir).expect("fake process directory");
+        let uid = std::fs::metadata(proc_root).expect("proc metadata").uid();
+        std::fs::write(
+            process_dir.join("status"),
+            format!("Name:\tcodex\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n"),
+        )
+        .expect("fake status");
+        // Linux stat field 22 is the start time; after removing pid/comm it is awk field 20.
+        std::fs::write(
+            process_dir.join("stat"),
+            format!("{pid} (codex) S {} {start_time}\n", vec!["0"; 18].join(" ")),
+        )
+        .expect("fake stat");
+        std::fs::write(process_dir.join("comm"), "codex\n").expect("fake comm");
+        std::fs::write(process_dir.join("cmdline"), b"codex\0resume\0").expect("fake cmdline");
+        symlink(release_binary, process_dir.join("exe")).expect("fake executable link");
+    }
 
     fn assert_posix_shell_syntax(script: &str) -> bool {
         let mut child = match Command::new("sh").arg("-n").stdin(Stdio::piped()).spawn() {
@@ -592,7 +754,7 @@ mod tests {
             version: "0.145.0".into(),
             release_path: "/home/u/.codex/packages/standalone/releases/0.145.0".into(),
         };
-        let script = remote_codex_process_termination_script(&[process]);
+        let script = remote_codex_process_termination_script(&[process], false);
         assert!(script.contains("kill -TERM \"$pid\""));
         assert!(script.contains("managed_start"));
         assert!(script.contains("managed_kind"));
@@ -600,6 +762,91 @@ mod tests {
         for forbidden in ["pkill", "killall", "SIGKILL", "kill -9", "kill -TERM -"] {
             assert!(!script.contains(forbidden), "unexpected {forbidden}");
         }
+    }
+
+    #[test]
+    fn force_termination_is_explicit_bounded_and_identity_checked() {
+        let process = RemoteCodexProcessIdentity {
+            pid: 42,
+            start_time: "1234".into(),
+            process_name: "codex-code-mode".into(),
+            process_kind: RemoteCodexProcessKind::AppServer,
+            version: "0.145.0".into(),
+            release_path: "/home/u/.codex/packages/standalone/releases/0.145.0".into(),
+        };
+        let script = remote_codex_process_termination_script(&[process], true);
+        for required in [
+            "kill -TERM \"$pid\"",
+            "kill -KILL \"$pid\"",
+            "[ \"$cycles\" -lt 6 ]",
+            "approved_release_contains \"$release\"",
+            "[ \"$managed_start\" = \"$start\" ]",
+            "[ \"$managed_kind\" = \"$kind\" ]",
+            "process-outside-approved-release",
+            "force-stop-respawn-limit",
+        ] {
+            assert!(script.contains(required), "missing {required}");
+        }
+        for forbidden in ["pkill", "killall", "kill -9", "kill -- -", "kill -KILL -"] {
+            assert!(!script.contains(forbidden), "unexpected {forbidden}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn force_termination_fixture_escalates_and_requires_two_empty_scans() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "codexhub-force-stop-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let proc_root = fixture_root.join("proc");
+        let release_root = fixture_root.join("releases");
+        let release_dir = release_root.join("0.145.0");
+        let release_binary = release_dir.join("bin/codex");
+        std::fs::create_dir_all(release_binary.parent().expect("release bin"))
+            .expect("release fixture");
+        std::fs::write(&release_binary, "fixture").expect("release binary");
+        write_fake_process(&proc_root, &release_binary, 42, "1234");
+
+        let process = RemoteCodexProcessIdentity {
+            pid: 42,
+            start_time: "1234".into(),
+            process_name: "codex".into(),
+            process_kind: RemoteCodexProcessKind::CodexSession,
+            version: "0.145.0".into(),
+            release_path: release_dir.to_string_lossy().into_owned(),
+        };
+        let script = remote_codex_process_termination_script(&[process], true)
+            .replace(
+                "kill -TERM \"$pid\" 2>/dev/null",
+                "fixture_kill TERM \"$pid\"",
+            )
+            .replace(
+                "kill -KILL \"$pid\" 2>/dev/null",
+                "fixture_kill KILL \"$pid\"",
+            )
+            .replace("sleep 1", ":");
+        let script = format!(
+            "fixture_kill() {{ [ \"$1\" = TERM ] || mv \"$CODEXHUB_PROC_ROOT/$2\" \"$CODEXHUB_PROC_ROOT/stopped-$2\"; }}\n{script}"
+        );
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(script)
+            .env("CODEXHUB_PROC_ROOT", &proc_root)
+            .env("CODEXHUB_RELEASE_ROOT", &release_root)
+            .env("TMPDIR", &fixture_root)
+            .output()
+            .expect("run force-stop fixture");
+        let stdout = String::from_utf8(output.stdout).expect("fixture stdout");
+        assert!(output.status.success(), "{stdout}");
+        assert!(stdout.contains("CODEXHUB_PROCESS_TERMINATION_STATUS=stopped"));
+        assert!(stdout.contains("CODEXHUB_PROCESS_TERMINATION_FORCED=1"));
+        assert!(stdout.contains("CODEXHUB_PROCESS_TERMINATION_REASON=force-completed"));
+        std::fs::remove_dir_all(&fixture_root).expect("remove fixture");
     }
 
     #[test]
@@ -662,7 +909,10 @@ mod tests {
             return;
         }
         assert!(assert_posix_shell_syntax(
-            &remote_codex_process_termination_script(&[process])
+            &remote_codex_process_termination_script(&[process.clone()], false)
+        ));
+        assert!(assert_posix_shell_syntax(
+            &remote_codex_process_termination_script(&[process], true)
         ));
     }
 }

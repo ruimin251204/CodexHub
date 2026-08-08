@@ -78,6 +78,8 @@ describe("BatchCodexProcessConfirmModal", () => {
 
     expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
     expect(screen.getByText("PID 42 · Codex App SSH proxy · 0.145.0")).toBeVisible();
+    expect(screen.getByText(/exact-PID SIGKILL/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Force stop and update selected" })).toBeVisible();
     expect(screen.getAllByText(/temporarily disconnects this host/)).not.toHaveLength(0);
     expect(screen.getByText("Continues automatically")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Select all affected hosts" }));
@@ -86,7 +88,7 @@ describe("BatchCodexProcessConfirmModal", () => {
     expect(checkboxes[1]).toBeChecked();
     expect(checkboxes[2]).toBeDisabled();
     fireEvent.click(checkboxes[1]);
-    fireEvent.click(screen.getByRole("button", { name: "Continue with selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Force stop and update selected" }));
     expect(onConfirm).toHaveBeenCalledWith(["busy-a"]);
   });
 
@@ -124,7 +126,7 @@ describe("BatchCodexProcessConfirmModal", () => {
     expect(screen.getByText(/could not be safely classified/)).toBeVisible();
     expect(screen.getByRole("checkbox")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Select all affected hosts" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Continue with selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Force stop and update selected" }));
     expect(onConfirm).toHaveBeenCalledWith([]);
   });
 });

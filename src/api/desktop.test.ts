@@ -49,7 +49,7 @@ test("desktop batch update keeps process preview and execution as separate comma
 
   const plans = [{
     hostAlias: "host-a",
-    processAction: "terminate" as const,
+    processAction: "force-terminate" as const,
     approvedProcesses: [{
       pid: 42,
       startTime: "1234",

@@ -23,10 +23,65 @@ pub(crate) async fn execute_list_ssh_config_hosts() -> Result<Vec<ssh::SshConfig
 pub(crate) fn execute_upsert_ssh_config_host(
     app: AppHandle,
     draft: ssh::SshHostDraft,
+    original_alias: Option<String>,
 ) -> Result<ssh::SshConfigWriteResult, String> {
     let state = app.state::<AppState>();
     run_durable_local(&state, "Save SSH Host", "hosts", || {
-        ssh::upsert_ssh_config_host(draft)
+        let target_alias = ssh::validate_ssh_alias(&draft.alias)?;
+        let source_alias = original_alias
+            .as_deref()
+            .map(ssh::validate_ssh_alias)
+            .transpose()?
+            .unwrap_or_else(|| target_alias.clone());
+        let mut next_hosts = load_hosts(&app, &state)?;
+        if !source_alias.eq_ignore_ascii_case(&target_alias)
+            && next_hosts.iter().any(|host| {
+                host.host_alias.eq_ignore_ascii_case(&target_alias)
+                    && !host.host_alias.eq_ignore_ascii_case(&source_alias)
+            })
+        {
+            return Err(format!(
+                "Host {target_alias} already exists in the Host inventory."
+            ));
+        }
+
+        let result = ssh::upsert_ssh_config_host_from(draft, Some(source_alias.clone()))?;
+        if let Some(config_host) = result.host.as_ref() {
+            if let Some(existing) = next_hosts
+                .iter_mut()
+                .find(|host| host.host_alias.eq_ignore_ascii_case(&source_alias))
+            {
+                if existing.name.eq_ignore_ascii_case(&source_alias) {
+                    existing.name = config_host.alias.clone();
+                }
+                existing.host_alias = config_host.alias.clone();
+                existing.source = config_host.source.clone();
+                existing.address = crate::services::host_operations::host_address(config_host);
+                existing.port = config_host.port;
+                existing.username = config_host.user.clone();
+                existing.auth_method = if config_host.identity_file.is_empty() {
+                    crate::AuthMethod::Agent
+                } else {
+                    crate::AuthMethod::SshKey
+                };
+                crate::services::host_operations::ensure_tag(&mut existing.tags, "ssh-config");
+                crate::services::host_operations::ensure_tag(
+                    &mut existing.tags,
+                    &config_host.source,
+                );
+            } else {
+                crate::services::host_operations::merge_discovered_host(
+                    &mut next_hosts,
+                    config_host.clone(),
+                );
+            }
+            save_hosts(&app, &state, &next_hosts).map_err(|error| {
+                format!(
+                    "partial-failure: SSH config changed, but the Host inventory failed to persist: {error}"
+                )
+            })?;
+        }
+        Ok(result)
     })
 }
 

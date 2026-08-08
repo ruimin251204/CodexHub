@@ -66,7 +66,7 @@ Each mutating operation must have:
 - Restore path when possible.
 - Redacted operation log.
 - Explicit process-impact confirmation before remote reload; stopping all sessions requires an additional acknowledgement.
-- A process-impact confirmation before every Update mutation; revalidate UID/PID/starttime/release/comm/process-kind identity before individual `SIGTERM`, and record a failed no-mutation task for every declined, unknown, changed, or unverifiable host.
+- A process-impact confirmation before every Update mutation; approved hosts use revalidated UID/PID/starttime/release/comm/process-kind identities for exact-PID `SIGTERM`, then bounded exact-PID `SIGKILL` for stubborn or safely classified restarted processes from approved releases. Require two consecutive empty scans before installation, and record a failed no-mutation task for every declined, unknown, other-UID, outside-approved-release, or unverifiable host.
 - A no-downgrade runtime check before an Update/Profile apply is accepted, plus conservative defer-on-uncertainty rules for old managed-release cleanup.
 
 ## First Milestones

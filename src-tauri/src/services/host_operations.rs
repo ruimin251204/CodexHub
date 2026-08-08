@@ -3562,7 +3562,9 @@ fn validate_batch_update_plans(
         let process_count = plan.approved_processes.len();
         match plan.process_action {
             RemoteCodexBatchProcessAction::Proceed if process_count == 0 => {}
-            RemoteCodexBatchProcessAction::Terminate if process_count > 0 => {}
+            RemoteCodexBatchProcessAction::Terminate
+            | RemoteCodexBatchProcessAction::ForceTerminate
+                if process_count > 0 => {}
             RemoteCodexBatchProcessAction::Decline
             | RemoteCodexBatchProcessAction::PreflightFailed
                 if process_count == 0 => {}
@@ -3747,6 +3749,17 @@ pub(crate) fn run_batch_remote_update_codex(
                 Some(request_id.clone()),
                 RemoteCodexProcessGate::Terminate(plan.approved_processes),
             ),
+            RemoteCodexBatchProcessAction::ForceTerminate => {
+                run_remote_manage_codex_with_process_gate(
+                    app,
+                    state,
+                    host_alias.clone(),
+                    RemoteCodexAction::Update,
+                    timeout_ms,
+                    Some(request_id.clone()),
+                    RemoteCodexProcessGate::ForceTerminate(plan.approved_processes),
+                )
+            }
             RemoteCodexBatchProcessAction::Decline => {
                 blocked_batch_update_result(app, state, &host_alias, &request_id, false)
             }

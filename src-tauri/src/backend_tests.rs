@@ -1307,6 +1307,42 @@ codexhub_test_sleep() {{ :; }}
             "codex",
             &["/home/test/.local/bin/codex", "exec"],
         );
+        write_fake_proc(
+            &app_root,
+            104,
+            1_004,
+            "codex",
+            &[
+                "/home/test/.local/bin/codex",
+                "-c",
+                "fixture_option=value",
+                "app-server",
+            ],
+        );
+        write_fake_proc(
+            &app_root,
+            105,
+            1_005,
+            "codex",
+            &[
+                "/home/test/.local/bin/codex",
+                "--config",
+                "fixture_option=value",
+                "remote-control",
+            ],
+        );
+        write_fake_proc(
+            &app_root,
+            106,
+            1_006,
+            "codex",
+            &[
+                "/home/test/.local/bin/codex",
+                "-c",
+                "fixture_option=value",
+                "exec",
+            ],
+        );
         write_fake_proc_dir(
             &app_root.join(".spawn-replacement"),
             900,
@@ -1317,10 +1353,10 @@ codexhub_test_sleep() {{ :; }}
         let (app_result, app_terms) =
             run_isolated_reload_fixture(&app_root, RemoteCodexReloadMode::AppServices);
         assert_eq!(app_result.status, RemoteCodexReloadStatus::Reconnected);
-        assert_eq!(app_result.targeted_count, 2);
-        assert_eq!(app_result.stopped_count, 2);
-        assert_eq!(app_result.preserved_cli_count, 1);
-        assert_eq!(app_terms, vec![101, 102]);
+        assert_eq!(app_result.targeted_count, 4);
+        assert_eq!(app_result.stopped_count, 4);
+        assert_eq!(app_result.preserved_cli_count, 2);
+        assert_eq!(app_terms, vec![101, 102, 104, 105]);
 
         let all_root = isolated_reload_fixture_root("all-codex");
         write_fake_proc(
@@ -1450,6 +1486,12 @@ codexhub_test_sleep() {{ :; }}
             "proc_start=$(sed 's/^[^)]*) //'",
             "codex:codex:app-server",
             "codex:codex:remote-control",
+            "proc_arg3=$(tr '\\000' '\\n'",
+            "codex:codex:-c:app-server",
+            "codex:codex:-c:remote-control",
+            "codex:codex:--config:app-server",
+            "codex:codex:--config:remote-control",
+            "[ -n \"$proc_arg2\" ] && return 0",
             "codex-app-server:codex-app-server:*",
             "codex-remote-control:codex-remote-control:*",
             "[ \"$proc_base\" = \"codex\" ] && [ \"$proc_comm\" = \"codex\" ]",
@@ -1502,6 +1544,7 @@ codexhub_test_sleep() {{ :; }}
             assert!(!line.contains("proc_argv"));
             assert!(!line.contains("proc_arg1"));
             assert!(!line.contains("proc_arg2"));
+            assert!(!line.contains("proc_arg3"));
         }
     }
 

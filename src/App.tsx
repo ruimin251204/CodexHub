@@ -53,6 +53,7 @@ import type {
   SshBootstrapStepStatus,
   SshConfigDeleteResult,
   SshConfigHost,
+  SshConfigWriteResult,
   SshHostDraft,
   SshKeyInfo,
   SshStatus,
@@ -675,7 +676,7 @@ export const uiCopy = {
         verify_alias_login: "4. Test SSH Host alias"
       },
       savedHost: (alias: string) => `Saved Host ${alias}.`,
-      editingHost: (alias: string) => `Editing managed Host ${alias}. Submit with the same alias to update it in place.`,
+      editingHost: (alias: string) => `Editing SSH Host ${alias}. You may change its alias; CodexHub checks conflicts and backs up SSH config before saving.`,
       deleteConfirm: (alias: string) => `Delete Host ${alias} from SSH config?`,
       deletedHost: (alias: string) => `Deleted Host ${alias}.`,
       hostAlias: "Host Alias",
@@ -690,6 +691,7 @@ export const uiCopy = {
       cancel: "Cancel",
       saving: "Saving...",
       writeSshConfig: "Connect",
+      saveSshConfig: "Save SSH config",
       reset: "Reset",
       codexhubManaged: "CodexHub",
       sshHostBlocks: "SSH Host blocks",
@@ -904,10 +906,11 @@ export const uiCopy = {
       batchProcessPreflight: (count: number) => `Checking running Codex processes on ${count} hosts before any remote change.`,
       batchProcessConfirmTitle: "Confirm affected Codex processes",
       batchProcessConfirmBody: (hosts: number, processes: number) =>
-        `${processes} running process${processes === 1 ? "" : "es"} on ${hosts} host${hosts === 1 ? "" : "s"} must close before installation or update. Choose the hosts CodexHub may stop.`,
+        `${processes} running process${processes === 1 ? "" : "es"} on ${hosts} host${hosts === 1 ? "" : "s"} must close before installation or update. Choose the hosts CodexHub may force-stop.`,
+      batchProcessForceWarning: "Authorization allows CodexHub to send SIGTERM, then exact-PID SIGKILL when required, including to classified Codex processes restarted during the stop window. Active App connections and CLI sessions will be interrupted, and unsaved session state may be lost.",
       batchProcessSelectAll: "Select all affected hosts",
       batchProcessClear: "Clear selection",
-      batchProcessContinue: "Continue with selection",
+      batchProcessContinue: "Force stop and update selected",
       batchProcessAutoContinue: "Continues automatically",
       batchProcessNoImpact: "No running managed-release process; this host will continue automatically.",
       batchProcessUnavailable: "Process identity could not be verified; this host will fail without starting installation or update.",
@@ -942,7 +945,7 @@ export const uiCopy = {
         api: ["API configuration", "Check remote Codex configuration and credential environment readiness."],
         skills: ["Skills", "Check the remote Codex skills directory and inventory."],
         preparation: ["Preparation", "Check SSH, the current Codex state, platform, tools, and user paths."],
-        "process-impact": ["Running process safety", "Verify the approved process identities and stop only strictly matched managed-release processes."],
+        "process-impact": ["Running process safety", "Verify approved managed-release processes, force-clear exact PIDs when authorized, and require a stable empty scan before update."],
         "path-repair": ["Shell PATH", "Verify ~/.local/bin and repair the remote user's shell PATH when required."],
         "official-installer": ["Official installer", "Try the official Codex installer with strict TLS verification."],
         "remote-native-mirror": ["Remote native mirror package", "Download and verify the matching native package on the host."],
@@ -1580,7 +1583,7 @@ export const uiCopy = {
         verify_alias_login: "4. SSH Host 别名测试"
       },
       savedHost: (alias: string) => `已保存 Host ${alias}。`,
-      editingHost: (alias: string) => `正在编辑受管理的 Host ${alias}。用相同别名提交会原地更新。`,
+      editingHost: (alias: string) => `正在编辑 SSH Host ${alias}。可以修改别名；CodexHub 保存前会检查冲突并备份 SSH config。`,
       deleteConfirm: (alias: string) => `确定要从 SSH config 删除 Host ${alias} 吗？`,
       deletedHost: (alias: string) => `已删除 Host ${alias}。`,
       hostAlias: "Host 别名",
@@ -1595,6 +1598,7 @@ export const uiCopy = {
       cancel: "取消",
       saving: "保存中...",
       writeSshConfig: "连接",
+      saveSshConfig: "保存 SSH 配置",
       reset: "重置",
       codexhubManaged: "CodexHub",
       sshHostBlocks: "SSH Host 块",
@@ -1809,10 +1813,11 @@ export const uiCopy = {
       batchProcessPreflight: (count: number) => `正在并行检查 ${count} 台主机的 Codex 进程，检查完成前不会修改远端。`,
       batchProcessConfirmTitle: "确认受影响的 Codex 进程",
       batchProcessConfirmBody: (hosts: number, processes: number) =>
-        `${hosts} 台主机上共有 ${processes} 个运行中进程需要在安装或更新前关闭。请选择允许 CodexHub 终止进程的主机。`,
+        `${hosts} 台主机上共有 ${processes} 个运行中进程需要在安装或更新前关闭。请选择允许 CodexHub 强制终止进程的主机。`,
+      batchProcessForceWarning: "授权后，CodexHub 会先发送 SIGTERM，必要时对身份复核一致的精确 PID 发送 SIGKILL；停止窗口内重新拉起且可安全分类的 Codex 进程也会被终止。当前 App 连接和 CLI 会话将中断，未保存的会话状态可能丢失。",
       batchProcessSelectAll: "全选受影响主机",
       batchProcessClear: "清空选择",
-      batchProcessContinue: "按选择继续",
+      batchProcessContinue: "强制停止并更新所选主机",
       batchProcessAutoContinue: "自动继续",
       batchProcessNoImpact: "没有运行中的托管版本进程，将自动继续。",
       batchProcessUnavailable: "无法安全确认进程身份；该主机不会开始安装或更新，并会记录失败任务。",
@@ -1847,7 +1852,7 @@ export const uiCopy = {
         api: ["API 配置", "检查远端 Codex 配置及凭据环境是否就绪。"],
         skills: ["Skills", "检查远端 Codex skills 目录和技能数量。"],
         preparation: ["前期准备", "检查 SSH、当前 Codex、平台、必要工具和用户目录。"],
-        "process-impact": ["运行进程安全确认", "复核已批准的进程身份，仅终止严格匹配的托管 release 进程。"],
+        "process-impact": ["运行进程安全确认", "复核已批准的托管 release 进程；授权后强制清空精确 PID，并在稳定空扫描后更新。"],
         "path-repair": ["Shell PATH", "检查 ~/.local/bin，必要时修复远端用户的 Shell PATH。"],
         "official-installer": ["官方安装器", "使用严格 TLS 校验尝试官方 Codex 安装器。"],
         "remote-native-mirror": ["远端镜像原生包", "在主机上下载并校验匹配架构的原生包。"],
@@ -3637,6 +3642,19 @@ function App() {
     });
   };
 
+  const handleSaveSshConfigHost = async (
+    draft: SshHostDraft,
+    originalAlias: string
+  ): Promise<SshConfigWriteResult> => {
+    const section = activeSection;
+    return runSectionOperation(section, async () => {
+      const result = await api.upsertSshConfigHost(draft, originalAlias);
+      await refreshSshState();
+      setNotice(result.backupPath ? `${result.message} Backup: ${result.backupPath}` : result.message);
+      return result;
+    });
+  };
+
   const handleDeleteSshConfigHost = async (alias: string) => {
     const section = activeSection;
     return runSectionOperation(section, async () => {
@@ -4032,7 +4050,7 @@ function App() {
         : item.processes.length === 0
           ? "proceed"
           : selected.has(item.hostAlias)
-            ? "terminate"
+            ? "force-terminate"
             : "decline",
       approvedProcesses: item.ok && item.processes.length > 0 && selected.has(item.hostAlias)
         ? item.processes
@@ -4702,6 +4720,7 @@ function App() {
             sshBusy={sshBusy}
             onCloseAddHost={() => setHostModalOpen(false)}
             onConnectSshHost={handleConnectSshHost}
+            onSaveSshConfigHost={handleSaveSshConfigHost}
             onDeleteSshConfigHost={handleDeleteSshConfigHost}
             onDetectLocalSshHosts={handleDetectLocalSshHosts}
             onGenerateEd25519Key={handleGenerateEd25519Key}
@@ -5540,6 +5559,7 @@ export function BatchCodexProcessConfirmModal({
       <p className="modalLead" id="batch-process-confirm-description">
         {copy.codexOperation.batchProcessConfirmBody(selectableAliases.length, processCount)}
       </p>
+      <p className="batchProcessDeclinedHint">{copy.codexOperation.batchProcessForceWarning}</p>
 
       <div className="batchProcessHostList">
         {request.preview.results.map((item) => {
@@ -6648,6 +6668,7 @@ function HostsView({
   sshStatus,
   onCloseAddHost,
   onConnectSshHost,
+  onSaveSshConfigHost,
   onDeleteSshConfigHost,
   onDetectLocalSshHosts,
   onGenerateEd25519Key,
@@ -6669,6 +6690,7 @@ function HostsView({
   sshStatus: SshStatus | null;
   onCloseAddHost: () => void;
   onConnectSshHost: (draft: SshHostDraft, password: string, requestId: string, onProgress: (event: SshBootstrapProgressEvent) => void) => Promise<SshBootstrapResult>;
+  onSaveSshConfigHost: (draft: SshHostDraft, originalAlias: string) => Promise<SshConfigWriteResult>;
   onDeleteSshConfigHost: (alias: string) => Promise<SshConfigDeleteResult>;
   onDetectLocalSshHosts: () => Promise<unknown>;
   onGenerateEd25519Key: () => Promise<unknown>;
@@ -6757,6 +6779,7 @@ function HostsView({
         sshStatus={sshStatus}
         onClose={onCloseAddHost}
         onConnect={onConnectSshHost}
+        onSave={onSaveSshConfigHost}
         onGenerateEd25519Key={onGenerateEd25519Key}
       />
 
@@ -6873,7 +6896,7 @@ function HostsView({
   );
 }
 
-function SshHostModal({
+export function SshHostModal({
   copy,
   defaultIdentityFile,
   initialDraft,
@@ -6882,6 +6905,7 @@ function SshHostModal({
   sshStatus,
   onClose,
   onConnect,
+  onSave,
   onGenerateEd25519Key
 }: {
   copy: UICopy;
@@ -6892,6 +6916,7 @@ function SshHostModal({
   sshStatus: SshStatus | null;
   onClose: () => void;
   onConnect: (draft: SshHostDraft, password: string, requestId: string, onProgress: (event: SshBootstrapProgressEvent) => void) => Promise<SshBootstrapResult>;
+  onSave: (draft: SshHostDraft, originalAlias: string) => Promise<SshConfigWriteResult>;
   onGenerateEd25519Key: () => Promise<unknown>;
 }) {
   const [draft, setDraft] = useState<SshHostDraft>(() => initialDraft ?? emptySshHostDraft(defaultIdentityFile));
@@ -6912,9 +6937,18 @@ function SshHostModal({
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
   const [steps, setSteps] = useState(() => createInitialBootstrapSteps(copy));
-  const hasIdentityFile = Boolean(defaultIdentityFile);
+  const editing = Boolean(initialDraft);
+  const hasIdentityFile = Boolean(editing ? draft.identityFile : defaultIdentityFile);
   const canGenerateKey = Boolean(sshStatus?.sshKeygenAvailable && !sshStatus.ed25519.privateExists && !sshStatus.ed25519.publicExists);
-  const canConnect = Boolean(draft.alias.trim() && draft.hostName.trim() && draft.port > 0 && draft.user.trim() && password && hasIdentityFile && !connecting);
+  const canConnect = Boolean(
+    draft.alias.trim()
+      && draft.hostName.trim()
+      && draft.port > 0
+      && draft.user.trim()
+      && (editing || password)
+      && hasIdentityFile
+      && !connecting
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -6973,6 +7007,13 @@ function SshHostModal({
     setMessage(copy.hosts.connectingProgress);
     setMessageTone("info");
     try {
+      if (initialDraft) {
+        const result = await onSave(draft, initialDraft.alias);
+        setMessage(result.message);
+        setMessageTone("success");
+        onClose();
+        return;
+      }
       const result = await onConnect({ ...draft, identityFile: defaultIdentityFile }, password, requestId, (progress) => {
         setSteps((current) => updateBootstrapStep(current, progress));
       });
@@ -6994,7 +7035,6 @@ function SshHostModal({
       setConnecting(false);
     }
   };
-  const editing = Boolean(initialDraft);
 
   return (
     <div className="modalBackdrop" role="presentation">
@@ -7013,7 +7053,7 @@ function SshHostModal({
         <form className="modalForm" onSubmit={handleSubmit}>
           <label className="fieldGroup">
             <span>{copy.hosts.hostAlias}</span>
-            <PersonalInfoInput disabled={connecting} maskKind="text" readOnly={editing} value={draft.alias} onChange={(event) => updateDraft("alias", event.target.value)} placeholder="HostAlias" required />
+            <PersonalInfoInput disabled={connecting} maskKind="text" value={draft.alias} onChange={(event) => updateDraft("alias", event.target.value)} placeholder="HostAlias" required />
           </label>
           <label className="fieldGroup">
             <span>{copy.hosts.hostName}</span>
@@ -7027,30 +7067,32 @@ function SshHostModal({
             <span>{copy.hosts.user}</span>
             <PersonalInfoInput disabled={connecting} maskKind="username" value={draft.user} onChange={(event) => updateDraft("user", event.target.value)} placeholder="Username" required />
           </label>
-          <label className="fieldGroup">
-            <span>{copy.hosts.bootstrapPassword}</span>
-            <div className="passwordInputWrap">
-              <input
-                autoComplete="new-password"
-                disabled={connecting}
-                type={passwordVisible ? "text" : "password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                required
-              />
-              <button
-                aria-label={passwordVisible ? copy.hosts.hidePassword : copy.hosts.showPassword}
-                aria-pressed={passwordVisible}
-                className="credentialVisibilityButton"
-                title={passwordVisible ? copy.hosts.hidePassword : copy.hosts.showPassword}
-                type="button"
-                onClick={() => setPasswordVisible((current) => !current)}
-              >
-                <CredentialVisibilityIcon visible={passwordVisible} />
-              </button>
-            </div>
-          </label>
+          {!editing ? (
+            <label className="fieldGroup">
+              <span>{copy.hosts.bootstrapPassword}</span>
+              <div className="passwordInputWrap">
+                <input
+                  autoComplete="new-password"
+                  disabled={connecting}
+                  type={passwordVisible ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  required
+                />
+                <button
+                  aria-label={passwordVisible ? copy.hosts.hidePassword : copy.hosts.showPassword}
+                  aria-pressed={passwordVisible}
+                  className="credentialVisibilityButton"
+                  title={passwordVisible ? copy.hosts.hidePassword : copy.hosts.showPassword}
+                  type="button"
+                  onClick={() => setPasswordVisible((current) => !current)}
+                >
+                  <CredentialVisibilityIcon visible={passwordVisible} />
+                </button>
+              </div>
+            </label>
+          ) : null}
           <div className="fieldGroup identityRow" data-has-action={!hasIdentityFile}>
             <span>IDFile</span>
             <input readOnly value={hasIdentityFile ? copy.hosts.identityDetected : copy.hosts.identityMissing} />
@@ -7062,11 +7104,13 @@ function SshHostModal({
           </div>
 
           <ModalActions>
-            <button className="primaryButton" disabled={!canConnect} type="submit">{connecting ? copy.hosts.writing : copy.hosts.writeSshConfig}</button>
+            <button className="primaryButton" disabled={!canConnect} type="submit">
+              {connecting ? copy.hosts.writing : editing ? copy.hosts.saveSshConfig : copy.hosts.writeSshConfig}
+            </button>
           </ModalActions>
         </form>
 
-        {showProgress ? <BootstrapProgressLog copy={copy} maskText={maskDraftText} steps={steps} /> : null}
+        {!editing && showProgress ? <BootstrapProgressLog copy={copy} maskText={maskDraftText} steps={steps} /> : null}
       </ModalFrame>
       <ConfirmDialog
         copy={{

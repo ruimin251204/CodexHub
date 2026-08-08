@@ -174,7 +174,7 @@ export type RemoteCodexProcessPreflightItemDto = { hostAlias: string, ok: boolea
 
 export type RemoteCodexProcessPreflightResultDto = { requestId: string, results: Array<RemoteCodexProcessPreflightItemDto>, };
 
-export type RemoteCodexBatchProcessActionDto = "proceed" | "terminate" | "decline" | "preflight-failed";
+export type RemoteCodexBatchProcessActionDto = "proceed" | "terminate" | "force-terminate" | "decline" | "preflight-failed";
 
 export type RemoteCodexBatchHostPlanDto = { hostAlias: string, processAction: RemoteCodexBatchProcessActionDto, approvedProcesses: Array<RemoteCodexProcessIdentityDto>, };
 

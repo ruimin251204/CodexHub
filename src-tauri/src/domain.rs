@@ -845,6 +845,7 @@ pub(crate) struct RemoteCodexProcessPreflightResult {
 pub(crate) enum RemoteCodexBatchProcessAction {
     Proceed,
     Terminate,
+    ForceTerminate,
     Decline,
     PreflightFailed,
 }
