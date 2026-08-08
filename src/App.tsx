@@ -92,6 +92,12 @@ import type { WorkspaceMode, WorkspaceTerminalHostRequest } from "./workspace/ty
 import { searchGlobalEntries } from "./search/globalSearch";
 import { createGlobalSearchCatalog, hostSearchAliasesCopy } from "./search/globalSearchCatalog";
 import type { CodexHubSearchEntry, SearchSectionId } from "./search/globalSearchCatalog";
+import {
+  assignMonitorGpuUserColors,
+  monitorGpuUserColor,
+  normalizeMonitorGpuUser
+} from "./monitor/gpuUserColors";
+import type { MonitorGpuUserColorMap } from "./monitor/gpuUserColors";
 import "./components/design-system.css";
 import "./components/app-shell-integration.css";
 import {
@@ -322,7 +328,6 @@ type MonitorGpuUserUsage = {
   usedMemoryBytes: number;
   color: string;
 };
-type MonitorGpuUserColorMap = ReadonlyMap<string, string>;
 type MonitorGpuMemoryUsage = {
   capacityBytes: number | null;
   mode: HostResourceSnapshot["gpus"][number]["memoryMode"];
@@ -11457,28 +11462,6 @@ function formatProcessCount(value: number, copy: UICopy) {
   return copy.monitor.processCountShort(value);
 }
 
-const MONITOR_UNKNOWN_GPU_USER = "unknown";
-const MONITOR_UNKNOWN_GPU_USER_COLOR = "#7c3aed";
-const MONITOR_GPU_USER_COLORS = [
-  "#0891b2",
-  "#2563eb",
-  "#0f9f6e",
-  "#b7791f",
-  "#c2417f",
-  "#dc2626",
-  "#4f46e5",
-  "#047857",
-  "#ca8a04",
-  "#be185d",
-  "#0d9488",
-  "#9333ea",
-  "#ea580c",
-  "#16a34a",
-  "#0284c7",
-  "#9f1239",
-  "#52525b"
-] as const;
-
 function aggregateGpuProcessUsers(
   gpu: HostResourceSnapshot["gpus"][number],
   userColorByUser: MonitorGpuUserColorMap
@@ -11526,53 +11509,6 @@ function buildMonitorGpuUserColorMap(snapshots: HostResourceSnapshot[]): Monitor
     }
   }
   return assignMonitorGpuUserColors(Array.from(users));
-}
-
-function assignMonitorGpuUserColors(users: string[]): MonitorGpuUserColorMap {
-  const colorsByUser = new Map<string, string>();
-  const takenColorIndexes = new Set<number>();
-  const sortedUsers = users
-    .filter((user) => user !== MONITOR_UNKNOWN_GPU_USER)
-    .sort((left, right) => left.localeCompare(right));
-
-  // Build one visible-snapshot-wide map so different GPU cards reuse the same
-  // color for a user while avoiding palette collisions whenever colors remain.
-  for (const user of sortedUsers) {
-    const preferredIndex = monitorGpuUserHash(user) % MONITOR_GPU_USER_COLORS.length;
-    let color: string | null = null;
-    for (let offset = 0; offset < MONITOR_GPU_USER_COLORS.length; offset += 1) {
-      const candidateIndex = (preferredIndex + offset) % MONITOR_GPU_USER_COLORS.length;
-      if (!takenColorIndexes.has(candidateIndex)) {
-        color = MONITOR_GPU_USER_COLORS[candidateIndex];
-        takenColorIndexes.add(candidateIndex);
-        break;
-      }
-    }
-    colorsByUser.set(user, color ?? monitorGeneratedGpuUserColor(user));
-  }
-  if (users.includes(MONITOR_UNKNOWN_GPU_USER)) {
-    colorsByUser.set(MONITOR_UNKNOWN_GPU_USER, MONITOR_UNKNOWN_GPU_USER_COLOR);
-  }
-  return colorsByUser;
-}
-
-function monitorGpuUserColor(user: string, userColorByUser: MonitorGpuUserColorMap) {
-  return userColorByUser.get(user) ?? (user === MONITOR_UNKNOWN_GPU_USER ? MONITOR_UNKNOWN_GPU_USER_COLOR : monitorGeneratedGpuUserColor(user));
-}
-
-function monitorGeneratedGpuUserColor(user: string) {
-  const hue = monitorGpuUserHash(user) % 360;
-  return `hsl(${hue} 64% 42%)`;
-}
-
-function monitorGpuUserHash(user: string) {
-  let hash = 0;
-  for (const char of user) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return hash;
-}
-
-function normalizeMonitorGpuUser(user: string | null | undefined) {
-  return user?.trim() || MONITOR_UNKNOWN_GPU_USER;
 }
 
 function sameStringArray(left: string[], right: string[]) {
