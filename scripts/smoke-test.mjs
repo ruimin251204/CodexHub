@@ -1364,8 +1364,15 @@ if (!app.includes('const canCheckStableUpdate = appUpdateStatus.channel === "sta
 if (app.includes('const canCheckStableUpdate = appUpdateStatus.channel === "stable" && appUpdateStatus.configured')) {
   fail("Stable update Check button must not be disabled solely because updater feed/signing is pending");
 }
-for (const token of ["type NavIconId = SectionId", "type PlatformIconId", "type TitleBarAction", "function AppTitleBar(", "startDragging()", 'data-action="minimize"', 'data-action="maximize"', 'data-action="close"', "function PlatformIcon(", "function ModalFrame(", "function ModalHeader(", "function ModalActions(", "function NavIcon(", 'className="navIcon"', 'className="navGlyph"', "<NavIcon id={item.id}", "function CommandBar(", "function CommandGroup(", "metricPrimary", "metricSecondary", "appliedProfileCount", "new Set(hosts.map((host) => host.profileId)", "successfulTaskCount", "matrixHeader", "matrixEmptyIcon", "onAddServer", "onTestAllSshHosts"]) {
+for (const token of ["type NavIconId = SectionId", "type PlatformIconId", "type TitleBarAction", "function AppTitleBar(", 'data-action="minimize"', 'data-action="maximize"', 'data-action="close"', "function PlatformIcon(", "function ModalFrame(", "function ModalHeader(", "function ModalActions(", "function NavIcon(", 'className="navIcon"', 'className="navGlyph"', "<NavIcon id={item.id}", "function CommandBar(", "function CommandGroup(", "metricPrimary", "metricSecondary", "appliedProfileCount", "new Set(hosts.map((host) => host.profileId)", "successfulTaskCount", "matrixHeader", "matrixEmptyIcon", "onAddServer", "onTestAllSshHosts"]) {
   if (!`${app}\n${modalFrameSource}`.includes(token)) fail(`missing dashboard home polish token: ${token}`);
+}
+const titleBarSource = app.slice(app.indexOf("function AppTitleBar("), app.indexOf("function useActionErrorReporter("));
+if ((titleBarSource.match(/data-tauri-drag-region="deep"/g) ?? []).length !== 2) {
+  fail("custom titlebar must expose exactly two deep Tauri drag regions");
+}
+for (const duplicateHandler of ["startDragging()", "handleDragMouseDown", "onMouseDown="]) {
+  if (titleBarSource.includes(duplicateHandler)) fail(`custom titlebar must leave drag and double-click handling to Tauri: ${duplicateHandler}`);
 }
 for (const token of [
   "SectionCompletionTone",

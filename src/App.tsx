@@ -2337,18 +2337,6 @@ function AppTitleBar({
     };
   }, []);
 
-  const handleDragMouseDown = (event: React.MouseEvent<HTMLElement>) => {
-    if (event.button !== 0) return;
-    if (event.detail === 2) {
-      event.preventDefault();
-      void runAction("maximize");
-      return;
-    }
-    void getCurrentWindow().startDragging().catch(() => {
-      console.debug("Desktop window dragging is unavailable in this preview.");
-    });
-  };
-
   const runAction = async (action: TitleBarAction) => {
     if (action === "close") {
       await onCloseRequest();
@@ -2366,10 +2354,11 @@ function AppTitleBar({
 
   return (
     <header className="appTitleBar">
-      <div className="titleBarLeadingDragRegion" data-tauri-drag-region onMouseDown={handleDragMouseDown}>
-        <div className="appTitle" data-tauri-drag-region>
+      {/* Tauri exclusively owns drag and double-click maximize behavior in these regions. */}
+      <div className="titleBarLeadingDragRegion" data-tauri-drag-region="deep">
+        <div className="appTitle">
           <img className="titleBarIcon" src={appLogoUrl} alt="" aria-hidden="true" />
-          <span data-tauri-drag-region>{title}</span>
+          <span>{title}</span>
         </div>
       </div>
       <div className="titleBarSearchRegion">
@@ -2377,7 +2366,7 @@ function AppTitleBar({
           {search}
         </div>
       </div>
-      <div className="titleBarTrailingDragRegion" data-tauri-drag-region onMouseDown={handleDragMouseDown} />
+      <div className="titleBarTrailingDragRegion" data-tauri-drag-region="deep" />
       <div className="captionControls" role="group" aria-label={title}>
         <button className="captionButton" data-action="minimize" type="button" aria-label={copy.windowControls.minimize} onClick={() => void runAction("minimize")}>
           <span className="captionGlyph" aria-hidden="true" />
