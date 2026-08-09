@@ -4830,6 +4830,29 @@ tr:last-child td {
   gap: 8px;
 }
 
+.batchProcessAppExitWarning {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--yellow) 62%, var(--border));
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 11px 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--yellow) 13%, var(--surface-solid));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--yellow) 10%, transparent);
+  line-height: 1.45;
+}
+
+.batchProcessAppExitWarning strong {
+  color: var(--yellow);
+  font-size: 0.9rem;
+}
+
+.batchProcessAppExitWarning span {
+  font-size: 0.82rem;
+}
+
 .batchProcessHostRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

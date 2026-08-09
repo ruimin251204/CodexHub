@@ -77,6 +77,8 @@ describe("BatchCodexProcessConfirmModal", () => {
     );
 
     expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Quit the ChatGPT App before updating");
+    expect(screen.getByRole("alert")).toHaveTextContent(/remote Codex processes may restart and cause the update to fail/);
     expect(screen.getByText("PID 42 · Codex App SSH proxy · 0.145.0")).toBeVisible();
     expect(screen.getByText(/exact-PID SIGKILL/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Force stop and update selected" })).toBeVisible();
@@ -128,5 +130,11 @@ describe("BatchCodexProcessConfirmModal", () => {
     expect(screen.getByRole("button", { name: "Select all affected hosts" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Force stop and update selected" }));
     expect(onConfirm).toHaveBeenCalledWith([]);
+  });
+
+  test("keeps the ChatGPT App exit recommendation localized in Chinese", () => {
+    expect(uiCopy.zh.codexOperation.batchProcessAppExitTitle).toBe("更新前请先退出 ChatGPT App");
+    expect(uiCopy.zh.codexOperation.batchProcessAppExitBody).toContain("彻底退出 ChatGPT App");
+    expect(uiCopy.zh.codexOperation.batchProcessAppExitBody).toContain("导致更新失败");
   });
 });

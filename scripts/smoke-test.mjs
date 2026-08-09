@@ -1436,6 +1436,9 @@ for (const token of ['new URL("../src-tauri/icons/128x128.png", import.meta.url)
 }
 for (const token of [
   '<AppTitleBar copy={copy} search={globalSearchControl}',
+  'className="batchProcessAppExitWarning" role="alert"',
+  'batchProcessAppExitTitle: "Quit the ChatGPT App before updating"',
+  'batchProcessAppExitTitle: "更新前请先退出 ChatGPT App"',
   'id: "home",',
   'items: [makeSidebarItem("dashboard")]',
   'items: (["terminal", "files", "transfers"] as SectionId[])',

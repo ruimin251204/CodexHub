@@ -907,6 +907,8 @@ export const uiCopy = {
       batchProcessConfirmTitle: "Confirm affected Codex processes",
       batchProcessConfirmBody: (hosts: number, processes: number) =>
         `${processes} running process${processes === 1 ? "" : "es"} on ${hosts} host${hosts === 1 ? "" : "s"} must close before installation or update. Choose the hosts CodexHub may force-stop.`,
+      batchProcessAppExitTitle: "Quit the ChatGPT App before updating",
+      batchProcessAppExitBody: "We strongly recommend fully quitting the ChatGPT App from the system tray or menu bar and closing related Codex CLI sessions before continuing. Otherwise, remote Codex processes may restart and cause the update to fail.",
       batchProcessForceWarning: "Authorization allows CodexHub to send SIGTERM, then exact-PID SIGKILL when required, including to classified Codex processes restarted during the stop window. Active App connections and CLI sessions will be interrupted, and unsaved session state may be lost.",
       batchProcessSelectAll: "Select all affected hosts",
       batchProcessClear: "Clear selection",
@@ -1814,6 +1816,8 @@ export const uiCopy = {
       batchProcessConfirmTitle: "确认受影响的 Codex 进程",
       batchProcessConfirmBody: (hosts: number, processes: number) =>
         `${hosts} 台主机上共有 ${processes} 个运行中进程需要在安装或更新前关闭。请选择允许 CodexHub 强制终止进程的主机。`,
+      batchProcessAppExitTitle: "更新前请先退出 ChatGPT App",
+      batchProcessAppExitBody: "强烈建议从系统托盘或菜单栏彻底退出 ChatGPT App，并关闭相关 Codex CLI 会话后再继续。否则远端 Codex 进程可能被自动重新拉起，导致更新失败。",
       batchProcessForceWarning: "授权后，CodexHub 会先发送 SIGTERM，必要时对身份复核一致的精确 PID 发送 SIGKILL；停止窗口内重新拉起且可安全分类的 Codex 进程也会被终止。当前 App 连接和 CLI 会话将中断，未保存的会话状态可能丢失。",
       batchProcessSelectAll: "全选受影响主机",
       batchProcessClear: "清空选择",
@@ -5548,6 +5552,11 @@ export function BatchCodexProcessConfirmModal({
       <p className="modalLead" id="batch-process-confirm-description">
         {copy.codexOperation.batchProcessConfirmBody(selectableAliases.length, processCount)}
       </p>
+      {/* Keep the App-exit recommendation visible before users authorize process termination. */}
+      <div className="batchProcessAppExitWarning" role="alert">
+        <strong>{copy.codexOperation.batchProcessAppExitTitle}</strong>
+        <span>{copy.codexOperation.batchProcessAppExitBody}</span>
+      </div>
       <p className="batchProcessDeclinedHint">{copy.codexOperation.batchProcessForceWarning}</p>
 
       <div className="batchProcessHostList">
