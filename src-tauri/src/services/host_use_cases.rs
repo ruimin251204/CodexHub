@@ -1,4 +1,31 @@
 use crate::*;
+use std::collections::HashSet;
+
+fn is_ssh_config_backed_host(host: &Host) -> bool {
+    host.source.eq_ignore_ascii_case("managed")
+        || host.source.eq_ignore_ascii_case("local")
+        || host
+            .tags
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case("ssh-config"))
+}
+
+/// Removes stale SSH-backed inventory rows without touching manually added hosts.
+fn reconcile_hosts_with_ssh_config(
+    hosts: &mut Vec<Host>,
+    config_hosts: &[ssh::SshConfigHost],
+) -> bool {
+    let config_aliases = config_hosts
+        .iter()
+        .map(|host| host.alias.trim().to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+    let before = hosts.len();
+    hosts.retain(|host| {
+        !is_ssh_config_backed_host(host)
+            || config_aliases.contains(&host.host_alias.trim().to_ascii_lowercase())
+    });
+    hosts.len() != before
+}
 
 pub(crate) async fn execute_get_ssh_status() -> Result<ssh::SshStatus, String> {
     run_blocking_command("get_ssh_status", ssh::get_ssh_status).await?
@@ -153,8 +180,14 @@ pub(crate) fn execute_delete_ssh_config_host(
 }
 
 pub(crate) fn execute_list_hosts(app: AppHandle, state: &AppState) -> Result<Vec<Host>, String> {
-    let hosts = load_hosts(&app, &state)?;
-    *state.hosts.lock().expect("hosts mutex poisoned") = hosts;
+    // Stable/dev inventories are isolated, while the local SSH config is shared.
+    // Reconcile stale SSH-backed rows before publishing hosts to every page.
+    let _write_guard = services::profile_links::acquire_write_lock(state)?;
+    let mut hosts = load_hosts(&app, &state)?;
+    let config_hosts = ssh::list_ssh_config_hosts()?;
+    if reconcile_hosts_with_ssh_config(&mut hosts, &config_hosts) {
+        save_hosts(&app, state, &hosts)?;
+    }
     let profiles = profile_apply_profiles_snapshot(&app, &state)?;
     reconcile_hosts_with_profile_links(&state, &profiles);
     apply_skill_inventory_to_hosts(&state)?;
@@ -609,6 +642,73 @@ pub(crate) async fn execute_get_local_codex_status() -> Result<LocalCodexStatus,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_host(alias: &str, source: &str, tags: &[&str]) -> Host {
+        Host {
+            id: format!("host-{alias}"),
+            name: alias.into(),
+            host_alias: alias.into(),
+            source: source.into(),
+            address: alias.into(),
+            port: 22,
+            username: "user".into(),
+            auth_method: AuthMethod::Agent,
+            status: HostStatus::Unknown,
+            os: "Unknown".into(),
+            arch: "Unknown".into(),
+            shell: "Unknown".into(),
+            path: None,
+            path_has_local_bin: None,
+            codex_command_available: None,
+            codex_installed: false,
+            codex_version: "pending".into(),
+            config_exists: None,
+            api_config_name: None,
+            api_config_source: None,
+            api_key_env_var: None,
+            api_key_env_present: None,
+            skills_exists: None,
+            skills_count: None,
+            profile_id: None,
+            skill_pack_ids: Vec::new(),
+            tags: tags.iter().map(|tag| (*tag).into()).collect(),
+            last_seen: "not tested".into(),
+            latency_ms: None,
+        }
+    }
+
+    fn test_config_host(alias: &str) -> ssh::SshConfigHost {
+        ssh::SshConfigHost {
+            alias: alias.into(),
+            host_name: alias.into(),
+            port: 22,
+            user: "user".into(),
+            identity_file: String::new(),
+            managed: true,
+            source: "managed".into(),
+        }
+    }
+
+    #[test]
+    fn stale_ssh_config_hosts_are_removed_but_manual_hosts_are_preserved() {
+        let mut hosts = vec![
+            test_host("6", "managed", &["ssh-config"]),
+            test_host("Sever-6", "managed", &["ssh-config"]),
+            test_host("manual-only", "manual", &[]),
+        ];
+
+        assert!(reconcile_hosts_with_ssh_config(
+            &mut hosts,
+            &[test_config_host("sever-6")]
+        ));
+        assert_eq!(
+            hosts
+                .iter()
+                .map(|host| host.host_alias.as_str())
+                .collect::<Vec<_>>(),
+            ["Sever-6", "manual-only"]
+        );
+    }
 
     #[test]
     fn automatic_resource_sample_does_not_persist_a_task() {
