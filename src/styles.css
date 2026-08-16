@@ -6155,6 +6155,7 @@ button:disabled {
 
 .operationHostStatusDot[data-status="running"] { background: var(--blue); }
 .operationHostStatusDot[data-status="success"] { background: var(--green); }
+.operationHostStatusDot[data-status="partial"] { background: var(--yellow); }
 .operationHostStatusDot[data-status="failed"] { background: var(--red); }
 
 .operationSelectedHostHeader {

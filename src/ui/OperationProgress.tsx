@@ -384,10 +384,8 @@ function OperationDetail({
 }
 
 function HostStatusDot({ status }: { status: OperationProgressHost["status"] }) {
-  const stepStatus: TaskStepStatus = status === "pending" || status === "partial"
-    ? "pending"
-    : status;
-  return <span aria-hidden="true" className="operationHostStatusDot" data-status={stepStatus} />;
+  const dotStatus = status === "pending" ? "pending" : status;
+  return <span aria-hidden="true" className="operationHostStatusDot" data-status={dotStatus} />;
 }
 
 function operationHostStatusLabel(copy: OperationProgressCopy, status: OperationProgressHost["status"]) {

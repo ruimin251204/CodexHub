@@ -1790,7 +1790,7 @@ export const mockApi: CodexHubApi = {
           ? pageItems[pageItems.length - 1].id
           : null,
       unacknowledgedTaskIds: mockTasks
-        .filter((task) => (task.status === "failed" || task.status === "interrupted") && !mockAcknowledgedTaskIds.has(task.id))
+        .filter((task) => (task.status === "failed" || task.status === "manual-required" || task.status === "interrupted") && !mockAcknowledgedTaskIds.has(task.id))
         .map((task) => task.id)
     };
   },

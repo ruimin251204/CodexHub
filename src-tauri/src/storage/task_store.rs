@@ -384,7 +384,7 @@ impl TaskStore {
         let mut statement = connection
             .prepare(
                 "SELECT id FROM task_runs
-                 WHERE acknowledged_at IS NULL AND status IN ('failed', 'interrupted')
+                 WHERE acknowledged_at IS NULL AND status IN ('failed', 'manual-required', 'interrupted')
                  ORDER BY started_at DESC, rowid DESC LIMIT ?1",
             )
             .map_err(|error| format!("Could not prepare unacknowledged task query: {error}"))?;
@@ -1214,6 +1214,7 @@ fn status_label(status: &TaskStatus) -> &'static str {
         TaskStatus::Running => "running",
         TaskStatus::Success => "success",
         TaskStatus::Failed => "failed",
+        TaskStatus::ManualRequired => "manual-required",
         TaskStatus::Cancelled => "cancelled",
         TaskStatus::Interrupted => "interrupted",
     }
@@ -1224,6 +1225,7 @@ fn parse_status(value: &str) -> TaskStatus {
         "queued" => TaskStatus::Queued,
         "running" => TaskStatus::Running,
         "success" => TaskStatus::Success,
+        "manual-required" => TaskStatus::ManualRequired,
         "cancelled" => TaskStatus::Cancelled,
         "interrupted" => TaskStatus::Interrupted,
         _ => TaskStatus::Failed,
@@ -1328,6 +1330,33 @@ mod tests {
         assert_eq!(tasks[0].logs.len(), 1);
         assert_eq!(tasks[0].logs[0].step_id.as_deref(), Some("prepare"));
         assert!(store.acknowledge("task-1").expect("acknowledge task"));
+    }
+
+    #[test]
+    fn manual_required_tasks_round_trip_and_need_acknowledgement() {
+        let store = TaskStore::in_memory();
+        store
+            .upsert(&task("task-manual-required", TaskStatus::ManualRequired))
+            .expect("persist manual-required task");
+
+        let persisted = store
+            .get("task-manual-required")
+            .expect("read manual-required task")
+            .expect("manual-required task exists");
+        assert!(matches!(persisted.status, TaskStatus::ManualRequired));
+        assert_eq!(
+            store
+                .list_unacknowledged_failures(10)
+                .expect("list unacknowledged tasks"),
+            vec!["task-manual-required"]
+        );
+        assert!(store
+            .acknowledge("task-manual-required")
+            .expect("acknowledge manual-required task"));
+        assert!(store
+            .list_unacknowledged_failures(10)
+            .expect("list acknowledged tasks")
+            .is_empty());
     }
 
     #[test]

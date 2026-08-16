@@ -1055,10 +1055,12 @@ pub(crate) fn profile_apply_task_status(
     reload_succeeded: bool,
     cleanup_hard_failed: bool,
 ) -> TaskStatus {
-    if config_succeeded && reload_succeeded && !cleanup_hard_failed {
-        TaskStatus::Success
-    } else {
+    if !config_succeeded || cleanup_hard_failed {
         TaskStatus::Failed
+    } else if !reload_succeeded {
+        TaskStatus::ManualRequired
+    } else {
+        TaskStatus::Success
     }
 }
 
@@ -1632,18 +1634,37 @@ pub(crate) fn reload_remote_codex_processes(
         _ => TaskLogLevel::Info,
     };
     // The reload protocol may be preceded by an SSH banner or other noise. Persist only
-    // the parsed result so task history never receives a process argv or secret by accident.
-    logs.push(basic_log(
+    // parsed metadata and safe process diagnostics, never command output or argv.
+    logs.push(remote_codex_reload_log(
         task_id,
         *next_log,
         level,
-        &remote_codex_reload_log_message(&result),
+        &remote_codex_reload_log_message(&result, &output, timeout.max(30_000)),
+        &output,
     ));
     *next_log += 1;
     result
 }
 
-pub(crate) fn remote_codex_reload_log_message(result: &RemoteCodexReloadResult) -> String {
+pub(crate) fn remote_codex_reload_log(
+    task_id: &str,
+    index: usize,
+    level: TaskLogLevel,
+    message: &str,
+    output: &ssh::SshCommandOutput,
+) -> TaskLog {
+    let mut log = basic_log(task_id, index, level, message);
+    log.exit_code = output.exit_code;
+    log.duration_ms = Some(output.duration_ms);
+    log.timed_out = Some(output.timed_out);
+    log
+}
+
+pub(crate) fn remote_codex_reload_log_message(
+    result: &RemoteCodexReloadResult,
+    output: &ssh::SshCommandOutput,
+    timeout_ms: u64,
+) -> String {
     let mode = match result.mode {
         RemoteCodexReloadMode::None => "none",
         RemoteCodexReloadMode::AppServices => "app-services",
@@ -1658,14 +1679,50 @@ pub(crate) fn remote_codex_reload_log_message(result: &RemoteCodexReloadResult) 
         RemoteCodexReloadStatus::ManualRequired => "manual-required",
         RemoteCodexReloadStatus::Failed => "failed",
     };
+    let exit_code = output
+        .exit_code
+        .map(|code| code.to_string())
+        .unwrap_or_else(|| "none".into());
+    let protocol = if result.status == RemoteCodexReloadStatus::Failed {
+        remote_codex_reload_protocol_issue(output)
+    } else {
+        "valid"
+    };
     format!(
-        "{} [mode={mode}, status={status}, targeted={}, stopped={}, preservedCli={}, replacementObserved={}].",
+        "{} [mode={mode}, status={status}, targeted={}, stopped={}, preservedCli={}, replacementObserved={}, exitCode={exit_code}, durationMs={}, timedOut={}, timeoutMs={timeout_ms}, protocol={protocol}].",
         result.message,
         result.targeted_count,
         result.stopped_count,
         result.preserved_cli_count,
-        result.replacement_observed
+        result.replacement_observed,
+        output.duration_ms,
+        output.timed_out
     )
+}
+
+fn remote_codex_reload_protocol_issue(output: &ssh::SshCommandOutput) -> &'static str {
+    if output.timed_out {
+        return "command-timeout";
+    }
+    if output.exit_code != Some(0) {
+        return "command-failed";
+    }
+    if marker_value(&output.stdout, "CODEXHUB_RELOAD_STATUS").is_none() {
+        return "status-missing";
+    }
+    if marker_value(&output.stdout, "CODEXHUB_RELOAD_TARGETED").is_none()
+        || marker_value(&output.stdout, "CODEXHUB_RELOAD_STOPPED").is_none()
+        || marker_value(&output.stdout, "CODEXHUB_RELOAD_PRESERVED_CLI").is_none()
+    {
+        return "counts-missing";
+    }
+    if marker_value(&output.stdout, "CODEXHUB_RELOAD_REPLACEMENT_OBSERVED").is_none() {
+        return "replacement-marker-missing";
+    }
+    if marker_value(&output.stdout, "CODEXHUB_RELOAD_REASON").is_none() {
+        return "reason-missing";
+    }
+    "protocol-invalid"
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {

@@ -8,6 +8,8 @@ pub(crate) enum TaskStatus {
     Running,
     Success,
     Failed,
+    #[serde(rename = "manual-required")]
+    ManualRequired,
     Cancelled,
     Interrupted,
 }
@@ -127,6 +129,22 @@ mod tests {
             (TaskStepStatus::Success, "success"),
             (TaskStepStatus::Failed, "failed"),
             (TaskStepStatus::Skipped, "skipped"),
+        ];
+        for (status, expected) in labels {
+            assert_eq!(serde_json::to_value(status).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn task_statuses_use_stable_wire_labels() {
+        let labels = [
+            (TaskStatus::Queued, "queued"),
+            (TaskStatus::Running, "running"),
+            (TaskStatus::Success, "success"),
+            (TaskStatus::Failed, "failed"),
+            (TaskStatus::ManualRequired, "manual-required"),
+            (TaskStatus::Cancelled, "cancelled"),
+            (TaskStatus::Interrupted, "interrupted"),
         ];
         for (status, expected) in labels {
             assert_eq!(serde_json::to_value(status).unwrap(), expected);

@@ -1130,6 +1130,7 @@ export const uiCopy = {
         running: (action: string) => `${action} is running.`,
         success: (action: string) => `${action} completed.`,
         failed: (action: string) => `${action} failed. Review the logs for details.`,
+        "manual-required": (action: string) => `${action} completed, but manual recovery is required.`,
         cancelled: (action: string) => `${action} was cancelled.`,
         interrupted: (action: string) => `${action} was interrupted.`
       }
@@ -1305,6 +1306,7 @@ export const uiCopy = {
         running: "running",
         success: "success",
         failed: "failed",
+        "manual-required": "manual recovery required",
         cancelled: "cancelled",
         interrupted: "interrupted"
       },
@@ -2039,6 +2041,7 @@ export const uiCopy = {
         running: (action: string) => `${action}正在执行。`,
         success: (action: string) => `${action}已完成。`,
         failed: (action: string) => `${action}失败，请查看日志详情。`,
+        "manual-required": (action: string) => `${action}已完成，但需要手动处理。`,
         cancelled: (action: string) => `${action}已取消。`,
         interrupted: (action: string) => `${action}已中断。`
       }
@@ -2214,6 +2217,7 @@ export const uiCopy = {
         running: "运行中",
         success: "成功",
         failed: "失败",
+        "manual-required": "需要手动处理",
         cancelled: "已取消",
         interrupted: "已中断"
       },
@@ -10114,7 +10118,7 @@ function TaskLogModal({
   footer?: ReactNode;
 }) {
   const personalInfo = usePersonalInfoMasking();
-  const statusTone = task.status === "success" ? "green" : task.status === "failed" ? "red" : task.status === "running" ? "yellow" : "gray";
+  const statusTone = task.status === "success" ? "green" : task.status === "failed" ? "red" : task.status === "running" || task.status === "manual-required" ? "yellow" : "gray";
   const operationHost = taskOperationHost(task, copy);
   return (
     <div className="modalBackdrop" role="presentation">
@@ -10743,7 +10747,7 @@ function latestAppInstallTask(tasks: TaskRun[]) {
 }
 
 function TaskStatusBadge({ copy, status }: { copy: UICopy; status: TaskStatus }) {
-  const tone: BadgeTone = status === "success" ? "green" : status === "failed" ? "red" : status === "running" ? "yellow" : "gray";
+  const tone: BadgeTone = status === "success" ? "green" : status === "failed" ? "red" : status === "running" || status === "manual-required" ? "yellow" : "gray";
   return <Badge tone={tone}>{copy.status.task[status]}</Badge>;
 }
 
@@ -11294,6 +11298,7 @@ function taskOperationHostStatus(status: TaskStatus): OperationProgressHost["sta
   if (status === "queued") return "pending";
   if (status === "running") return "running";
   if (status === "success") return "success";
+  if (status === "manual-required") return "partial";
   return "failed";
 }
 

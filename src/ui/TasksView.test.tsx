@@ -75,6 +75,27 @@ test("task page header clears all completed history while the detail dialog has 
   expect(onClearTaskHistory).toHaveBeenCalledTimes(1);
 });
 
+test("manual-required task is shown as actionable instead of failed", () => {
+  render(
+    <FeedbackProvider>
+      <TasksView
+        copy={uiCopy.en}
+        hasMore={false}
+        loadingMore={false}
+        mockMode={false}
+        requestedTaskId={null}
+        tasks={[{ ...task, id: "task-manual-required", status: "manual-required" }]}
+        onClearTaskHistory={async () => 1}
+        onLoadMore={async () => undefined}
+        onRequestHandled={() => undefined}
+        onTaskViewed={() => undefined}
+      />
+    </FeedbackProvider>
+  );
+
+  expect(screen.getByText("manual recovery required")).toBeInTheDocument();
+});
+
 test("failed uninstall with unknown remote state preserves the confirmed host Codex state", () => {
   const host: Host = {
     id: "host-1",

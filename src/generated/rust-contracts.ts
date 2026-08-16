@@ -52,7 +52,7 @@ export type ProfileDraftDto = { name: string, description?: string, model: strin
 
 export type ProfilePatchDto = { name?: string, description?: string, model?: string, provider?: string, baseUrl?: string, apiKeyEnvVar?: string, modelReasoningEffort?: string, planModeReasoningEffort?: string, fastMode?: boolean, serviceTier?: string, approvalPolicy?: string, sandboxMode?: string, extraToml?: string, source?: string, credentialStored?: boolean, hostIds?: Array<string>, };
 
-export type TaskStatus = "queued" | "running" | "success" | "failed" | "cancelled" | "interrupted";
+export type TaskStatus = "queued" | "running" | "success" | "failed" | "manual-required" | "cancelled" | "interrupted";
 
 export type TaskStepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 

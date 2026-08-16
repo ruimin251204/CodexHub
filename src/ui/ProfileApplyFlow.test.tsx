@@ -107,7 +107,7 @@ const manualReconnectTask: TaskRun = {
   hostId: testHost.id,
   hostName: testHost.name,
   action: "Apply profile",
-  status: "failed",
+  status: "manual-required",
   startedAt: "2026-07-17T00:00:00.000Z",
   endedAt: "2026-07-17T00:00:01.000Z",
   summary: "Configuration applied; manual reconnect required.",

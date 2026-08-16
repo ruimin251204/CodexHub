@@ -1699,6 +1699,10 @@ codexhub_test_sleep() {{ :; }}
         let parsed =
             parse_remote_codex_reload_result(RemoteCodexReloadMode::AppServices, &timed_out);
         assert_eq!(parsed.status, RemoteCodexReloadStatus::Failed);
+        let timeout_message = remote_codex_reload_log_message(&parsed, &timed_out, 30_000);
+        assert!(timeout_message.contains("timedOut=true"));
+        assert!(timeout_message.contains("durationMs=30000"));
+        assert!(timeout_message.contains("protocol=command-timeout"));
 
         let noisy = ssh::SshCommandOutput {
             command: "ssh lab sh -s".into(),
@@ -1712,11 +1716,12 @@ codexhub_test_sleep() {{ :; }}
         let serialized = serde_json::to_string(&parsed).expect("serialize reload result");
         assert!(!serialized.contains("codex app-server"));
         assert!(!serialized.contains("sk-test-secret"));
-        let log = basic_log(
+        let log = remote_codex_reload_log(
             "task-reload-noisy",
             0,
             TaskLogLevel::Info,
-            &remote_codex_reload_log_message(&parsed),
+            &remote_codex_reload_log_message(&parsed, &noisy, 30_000),
+            &noisy,
         );
         let serialized_log = serde_json::to_string(&log).expect("serialize reload task log");
         assert!(serialized_log.contains("targeted=0"));
@@ -1726,6 +1731,9 @@ codexhub_test_sleep() {{ :; }}
         assert!(log.command.is_none());
         assert!(log.stdout.is_none());
         assert!(log.stderr.is_none());
+        assert_eq!(log.exit_code, Some(0));
+        assert_eq!(log.duration_ms, Some(20));
+        assert_eq!(log.timed_out, Some(false));
 
         let malformed = ssh::SshCommandOutput {
             command: "ssh lab sh -s".into(),
@@ -1861,6 +1869,14 @@ codexhub_test_sleep() {{ :; }}
         ));
         assert!(matches!(
             profile_apply_task_status(true, true, true),
+            TaskStatus::Failed
+        ));
+        assert!(matches!(
+            profile_apply_task_status(true, false, false),
+            TaskStatus::ManualRequired
+        ));
+        assert!(matches!(
+            profile_apply_task_status(false, false, false),
             TaskStatus::Failed
         ));
     }

@@ -168,6 +168,7 @@ impl TerminalAuditSink for JobManagerTerminalAudit {
             task.status,
             TaskStatus::Success
                 | TaskStatus::Failed
+                | TaskStatus::ManualRequired
                 | TaskStatus::Cancelled
                 | TaskStatus::Interrupted
         ) {
