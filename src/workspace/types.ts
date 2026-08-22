@@ -149,6 +149,13 @@ export type WorkspaceFilePreview = {
   dataBase64: string | null;
   truncated: boolean;
   blockedReason: string | null;
+  fingerprint?: string;
+};
+
+export type WorkspaceFileClipboard = {
+  sourceFileSessionId: string;
+  sourceEntryRefs: string[];
+  names: string[];
 };
 
 export type WorkspaceLocalGrant = {
@@ -311,6 +318,11 @@ export type WorkspaceApi = {
 
   listLocalRoots: () => Promise<string[]>;
   openFiles: (input: { hostAlias: string }) => Promise<WorkspaceFilesSession>;
+  openFolderInVscode: (input: {
+    fileSessionId: string;
+    path: string;
+    entryRef?: string | null;
+  }) => Promise<void>;
   closeFiles: (input: { fileSessionId: string }) => Promise<void>;
   listDirectory: (input: {
     fileSessionId: string;
@@ -326,6 +338,18 @@ export type WorkspaceApi = {
   previewFile: (input: { fileSessionId: string; entryRef: string }) => Promise<WorkspaceFilePreview>;
   createDirectory: (input: { fileSessionId: string; parentPath: string; name: string }) => Promise<RemoteFileEntry>;
   copyEntry: (input: { fileSessionId: string; sourceEntryRef: string; destinationPath: string }) => Promise<RemoteFileEntry>;
+  copyEntries: (input: {
+    sourceFileSessionId: string;
+    destinationFileSessionId: string;
+    sourceEntryRefs: string[];
+    destinationPath: string;
+  }) => Promise<RemoteFileEntry[]>;
+  saveTextFile: (input: {
+    fileSessionId: string;
+    entryRef: string;
+    expectedFingerprint: string;
+    text: string;
+  }) => Promise<RemoteFileEntry>;
   validateTerminalCwd: (input: { sessionId: string; generation: number; fileSessionId: string }) => Promise<WorkspaceTerminalCwdEvent>;
   prepareFileOperation: (input: {
     fileSessionId: string;

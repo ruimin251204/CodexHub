@@ -6,6 +6,7 @@ use super::events::{
 use super::local_files::LocalFileSessions;
 use super::remote_path;
 use super::types::*;
+use super::vscode::{self, VscodeFolder};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::{DateTime, SecondsFormat, Utc};
 use futures_util::StreamExt;
@@ -34,6 +35,8 @@ const TEXT_PREVIEW_LIMIT: u64 = 1024 * 1024;
 const IMAGE_PREVIEW_LIMIT: u64 = 10 * 1024 * 1024;
 const MAX_SEARCH_RESULTS: usize = 10_000;
 const TRANSFER_CHUNK_BYTES: usize = 128 * 1024;
+const MAX_CLIPBOARD_ENTRIES: usize = 100;
+const MAX_EDIT_TEXT_BYTES: usize = TEXT_PREVIEW_LIMIT as usize;
 const MAX_SEARCH_DURATION: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -409,6 +412,42 @@ impl FileSessions {
         let canonical = canonicalize(&session, candidate_path).await?;
         path_string(&canonical)
     }
+
+    pub(crate) async fn open_folder_in_vscode(
+        &self,
+        request: OpenFolderInVscodeRequest,
+    ) -> WorkspaceResult<()> {
+        let folder = if LocalFileSessions::owns(&request.file_session_id) {
+            self.local
+                .vscode_folder(&request.path, request.entry_ref.as_deref())
+                .await?
+        } else {
+            let session = self.get(&request.file_session_id)?;
+            let canonical = canonicalize(&session, &request.path).await?;
+            let canonical_path = path_string(&canonical)?;
+            if let Some(entry_ref) = request.entry_ref.as_deref() {
+                let entry = self.resolve_entry(&session, entry_ref).await?;
+                if entry.kind != RemoteFileKind::Directory || entry.path != canonical_path {
+                    return Err(WorkspaceError::new(
+                        "vscode-folder-entry-mismatch",
+                        "Refresh the directory before opening this folder in VS Code.",
+                    ));
+                }
+            }
+            let connection = session.connection.lock().await;
+            let mut fs = connection.sftp.fs();
+            let metadata = fs
+                .symlink_metadata(&canonical)
+                .await
+                .map_err(sftp_error("vscode-folder-stale"))?;
+            ensure_plain_directory(&metadata, "vscode-folder-not-directory")?;
+            VscodeFolder::Remote {
+                host_alias: session.dto.host_alias.clone(),
+                path: canonical_path,
+            }
+        };
+        vscode::open_folder(folder).await
+    }
     /// A Files session is bound to one saved host.  Callers that combine a
     /// terminal or transfer with it must prove the same host before any SFTP
     /// path is canonicalized or a transfer plan is bound.
@@ -689,6 +728,309 @@ impl FileSessions {
             .await
             .insert(entry.entry_ref.clone(), entry.clone());
         Ok(entry)
+    }
+
+    /// Copies capabilities between independently selected Files windows. For
+    /// cross-session copies, data is streamed through a private temporary file
+    /// so neither source nor destination paths become webview authority.
+    pub async fn copy_entries(
+        &self,
+        request: CopyFileEntriesRequest,
+    ) -> WorkspaceResult<Vec<RemoteFileEntry>> {
+        if request.source_entry_refs.is_empty()
+            || request.source_entry_refs.len() > MAX_CLIPBOARD_ENTRIES
+        {
+            return Err(WorkspaceError::new(
+                "invalid-copy-selection",
+                "Copy between Files windows requires between 1 and 100 entries.",
+            ));
+        }
+        let destination_root = self
+            .canonicalize_cwd(
+                &request.destination_file_session_id,
+                &request.destination_path,
+            )
+            .await?;
+        let mut copied = Vec::with_capacity(request.source_entry_refs.len());
+        for source_ref in request.source_entry_refs {
+            let source = self
+                .operation_stat(&request.source_file_session_id, &source_ref)
+                .await?;
+            if !matches!(
+                source.kind,
+                RemoteFileKind::File | RemoteFileKind::Directory
+            ) || !source.writable_name
+                || is_prohibited_path(&source.path)
+            {
+                return Err(WorkspaceError::new(
+                    "copy-source-unsupported",
+                    "Only regular files and plain directories with safe names can be copied.",
+                ));
+            }
+            let destination = self
+                .unique_copy_destination(
+                    &request.destination_file_session_id,
+                    &destination_root,
+                    &source.name,
+                )
+                .await?;
+            if is_prohibited_path(&destination) {
+                return Err(WorkspaceError::new(
+                    "protected-file",
+                    "Workspace cannot copy files into a protected path.",
+                ));
+            }
+            if request.source_file_session_id == request.destination_file_session_id {
+                if source.kind == RemoteFileKind::Directory
+                    && remote_path::is_same_or_child(&destination, &source.path)
+                {
+                    return Err(WorkspaceError::new(
+                        "copy-destination-inside-source",
+                        "A folder cannot be copied into itself.",
+                    ));
+                }
+                copied.push(
+                    self.copy_entry(CopyFileEntryRequest {
+                        file_session_id: request.source_file_session_id.clone(),
+                        source_entry_ref: source_ref,
+                        destination_path: destination,
+                    })
+                    .await?,
+                );
+                continue;
+            }
+            if source.kind == RemoteFileKind::File {
+                self.copy_regular_between_sessions(
+                    &request.source_file_session_id,
+                    &source.path,
+                    &request.destination_file_session_id,
+                    &destination,
+                )
+                .await?;
+            } else {
+                self.operation_mkdir(&request.destination_file_session_id, &destination)
+                    .await?;
+                let mut pending = VecDeque::from([(source.path.clone(), destination.clone())]);
+                while let Some((source_dir, destination_dir)) = pending.pop_front() {
+                    let mut snapshot_id = None;
+                    let mut page_token = None;
+                    loop {
+                        let page = self
+                            .list_directory(ListDirectoryRequest {
+                                file_session_id: request.source_file_session_id.clone(),
+                                path: source_dir.clone(),
+                                snapshot_id: snapshot_id.clone(),
+                                page_token: page_token.clone(),
+                                sort: Some(FileSortField::Name),
+                                direction: Some(SortDirection::Asc),
+                            })
+                            .await?;
+                        snapshot_id = Some(page.snapshot_id.clone());
+                        for child in page.entries {
+                            if !child.writable_name
+                                || !matches!(
+                                    child.kind,
+                                    RemoteFileKind::File | RemoteFileKind::Directory
+                                )
+                                || is_prohibited_path(&child.path)
+                            {
+                                return Err(WorkspaceError::new(
+                                    "copy-source-unsupported",
+                                    "Folders containing links, special files, or protected entries cannot be copied safely.",
+                                ));
+                            }
+                            let child_destination =
+                                remote_path::join(&destination_dir, &child.name)?;
+                            if child.kind == RemoteFileKind::Directory {
+                                self.operation_mkdir(
+                                    &request.destination_file_session_id,
+                                    &child_destination,
+                                )
+                                .await?;
+                                pending.push_back((child.path, child_destination));
+                            } else {
+                                self.copy_regular_between_sessions(
+                                    &request.source_file_session_id,
+                                    &child.path,
+                                    &request.destination_file_session_id,
+                                    &child_destination,
+                                )
+                                .await?;
+                            }
+                        }
+                        page_token = page.next_page_token;
+                        if page_token.is_none() {
+                            break;
+                        }
+                    }
+                }
+            }
+            copied.push(
+                self.operation_internal_entry(&request.destination_file_session_id, &destination)
+                    .await?,
+            );
+        }
+        Ok(copied)
+    }
+
+    async fn unique_copy_destination(
+        &self,
+        file_session_id: &str,
+        parent: &str,
+        name: &str,
+    ) -> WorkspaceResult<String> {
+        let (stem, extension) = name
+            .rsplit_once('.')
+            .filter(|(stem, _)| !stem.is_empty())
+            .map(|(stem, ext)| (stem, format!(".{ext}")))
+            .unwrap_or((name, String::new()));
+        for index in 0..=100 {
+            let candidate_name = if index == 0 {
+                name.to_owned()
+            } else if index == 1 {
+                format!("{stem} copy{extension}")
+            } else {
+                format!("{stem} copy {index}{extension}")
+            };
+            let candidate = remote_path::join(parent, &candidate_name)?;
+            if !self.operation_exists(file_session_id, &candidate).await? {
+                return Ok(candidate);
+            }
+        }
+        Err(WorkspaceError::new(
+            "copy-destination-exhausted",
+            "Too many files with this name already exist in the destination.",
+        ))
+    }
+
+    async fn copy_regular_between_sessions(
+        &self,
+        source_session_id: &str,
+        source_path: &str,
+        destination_session_id: &str,
+        destination_path: &str,
+    ) -> WorkspaceResult<()> {
+        let temporary =
+            std::env::temp_dir().join(format!("codexhub-window-copy-{}", Uuid::new_v4()));
+        let cancel = CancellationToken::new();
+        let mut download_progress = |_bytes| Ok(());
+        let result = async {
+            match self
+                .transfer_download(
+                    source_session_id,
+                    source_path,
+                    &temporary,
+                    0,
+                    &cancel,
+                    &mut download_progress,
+                )
+                .await?
+            {
+                TransferStreamStop::Complete => {}
+                TransferStreamStop::Cancelled => {
+                    return Err(WorkspaceError::new(
+                        "copy-cancelled",
+                        "The file copy was cancelled.",
+                    ))
+                }
+            }
+            let mut upload_progress = |_bytes| Ok(());
+            match self
+                .transfer_upload(
+                    destination_session_id,
+                    &temporary,
+                    destination_path,
+                    0,
+                    &cancel,
+                    &mut upload_progress,
+                )
+                .await?
+            {
+                TransferStreamStop::Complete => Ok(()),
+                TransferStreamStop::Cancelled => Err(WorkspaceError::new(
+                    "copy-cancelled",
+                    "The file copy was cancelled.",
+                )),
+            }
+        }
+        .await;
+        let _ = tokio::fs::remove_file(&temporary).await;
+        result
+    }
+
+    /// Writes editor content to a backend-generated sibling staging file. The
+    /// recovery-aware overwrite flow owns the final replacement.
+    pub(crate) async fn write_text_staging(
+        &self,
+        file_session_id: &str,
+        destination_path: &str,
+        text: &str,
+    ) -> WorkspaceResult<RemoteFileEntry> {
+        if text.len() > MAX_EDIT_TEXT_BYTES {
+            return Err(WorkspaceError::new(
+                "edit-too-large",
+                "Workspace edits are limited to 1 MiB of UTF-8 text.",
+            ));
+        }
+        let parent = remote_path::parent(destination_path)?;
+        let staging_path =
+            remote_path::join(parent, &format!(".codexhub-edit-{}.tmp", Uuid::new_v4()))?;
+        if LocalFileSessions::owns(file_session_id) {
+            self.local
+                .write_text_staging(&staging_path, text.as_bytes())
+                .await?;
+        } else {
+            let session = self.get(file_session_id)?;
+            let connection = session.connection.lock().await;
+            let mut options = connection.sftp.options();
+            options.create_new(true).write(true);
+            let mut file = options
+                .open(Path::new(&staging_path))
+                .await
+                .map_err(sftp_error("edit-staging-open-failed"))?;
+            file.write_all(text.as_bytes())
+                .await
+                .map_err(sftp_error("edit-staging-write-failed"))?;
+            file.sync_all()
+                .await
+                .map_err(sftp_error("sftp-fsync-required"))?;
+            file.close()
+                .await
+                .map_err(sftp_error("edit-staging-close-failed"))?;
+        }
+        self.operation_internal_entry(file_session_id, &staging_path)
+            .await
+    }
+
+    pub(crate) async fn remove_staging_file(
+        &self,
+        file_session_id: &str,
+        path: &str,
+    ) -> WorkspaceResult<()> {
+        if !remote_path::file_name(path)?.starts_with(".codexhub-edit-") {
+            return Err(WorkspaceError::new(
+                "unsafe-staging-path",
+                "Only a generated editor staging file may be removed.",
+            ));
+        }
+        if LocalFileSessions::owns(file_session_id) {
+            return self.local.remove_staging_file(path).await;
+        }
+        let session = self.get(file_session_id)?;
+        let connection = session.connection.lock().await;
+        let mut fs = connection.sftp.fs();
+        match fs.remove_file(Path::new(path)).await {
+            Ok(()) => Ok(()),
+            Err(error)
+                if error
+                    .to_string()
+                    .to_ascii_lowercase()
+                    .contains("no such file") =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(sftp_error("edit-staging-remove-failed")(error)),
+        }
     }
     pub(crate) fn operation_host_alias(&self, file_session_id: &str) -> WorkspaceResult<String> {
         if LocalFileSessions::owns(file_session_id) {

@@ -157,6 +157,33 @@ impl FileOperations {
             requires_destination_backup,
         })
     }
+
+    /// Prepare a regular-file replacement from an editor staging entry. The
+    /// destination fingerprint is captured before the confirmation token is
+    /// returned, and `confirm` rechecks it before the atomic no-replace swap.
+    pub async fn prepare_overwrite(
+        &self,
+        files: &FileSessions,
+        file_session_id: &str,
+        destination_entry_ref: &str,
+        staging_entry_ref: &str,
+    ) -> WorkspaceResult<PreparedFileOperation> {
+        let destination = files
+            .operation_stat(file_session_id, destination_entry_ref)
+            .await?
+            .path;
+        self.prepare(
+            files,
+            PrepareFileOperationRequest {
+                file_session_id: file_session_id.to_owned(),
+                kind: FileOperationKind::Overwrite,
+                source_entry_ref: destination_entry_ref.to_owned(),
+                destination_path: Some(destination),
+                staging_entry_ref: Some(staging_entry_ref.to_owned()),
+            },
+        )
+        .await
+    }
     /// Gives the command boundary enough stable context to start an auditable
     /// Job Manager task before the one-shot confirmation token is consumed.
     pub fn prepared_host(&self, operation_token: &str) -> WorkspaceResult<(String, String)> {

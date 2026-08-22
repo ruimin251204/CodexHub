@@ -146,6 +146,19 @@ pub struct OpenFilesRequest {
     pub host_alias: String,
 }
 
+/// A Files-owned directory that the desktop may hand to an external editor.
+/// Directory entries use an opaque reference; the path is canonicalized again
+/// by the backend before VS Code is launched.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "WorkspaceOpenFolderInVscodeRequestDto")]
+pub struct OpenFolderInVscodeRequest {
+    pub file_session_id: String,
+    pub path: String,
+    #[serde(default)]
+    pub entry_ref: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "WorkspaceFileSessionDto")]
@@ -322,6 +335,31 @@ pub struct CopyFileEntryRequest {
     pub file_session_id: String,
     pub source_entry_ref: String,
     pub destination_path: String,
+}
+
+/// Copies one or more fresh file capabilities into a directory owned by a
+/// second Files session. The two sessions may point at the same host, two
+/// different SSH hosts, or the local filesystem.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "WorkspaceCopyFileEntriesRequestDto")]
+pub struct CopyFileEntriesRequest {
+    pub source_file_session_id: String,
+    pub destination_file_session_id: String,
+    pub source_entry_refs: Vec<String>,
+    pub destination_path: String,
+}
+
+/// A text edit is tied to the exact fingerprint shown in the editor. This
+/// prevents a save from silently replacing changes made after the file opened.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "WorkspaceSaveTextFileRequestDto")]
+pub struct SaveTextFileRequest {
+    pub file_session_id: String,
+    pub entry_ref: String,
+    pub expected_fingerprint: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, Deserialize, TS)]

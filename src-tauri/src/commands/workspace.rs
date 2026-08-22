@@ -617,6 +617,18 @@ pub(crate) async fn workspace_open_files(
 }
 
 #[tauri::command]
+pub(crate) async fn workspace_open_folder_in_vscode(
+    state: State<'_, AppState>,
+    request: OpenFolderInVscodeRequest,
+) -> Result<(), String> {
+    manager(&state)?
+        .files
+        .open_folder_in_vscode(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub(crate) async fn workspace_list_directory(
     state: State<'_, AppState>,
     request: ListDirectoryRequest,
@@ -745,6 +757,82 @@ pub(crate) async fn workspace_copy_file_entry(
         },
     );
     result
+}
+
+#[tauri::command]
+pub(crate) async fn workspace_copy_file_entries(
+    state: State<'_, AppState>,
+    request: CopyFileEntriesRequest,
+) -> Result<Vec<RemoteFileEntry>, String> {
+    manager(&state)?
+        .files
+        .copy_entries(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn workspace_save_text_file(
+    state: State<'_, AppState>,
+    request: SaveTextFileRequest,
+) -> Result<RemoteFileEntry, String> {
+    let workspace = manager(&state)?;
+    let current = workspace
+        .files
+        .operation_stat(&request.file_session_id, &request.entry_ref)
+        .await
+        .map_err(|error| error.to_string())?;
+    if current.kind != RemoteFileKind::File || current.fingerprint != request.expected_fingerprint {
+        return Err(
+            "stale-edit: The file changed after it was opened; reload before saving.".into(),
+        );
+    }
+    let staging = workspace
+        .files
+        .write_text_staging(&request.file_session_id, &current.path, &request.text)
+        .await
+        .map_err(|error| error.to_string())?;
+    let prepared = workspace
+        .operations
+        .prepare_overwrite(
+            &workspace.files,
+            &request.file_session_id,
+            &request.entry_ref,
+            &staging.entry_ref,
+        )
+        .await;
+    let prepared = match prepared {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = workspace
+                .files
+                .remove_staging_file(&request.file_session_id, &staging.path)
+                .await;
+            return Err(error.to_string());
+        }
+    };
+    let result = workspace
+        .operations
+        .confirm(
+            &workspace.files,
+            ConfirmFileOperationRequest {
+                operation_token: prepared.operation_token,
+            },
+            None,
+        )
+        .await;
+    let _ = workspace
+        .files
+        .remove_staging_file(&request.file_session_id, &staging.path)
+        .await;
+    match result {
+        Ok(_) => workspace
+            .files
+            .operation_internal_entry(&request.file_session_id, &current.path)
+            .await
+            .map_err(|error| error.to_string()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 #[tauri::command]

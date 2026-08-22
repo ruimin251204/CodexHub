@@ -257,6 +257,8 @@ export type WorkspaceTerminalIdentityRequestDto = { sessionId: string, generatio
 
 export type WorkspaceOpenFilesRequestDto = { local: boolean, hostId: string, hostName: string, hostAlias: string, };
 
+export type WorkspaceOpenFolderInVscodeRequestDto = { fileSessionId: string, path: string, entryRef: string | null, };
+
 export type WorkspaceFileSessionDto = { fileSessionId: string, hostId: string, hostName: string, hostAlias: string, homePath: string, supportsFsync: boolean,
 /**
  * A remote hard link gives regular files an atomic create-if-absent
@@ -301,6 +303,10 @@ export type WorkspaceFilePreviewDto = { entry: RemoteFileEntryDto, kind: Workspa
 export type WorkspaceCreateDirectoryRequestDto = { fileSessionId: string, parentPath: string, name: string, };
 
 export type WorkspaceCopyFileEntryRequestDto = { fileSessionId: string, sourceEntryRef: string, destinationPath: string, };
+
+export type WorkspaceCopyFileEntriesRequestDto = { sourceFileSessionId: string, destinationFileSessionId: string, sourceEntryRefs: Array<string>, destinationPath: string, };
+
+export type WorkspaceSaveTextFileRequestDto = { fileSessionId: string, entryRef: string, expectedFingerprint: string, text: string, };
 
 export type WorkspaceCwdSourceDto = "osc7" | "proc";
 

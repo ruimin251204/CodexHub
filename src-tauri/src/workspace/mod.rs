@@ -12,6 +12,7 @@ pub mod terminal;
 pub mod transfer_io;
 pub mod transfers;
 pub mod types;
+mod vscode;
 
 use crate::workspace::error::{WorkspaceError, WorkspaceResult};
 use crate::workspace::events::WorkspaceEventSink;
