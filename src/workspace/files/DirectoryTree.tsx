@@ -5,7 +5,7 @@ import type { FilesUiCopy } from "./filesUiCopy";
 import { FileGlyph } from "./FileGlyph";
 import { FilesIcon } from "./FilesIcon";
 
-type TreeNode = { name: string; path: string; virtualRoot?: boolean };
+type TreeNode = { name: string; path: string; hidden?: boolean; virtualRoot?: boolean };
 
 const LOCAL_ROOTS_PATH = "codexhub://local-roots";
 
@@ -17,7 +17,7 @@ function pathSegments(path: string) {
     let cursor = root.replace(/\/$/, "");
     for (const segment of drive[2].split("/").filter(Boolean)) {
       cursor += `/${segment}`;
-      nodes.push({ name: segment, path: cursor });
+      nodes.push({ name: segment, path: cursor, hidden: segment.startsWith(".") && segment.length > 1 });
     }
     return nodes;
   }
@@ -27,7 +27,7 @@ function pathSegments(path: string) {
   let cursor = "";
   for (const segment of normalized.slice(1).split("/")) {
     cursor += `/${segment}`;
-    nodes.push({ name: segment, path: cursor });
+      nodes.push({ name: segment, path: cursor, hidden: segment.startsWith(".") && segment.length > 1 });
   }
   return nodes;
 }
@@ -59,7 +59,13 @@ function buildTreeChildren(
     }
   }
   for (const [path, entries] of directoryEntriesByPath) {
-    for (const entry of entries) mergeChild(path, { name: entry.name, path: entry.canonicalPath });
+    for (const entry of entries) {
+      mergeChild(path, {
+        name: entry.name,
+        path: entry.canonicalPath,
+        hidden: entry.name.startsWith(".") && entry.name.length > 1
+      });
+    }
   }
   return children;
 }
@@ -72,6 +78,7 @@ function TreeBranch({
   loadingPaths,
   node,
   treeChildren,
+  onContextMenu,
   onNavigate,
   onToggle
 }: {
@@ -82,6 +89,7 @@ function TreeBranch({
   loadingPaths: ReadonlySet<string>;
   node: TreeNode;
   treeChildren: ReadonlyMap<string, TreeNode[]>;
+  onContextMenu: (path: string, point: { x: number; y: number }) => void;
   onNavigate: (path: string) => void;
   onToggle: (path: string) => void;
 }) {
@@ -90,7 +98,18 @@ function TreeBranch({
   const label = node.path === "/" ? copy.rootDirectory : node.name;
   return (
     <li role="treeitem" aria-expanded={expanded} aria-current={currentPath === node.path ? "page" : undefined}>
-      <div className="workspaceDirectoryTreeRow" data-active={currentPath === node.path} style={{ "--tree-depth": depth } as CSSProperties}>
+      <div
+        className="workspaceDirectoryTreeRow"
+        data-active={currentPath === node.path}
+        data-hidden={node.hidden ? "true" : undefined}
+        style={{ "--tree-depth": depth } as CSSProperties}
+        onContextMenu={(event) => {
+          if (node.virtualRoot) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onContextMenu(node.path, { x: event.clientX, y: event.clientY });
+        }}
+      >
         {node.virtualRoot ? (
           <span aria-hidden="true" className="workspaceDirectoryChevron"><FilesIcon name="chevronDown" /></span>
         ) : (
@@ -123,6 +142,7 @@ function TreeBranch({
               loadingPaths={loadingPaths}
               node={child}
               treeChildren={treeChildren}
+              onContextMenu={onContextMenu}
               onNavigate={onNavigate}
               onToggle={onToggle}
             />
@@ -141,6 +161,7 @@ export function DirectoryTree({
   localRoots,
   loadingPaths,
   session,
+  onContextMenu,
   onNavigate,
   onToggle
 }: {
@@ -151,6 +172,7 @@ export function DirectoryTree({
   localRoots: readonly string[];
   loadingPaths: ReadonlySet<string>;
   session: WorkspaceFilesSession | null;
+  onContextMenu: (path: string, point: { x: number; y: number }) => void;
   onNavigate: (path: string) => void;
   onToggle: (path: string) => void;
 }) {
@@ -177,6 +199,7 @@ export function DirectoryTree({
               loadingPaths={loadingPaths}
               node={rootNode}
               treeChildren={treeChildren}
+              onContextMenu={onContextMenu}
               onNavigate={onNavigate}
               onToggle={onToggle}
             />

@@ -146,6 +146,16 @@ test("Files defaults to the local target when no terminal exists", async () => {
   await waitFor(() => expect(onSelectedHostChange).toHaveBeenCalledWith(""));
 });
 
+test("the active Files window owns the full file browser surface", async () => {
+  renderWorkspace({ api: createWorkspaceApi([]), mode: "files", selectedHostAlias: "" });
+
+  const panel = await screen.findByTestId("files-panel");
+  const window = panel.closest(".workspaceFilesWindow");
+  expect(window).not.toBeNull();
+  expect(window).not.toHaveAttribute("hidden");
+  expect(window?.parentElement).toHaveClass("workspaceModeFiles");
+});
+
 test("activating a terminal keeps the selected Terminal host aligned with its PTY", async () => {
   const onSelectedHostChange = vi.fn();
   const api = createWorkspaceApi([

@@ -339,6 +339,127 @@ test("Files more-actions menu closes from an outside press or Escape", async () 
   expect(toggle).toHaveFocus();
 });
 
+test("the More menu opens the current directory in VS Code", async () => {
+  const stop = () => undefined;
+  const openFolderInVscode = vi.fn().mockResolvedValue(undefined);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    openFolderInVscode,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  await screen.findByRole("row", { name: /projects/i });
+  const moreActions = document.querySelector<HTMLDetailsElement>(".workspaceFilesMoreActions");
+  expect(moreActions).not.toBeNull();
+  if (!moreActions) throw new Error("Files more-actions menu is unavailable");
+  fireEvent.click(moreActions.querySelector("summary")!);
+  fireEvent.click(within(moreActions).getByRole("button", { name: workspaceCopy.en.openFolderInVscode }));
+
+  await waitFor(() => expect(openFolderInVscode).toHaveBeenCalledWith({
+    fileSessionId: session.fileSessionId,
+    path: session.homePath,
+    entryRef: null
+  }));
+});
+
+test("a directory context menu opens that directory in VS Code", async () => {
+  const stop = () => undefined;
+  const openFolderInVscode = vi.fn().mockResolvedValue(undefined);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    openFolderInVscode,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  fireEvent.contextMenu(await screen.findByRole("row", { name: /projects/i }), { clientX: 10, clientY: 10 });
+  fireEvent.click(screen.getByRole("menuitem", { name: workspaceCopy.en.openFolderInVscode }));
+
+  await waitFor(() => expect(openFolderInVscode).toHaveBeenCalledWith({
+    fileSessionId: session.fileSessionId,
+    path: directory.canonicalPath,
+    entryRef: directory.entryRef
+  }));
+});
+
+test("a directory tree context menu opens that folder in VS Code", async () => {
+  const stop = () => undefined;
+  const openFolderInVscode = vi.fn().mockResolvedValue(undefined);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    openFolderInVscode,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  const tree = await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree });
+  fireEvent.contextMenu(within(tree).getByTitle(directory.canonicalPath), { clientX: 18, clientY: 24 });
+  fireEvent.click(screen.getByRole("menuitem", { name: workspaceCopy.en.openFolderInVscode }));
+
+  await waitFor(() => expect(openFolderInVscode).toHaveBeenCalledWith({
+    fileSessionId: session.fileSessionId,
+    path: directory.canonicalPath,
+    entryRef: directory.entryRef
+  }));
+});
+
+test("directory tree and file-list context menus match and show one Copy action", async () => {
+  renderPanel();
+
+  fireEvent.contextMenu(await screen.findByRole("row", { name: /projects/i }), { clientX: 10, clientY: 10 });
+  const fileMenu = screen.getByRole("menu");
+  const fileActions = within(fileMenu).getAllByRole("menuitem").map((item) => item.textContent);
+  expect(within(fileMenu).getAllByRole("menuitem", { name: workspaceCopy.en.copyEntry })).toHaveLength(1);
+
+  fireEvent.pointerDown(document.body);
+  const tree = screen.getByRole("tree", { name: filesUiCopy.en.directoryTree });
+  fireEvent.contextMenu(within(tree).getByTitle(directory.canonicalPath), { clientX: 18, clientY: 24 });
+  const treeMenu = screen.getByRole("menu");
+  const treeActions = within(treeMenu).getAllByRole("menuitem").map((item) => item.textContent);
+
+  expect(treeActions).toEqual(fileActions);
+  expect(within(treeMenu).getAllByRole("menuitem", { name: workspaceCopy.en.copyEntry })).toHaveLength(1);
+});
+
+test("Ctrl+C copies selected files and Ctrl+V pastes them", async () => {
+  const stop = () => undefined;
+  const copyEntries = vi.fn().mockResolvedValue([]);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory])),
+    copyEntries,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  fireEvent.click(await screen.findByRole("row", { name: /projects/i }));
+  fireEvent.keyDown(window, { key: "c", ctrlKey: true });
+  fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+
+  await waitFor(() => expect(copyEntries).toHaveBeenCalledWith({
+    sourceFileSessionId: session.fileSessionId,
+    destinationFileSessionId: session.fileSessionId,
+    sourceEntryRefs: [directory.entryRef],
+    destinationPath: session.homePath
+  }));
+});
+
 test("the More menu delete action offers backup mode and asks whether to remember it", async () => {
   window.localStorage.removeItem(FILE_DELETE_MODE_STORAGE_KEY);
   const stop = () => undefined;

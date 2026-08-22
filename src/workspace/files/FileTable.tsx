@@ -116,6 +116,10 @@ function fileTypeLabel(entry: RemoteFileEntry, copy: WorkspaceCopy) {
   }
 }
 
+function isHiddenEntry(entry: RemoteFileEntry) {
+  return entry.name.startsWith(".") && entry.name.length > 1;
+}
+
 function ResizableColumnHeader({
   ariaSort,
   column,
@@ -400,6 +404,7 @@ export function FileTable({
             aria-selected={selectedRefs.has(entry.entryRef)}
             className="workspaceFileRow"
             data-external-drop-target={externalDropTargetPath === entry.canonicalPath || undefined}
+            data-hidden={isHiddenEntry(entry) ? "true" : undefined}
             data-kind={entry.kind}
             data-workspace-drop-directory={entry.kind === "directory" ? entry.canonicalPath : undefined}
             draggable={entry.writable && entry.nameEncoding === "utf8"}

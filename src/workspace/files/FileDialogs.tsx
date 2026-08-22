@@ -84,6 +84,39 @@ export function FilePreviewDialog({ copy, preview, onClose }: {
   );
 }
 
+export function FileEditorDialog({
+  copy,
+  name,
+  text,
+  busy,
+  dirty,
+  onChange,
+  onCancel,
+  onSave
+}: {
+  copy: WorkspaceCopy;
+  name: string;
+  text: string;
+  busy: boolean;
+  dirty: boolean;
+  onChange: (text: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="workspaceInlineDialogBackdrop" role="presentation">
+      <section aria-labelledby="workspace-editor-title" className="workspaceInlineDialog workspaceEditorDialog" role="dialog" aria-modal="true">
+        <header><h3 id="workspace-editor-title">{copy.editFile}: {name}</h3><button aria-label={copy.close} type="button" onClick={onCancel}>×</button></header>
+        <textarea aria-label={copy.editFile} autoFocus value={text} onChange={(event) => onChange(event.target.value)} />
+        <footer className="workspaceDialogActions">
+          <button disabled={busy} type="button" onClick={onCancel}>{copy.cancel}</button>
+          <button className="workspacePrimaryButton" disabled={busy || !dirty} type="button" onClick={onSave}>{busy ? copy.busy : copy.saveFile}</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 export function FileOperationDialog({
   busy,
   copy,

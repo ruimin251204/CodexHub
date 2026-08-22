@@ -7,6 +7,7 @@ export type FilesIconName =
   | "chevronRight"
   | "chevronUp"
   | "close"
+  | "copy"
   | "current"
   | "download"
   | "eye"
@@ -16,6 +17,7 @@ export type FilesIconName =
   | "home"
   | "locate"
   | "more"
+  | "paste"
   | "refresh"
   | "search"
   | "sortAscending"
@@ -32,6 +34,7 @@ const iconPaths: Record<FilesIconName, ReactNode> = {
   chevronRight: <path d="m6 4.5 3.5 3.5L6 11.5" />,
   chevronUp: <path d="m4.5 10 3.5-3.5 3.5 3.5" />,
   close: <path d="m4 4 8 8m0-8-8 8" />,
+  copy: <><rect x="5" y="5" width="7" height="7" rx="1" /><path d="M3 10V3.8A.8.8 0 0 1 3.8 3H10" /></>,
   current: <><circle cx="8" cy="8" r="4" /><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" /></>,
   download: <><path d="M8 2.5v7" /><path d="m5 7 3 3 3-3" /><path d="M3 13.5h10" /></>,
   eye: <><path d="M1.5 8S3.8 4.5 8 4.5 14.5 8 14.5 8 12.2 11.5 8 11.5 1.5 8 1.5 8Z" /><circle cx="8" cy="8" r="1.8" /></>,
@@ -41,6 +44,7 @@ const iconPaths: Record<FilesIconName, ReactNode> = {
   home: <><path d="m2.5 7 5.5-4.5L13.5 7v6H2.5V7Z" /><path d="M6.2 13V9.2h3.6V13" /></>,
   locate: <><circle cx="8" cy="8" r="3" /><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" /></>,
   more: <><circle cx="4" cy="8" r=".7" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r=".7" fill="currentColor" stroke="none" /><circle cx="12" cy="8" r=".7" fill="currentColor" stroke="none" /></>,
+  paste: <><path d="M5 4h6v10H5z" /><path d="M7 2.5h2a1 1 0 0 1 1 1V4H6v-.5a1 1 0 0 1 1-1Z" /></>,
   refresh: <path d="M13 5.5V2.8l-1.6 1.6A5.4 5.4 0 1 0 13.2 10" />,
   search: <><circle cx="7" cy="7" r="4.2" /><path d="m10.2 10.2 3 3" /></>,
   sortAscending: <><path d="M3 4h7M3 8h5M3 12h3M13 12V4m0 0-2 2m2-2 2 2" /></>,

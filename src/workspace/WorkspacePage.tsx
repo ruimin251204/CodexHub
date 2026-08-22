@@ -20,6 +20,33 @@ import type {
 const TERMINAL_COLUMNS = 120;
 const TERMINAL_ROWS = 32;
 const SPLIT_STACK_BREAKPOINT = 900;
+const FILES_WINDOWS_STORAGE_KEY = "codexhub.workspace.files-windows.v1";
+
+type PersistedFilesWindow = { id: string; hostAlias: string };
+
+function loadPersistedFilesWindows(initialHostAlias: string): { windows: PersistedFilesWindow[]; activeId: string } {
+  const fallback = { windows: [{ id: "files-window-1", hostAlias: initialHostAlias }], activeId: "files-window-1" };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(FILES_WINDOWS_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { windows?: unknown; activeId?: unknown };
+    if (!Array.isArray(parsed.windows)) return fallback;
+    const windows = parsed.windows.filter((item): item is PersistedFilesWindow => (
+      Boolean(item)
+      && typeof item === "object"
+      && typeof (item as PersistedFilesWindow).id === "string"
+      && typeof (item as PersistedFilesWindow).hostAlias === "string"
+    )).slice(0, 8);
+    if (windows.length === 0) return fallback;
+    const activeId = typeof parsed.activeId === "string" && windows.some((item) => item.id === parsed.activeId)
+      ? parsed.activeId
+      : windows[0].id;
+    return { windows, activeId };
+  } catch {
+    return fallback;
+  }
+}
 function isTerminalTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest(".workspaceXtermCanvas, .xterm"));
 }
@@ -78,6 +105,10 @@ export function WorkspacePage({
   const [internalMode, setInternalMode] = useState<WorkspaceMode>(defaultMode);
   const mode = controlledMode ?? internalMode;
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const initialFilesWindowStateRef = useRef<{ windows: PersistedFilesWindow[]; activeId: string } | null>(null);
+  if (!initialFilesWindowStateRef.current) initialFilesWindowStateRef.current = loadPersistedFilesWindows(initialHostAlias);
+  const [filesWindows, setFilesWindows] = useState<PersistedFilesWindow[]>(() => initialFilesWindowStateRef.current!.windows);
+  const [activeFilesWindowId, setActiveFilesWindowId] = useState(() => initialFilesWindowStateRef.current!.activeId);
   const [internalHostAlias, setInternalHostAlias] = useState(initialHostAlias);
   const selectedHostAlias = controlledHostAlias ?? internalHostAlias;
   const [followCwd, setFollowCwd] = useState(true);
@@ -94,11 +125,15 @@ export function WorkspacePage({
   );
   const activeTerminal = sessions.find((session) => session.sessionId === activeSessionId) ?? null;
   const cwd = activeTerminal ? controller.state.cwdBySession[activeTerminal.sessionId] ?? null : null;
-  const filesDefaultAlias = sessions[0]?.hostAlias ?? "";
-  const filesHostAlias = mode === "files" && controller.state.sessionsLoaded && !filesDefaultAppliedRef.current
-    ? filesDefaultAlias
-    : selectedHostAlias;
   const filesActive = mode === "split" || (mode === "files" && controller.state.sessionsLoaded);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FILES_WINDOWS_STORAGE_KEY, JSON.stringify({ windows: filesWindows, activeId: activeFilesWindowId }));
+    } catch {
+      // Storage may be disabled by a hardened WebView; the in-memory state remains usable.
+    }
+  }, [activeFilesWindowId, filesWindows]);
 
   useEffect(() => {
     const container = splitRef.current;
@@ -143,7 +178,9 @@ export function WorkspacePage({
     }
     if (!controller.state.sessionsLoaded || filesDefaultAppliedRef.current) return;
     filesDefaultAppliedRef.current = true;
-    selectHost(sessions[0]?.hostAlias ?? "");
+    const defaultAlias = sessions[0]?.hostAlias ?? "";
+    setFilesWindows((current) => current.map((window, index) => index === 0 && !window.hostAlias ? { ...window, hostAlias: defaultAlias } : window));
+    selectHost(defaultAlias);
   }, [controller.state.sessionsLoaded, mode, selectHost, sessions]);
 
   /** Keeps the selected app host aligned with the PTY receiving terminal input. */
@@ -384,26 +421,66 @@ export function WorkspacePage({
     />
   );
   const filesPanel = (
-    <FilesPanel
-      activeTerminal={activeTerminal}
-      api={api}
-      copy={copy}
-      cwd={cwd}
-      followCwd={followCwd}
-      hosts={hosts}
-      isActive={filesActive}
-      compact={mode === "split"}
-      locale={locale}
-      selectedHostAlias={filesHostAlias}
-      onError={onError}
-      onFollowCwdChange={setFollowCwd}
-      onHostSelected={selectHost}
-      onOpenTerminalAt={(hostAlias, fileSessionId, path) => void openTerminal(hostAlias, { fileSessionId, path })}
-      onRecoveryCreated={controller.upsertRecovery}
-      onViewRecoveries={() => chooseMode("transfers")}
-      transfers={controller.state.transfers}
-      onTransfersQueued={controller.upsertTransfers}
-    />
+    <>
+      {mode === "files" ? (
+        <div className="workspaceFilesWindowTabs" role="tablist" aria-label={copy.filesWindow}>
+          {filesWindows.map((window) => (
+            <button
+              key={window.id}
+              role="tab"
+              aria-selected={window.id === activeFilesWindowId}
+              type="button"
+              onClick={() => setActiveFilesWindowId(window.id)}
+            >{window.hostAlias || copy.localFiles}</button>
+          ))}
+          <button type="button" aria-label={copy.newFilesWindow} onClick={() => {
+            const id = `files-window-${Date.now()}`;
+            setFilesWindows((current) => [...current, { id, hostAlias: selectedHostAlias }]);
+            setActiveFilesWindowId(id);
+          }}>＋</button>
+          {filesWindows.length > 1 ? <button type="button" aria-label={copy.closeFilesWindow} onClick={() => {
+            setFilesWindows((current) => {
+              const remaining = current.filter((window) => window.id !== activeFilesWindowId);
+              const next = remaining[remaining.length - 1];
+              if (next) setActiveFilesWindowId(next.id);
+              return remaining.length > 0 ? remaining : [{ id: "files-window-1", hostAlias: "" }];
+            });
+          }}>×</button> : null}
+        </div>
+      ) : null}
+      {filesWindows.map((window) => (
+        <div
+          className="workspaceFilesWindow"
+          key={window.id}
+          hidden={window.id !== activeFilesWindowId}
+        >
+          <FilesPanel
+            activeTerminal={activeTerminal}
+            api={api}
+            copy={copy}
+            cwd={cwd}
+            followCwd={followCwd}
+            hosts={hosts}
+            isActive={filesActive && window.id === activeFilesWindowId}
+            compact={mode === "split"}
+            locale={locale}
+            selectedHostAlias={window.hostAlias}
+            onError={onError}
+            onFollowCwdChange={setFollowCwd}
+            onHostSelected={(hostAlias) => {
+              setFilesWindows((current) => current.map((item) => item.id === window.id ? { ...item, hostAlias } : item));
+              if (window.id === activeFilesWindowId) selectHost(hostAlias);
+            }}
+            onOpenTerminalAt={(hostAlias, fileSessionId, path) => void openTerminal(hostAlias, { fileSessionId, path })}
+            onRecoveryCreated={controller.upsertRecovery}
+            onViewRecoveries={() => chooseMode("transfers")}
+            transfers={controller.state.transfers}
+            onTransfersQueued={controller.upsertTransfers}
+            instanceId={window.id}
+          />
+        </div>
+      ))}
+    </>
   );
 
   return (
