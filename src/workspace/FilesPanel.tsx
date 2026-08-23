@@ -49,6 +49,7 @@ const DEFAULT_TREE_WIDTH = 248;
 export const FILE_TRANSFER_COMPLETED_RETENTION_MS = 10_000;
 export const FILE_DELETE_MODE_STORAGE_KEY = "codexhub.files-delete-mode";
 export const WORKSPACE_FILES_CLIPBOARD_EVENT = "codexhub:workspace-files-clipboard";
+export const WORKSPACE_FILES_REFRESH_EVENT = "codexhub:workspace-files-refresh";
 const FILES_VIEW_STORAGE_PREFIX = "codexhub.workspace.files-view.v1:";
 const ACTIVE_TRANSFER_STATES = new Set<WorkspaceTransfer["state"]>([
   "queued", "running", "pausing", "paused", "waiting-conflict", "verifying", "finalizing"
@@ -431,8 +432,8 @@ export function FilesPanel({
 
   useEffect(() => {
     const receive = (event: Event) => {
-      const detail = (event as CustomEvent<WorkspaceFileClipboard>).detail;
-      if (detail) setClipboard(detail);
+      const detail = (event as CustomEvent<WorkspaceFileClipboard | null>).detail;
+      setClipboard(detail ?? null);
     };
     window.addEventListener(WORKSPACE_FILES_CLIPBOARD_EVENT, receive);
     return () => window.removeEventListener(WORKSPACE_FILES_CLIPBOARD_EVENT, receive);
@@ -554,6 +555,17 @@ export function FilesPanel({
       reportError(error);
     }
   }, [api, rememberDirectoryPage, reportError]);
+
+  useEffect(() => {
+    const refreshMovedSource = (event: Event) => {
+      const sourceFileSessionId = (event as CustomEvent<string>).detail;
+      if (currentViewRef.current?.fileSession?.fileSessionId === sourceFileSessionId) {
+        void refreshCurrentDirectory();
+      }
+    };
+    window.addEventListener(WORKSPACE_FILES_REFRESH_EVENT, refreshMovedSource);
+    return () => window.removeEventListener(WORKSPACE_FILES_REFRESH_EVENT, refreshMovedSource);
+  }, [refreshCurrentDirectory]);
 
   useEffect(() => {
     const previousHostAlias = activeHostRef.current;
@@ -1248,27 +1260,42 @@ export function FilesPanel({
     }
   };
 
-  const copyEntriesToClipboard = (targets: RemoteFileEntry[]) => {
+  const storeEntriesInClipboard = (mode: WorkspaceFileClipboard["mode"], targets: RemoteFileEntry[]) => {
     if (!fileSession || targets.length === 0) return;
     const next: WorkspaceFileClipboard = {
+      mode,
       sourceFileSessionId: fileSession.fileSessionId,
       sourceEntryRefs: targets.map((entry) => entry.entryRef),
       names: targets.map((entry) => entry.name)
     };
     setClipboard(next);
     window.dispatchEvent(new CustomEvent<WorkspaceFileClipboard>(WORKSPACE_FILES_CLIPBOARD_EVENT, { detail: next }));
-    setSelectedRefs(new Set());
   };
+
+  const copyEntriesToClipboard = (targets: RemoteFileEntry[]) => storeEntriesInClipboard("copy", targets);
+  const cutEntriesToClipboard = (targets: RemoteFileEntry[]) => storeEntriesInClipboard("cut", targets);
 
   const pasteClipboard = async () => {
     if (!clipboard || !fileSession || !page) return;
     try {
-      await api.copyEntries({
+      const paste = clipboard.mode === "cut" ? api.moveEntries : api.copyEntries;
+      await paste({
         sourceFileSessionId: clipboard.sourceFileSessionId,
         destinationFileSessionId: fileSession.fileSessionId,
         sourceEntryRefs: clipboard.sourceEntryRefs,
         destinationPath: page.canonicalPath
       });
+      if (clipboard.mode === "cut") {
+        if (clipboard.sourceFileSessionId !== fileSession.fileSessionId) {
+          window.dispatchEvent(new CustomEvent<string>(WORKSPACE_FILES_REFRESH_EVENT, {
+            detail: clipboard.sourceFileSessionId
+          }));
+        }
+        setClipboard(null);
+        window.dispatchEvent(new CustomEvent<WorkspaceFileClipboard | null>(WORKSPACE_FILES_CLIPBOARD_EVENT, {
+          detail: null
+        }));
+      }
       await refreshCurrentDirectory();
     } catch (error) {
       reportError(error);
@@ -1285,6 +1312,9 @@ export function FilesPanel({
       if (event.key.toLowerCase() === "c" && selectedEntries.length > 0) {
         event.preventDefault();
         copyEntriesToClipboard(selectedEntries);
+      } else if (event.key.toLowerCase() === "x" && selectedEntries.length > 0) {
+        event.preventDefault();
+        cutEntriesToClipboard(selectedEntries);
       } else if (event.key.toLowerCase() === "v" && clipboard) {
         event.preventDefault();
         void pasteClipboard();
@@ -1322,6 +1352,14 @@ export function FilesPanel({
   };
 
   const canLocate = Boolean(fileSession && activeTerminal && activeTerminal.hostAlias === selectedHostAlias);
+  const contextTargets = contextMenu?.entry
+    ? selectedRefs.has(contextMenu.entry.entryRef)
+      ? selectedEntries
+      : [contextMenu.entry]
+    : [];
+  const cutRefs = clipboard?.mode === "cut" && clipboard.sourceFileSessionId === fileSession?.fileSessionId
+    ? new Set(clipboard.sourceEntryRefs)
+    : new Set<string>();
   const pauseTransfer = async (transfer: WorkspaceTransfer) => {
     try {
       await api.pauseTransfer({ transferId: transfer.transferId, revision: transfer.revision });
@@ -1452,6 +1490,7 @@ export function FilesPanel({
           <button aria-label={sortAscending ? copy.ascending : copy.descending} title={sortAscending ? copy.ascending : copy.descending} type="button" onClick={() => setSortAscending((value) => !value)}><FilesIcon name={sortAscending ? "sortAscending" : "sortDescending"} /><span>{sortAscending ? copy.ascending : copy.descending}</span></button>
            <button aria-label={copy.download} disabled={selectedEntries.length === 0} title={copy.download} type="button" onClick={() => void download()}><FilesIcon name="download" /><span>{copy.download}</span></button>
            <button aria-label={copy.copyEntry} disabled={selectedEntries.length === 0} title={copy.copyEntry} type="button" onClick={() => copyEntriesToClipboard(selectedEntries)}><FilesIcon name="copy" /><span>{copy.copyEntry}</span></button>
+           <button aria-label={copy.cutEntry} disabled={selectedEntries.length === 0} title={copy.cutEntry} type="button" onClick={() => cutEntriesToClipboard(selectedEntries)}><FilesIcon name="cut" /><span>{copy.cutEntry}</span></button>
            <button aria-label={copy.pasteFiles} disabled={!clipboard || !fileSession || !page} title={!clipboard ? copy.clipboardEmpty : copy.pasteFiles} type="button" onClick={() => void pasteClipboard()}><FilesIcon name="paste" /><span>{copy.pasteFiles}</span></button>
           <button aria-label={copy.openFolderInVscode} disabled={!fileSession || !page} title={!fileSession || !page ? copy.openFolderInVscodeUnavailable : copy.openFolderInVscode} type="button" onClick={() => openFolderInVscode(null, page?.canonicalPath ?? null)}><FilesIcon name="folderPlus" /><span>{copy.openFolderInVscode}</span></button>
           <button aria-label={copy.newFolder} disabled={!fileSession || !page} title={copy.newFolder} type="button" onClick={() => askOperation("create-directory", null, page?.canonicalPath ?? null)}><FilesIcon name="folderPlus" /><span>{copy.newFolder}</span></button>
@@ -1513,6 +1552,7 @@ export function FilesPanel({
             externalDropTargetPath={externalDropTarget?.kind === "directory" ? externalDropTarget.path : null}
             focusedIndex={focusedIndex}
             locale={locale}
+            cutRefs={cutRefs}
             selectedRefs={selectedRefs}
             sortAscending={sortAscending}
             sortKey={sortKey}
@@ -1525,6 +1565,7 @@ export function FilesPanel({
             onMove={(source, destination) => askOperation("move", source, destination.canonicalPath)}
             onOpenEntry={openEntry}
             onSelectEntry={selectEntry}
+            onSelectRefs={(entryRefs) => setSelectedRefs(new Set(entryRefs))}
             onSelectPage={selectPage}
             onSort={changeSort}
             onShowPreview={(entry) => void showPreview(entry)}
@@ -1591,11 +1632,12 @@ export function FilesPanel({
           {contextMenu.kind === "directory" ? <button role="menuitem" type="button" onClick={() => { openFolderInVscode(contextMenu.entry, contextMenu.path); setContextMenu(null); }}>{copy.openFolderInVscode}</button> : null}
           <button role="menuitem" type="button" disabled={!contextMenu.entry} onClick={() => { if (contextMenu.entry) void showPreview(contextMenu.entry); setContextMenu(null); }}>{copy.preview}</button>
           {contextMenu.kind === "file" ? <button role="menuitem" type="button" disabled={!contextMenu.entry} onClick={() => { if (contextMenu.entry) void editEntry(contextMenu.entry); setContextMenu(null); }}>{copy.editFile}</button> : null}
-          <button role="menuitem" type="button" disabled={!contextMenu.entry} onClick={() => { if (contextMenu.entry) copyEntriesToClipboard([contextMenu.entry]); setContextMenu(null); }}>{copy.copyEntry}</button>
-          <button role="menuitem" type="button" disabled={!contextMenu.entry} onClick={() => { if (contextMenu.entry) void download([contextMenu.entry]); setContextMenu(null); }}>{copy.download}</button>
+          <button role="menuitem" type="button" disabled={contextTargets.length === 0} onClick={() => { copyEntriesToClipboard(contextTargets); setContextMenu(null); }}>{copy.copyEntry}</button>
+          <button role="menuitem" type="button" disabled={contextTargets.length === 0} onClick={() => { cutEntriesToClipboard(contextTargets); setContextMenu(null); }}>{copy.cutEntry}</button>
+          <button role="menuitem" type="button" disabled={contextTargets.length === 0} onClick={() => { void download(contextTargets); setContextMenu(null); }}>{copy.download}</button>
           {contextMenu.kind === "directory" ? <button role="menuitem" type="button" onClick={() => { void upload(contextMenu.path); setContextMenu(null); }}>{copy.uploadHere}</button> : null}
           <button role="menuitem" type="button" disabled={!contextMenu.entry?.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { if (contextMenu.entry) askOperation("rename", contextMenu.entry); setContextMenu(null); }}>{copy.rename}</button>
-          <button className="workspaceDangerButton" role="menuitem" type="button" disabled={!contextMenu.entry?.writable || contextMenu.entry.nameEncoding !== "utf8"} onClick={() => { if (contextMenu.entry) requestDelete([contextMenu.entry]); setContextMenu(null); }}>{copy.delete}</button>
+          <button className="workspaceDangerButton" role="menuitem" type="button" disabled={!contextTargets.some((entry) => entry.writable && entry.nameEncoding === "utf8")} onClick={() => { requestDelete(contextTargets); setContextMenu(null); }}>{copy.delete}</button>
           <button role="menuitem" type="button" onClick={() => { void navigator.clipboard.writeText(contextMenu.path).catch(reportError); setContextMenu(null); }}>{copy.copyPath}</button>
           <button
             disabled={!fileSession || fileSession.targetKind === "local"}

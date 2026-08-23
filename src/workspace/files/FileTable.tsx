@@ -9,6 +9,7 @@ import type { FilesUiCopy } from "./filesUiCopy";
 import { usePersonalInfoMasking } from "../../ui/PersonalInfoMasking";
 
 type ContextPoint = { x: number; y: number };
+type SelectionRectangle = { left: number; top: number; width: number; height: number };
 type ResizableColumn = "name" | "type" | "size" | "modified";
 type FileColumnWidths = Record<ResizableColumn, number>;
 
@@ -169,6 +170,7 @@ export function FileTable({
   externalDropTargetPath,
   focusedIndex,
   locale,
+  cutRefs,
   selectedRefs,
   sortAscending,
   sortKey,
@@ -179,6 +181,7 @@ export function FileTable({
   onMove,
   onOpenEntry,
   onSelectEntry,
+  onSelectRefs,
   onSelectPage,
   onSort,
   onShowPreview
@@ -189,6 +192,7 @@ export function FileTable({
   externalDropTargetPath: string | null;
   focusedIndex: number;
   locale: "en" | "zh";
+  cutRefs: ReadonlySet<string>;
   selectedRefs: ReadonlySet<string>;
   sortAscending: boolean;
   sortKey: WorkspaceFileSortField;
@@ -199,6 +203,7 @@ export function FileTable({
   onMove: (source: RemoteFileEntry, destination: RemoteFileEntry) => void;
   onOpenEntry: (entry: RemoteFileEntry) => void;
   onSelectEntry: (entry: RemoteFileEntry, toggle: boolean) => void;
+  onSelectRefs: (entryRefs: ReadonlySet<string>) => void;
   onSelectPage: (selected: boolean) => void;
   onSort: (column: WorkspaceFileSortField) => void;
   onShowPreview: (entry: RemoteFileEntry) => void;
@@ -207,14 +212,19 @@ export function FileTable({
   const gridRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const selectionCleanupRef = useRef<(() => void) | null>(null);
   const compactRef = useRef(compact);
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
   const [containerWidth, setContainerWidth] = useState(0);
   const [manualColumnWidths, setManualColumnWidths] = useState(false);
   const [resizingColumn, setResizingColumn] = useState<ResizableColumn | null>(null);
+  const [selectionRectangle, setSelectionRectangle] = useState<SelectionRectangle | null>(null);
   const allSelected = entries.length > 0 && entries.every((entry) => selectedRefs.has(entry.entryRef));
 
-  useEffect(() => () => resizeCleanupRef.current?.(), []);
+  useEffect(() => () => {
+    resizeCleanupRef.current?.();
+    selectionCleanupRef.current?.();
+  }, []);
 
   useEffect(() => {
     if (compactRef.current === compact) return;
@@ -339,14 +349,62 @@ export function FileTable({
     onSelectEntry(entry, event.ctrlKey || event.metaKey);
   };
 
+  const startSelectionRectangle = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target;
+    if (!(target instanceof Element) || target.closest(".workspaceFileRow, .workspaceFileGridHeader")) return;
+
+    event.preventDefault();
+    selectionCleanupRef.current?.();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const additive = event.ctrlKey || event.metaKey;
+    const baseSelection = additive ? new Set(selectedRefs) : new Set<string>();
+    onSelectRefs(baseSelection);
+
+    const move = (pointerEvent: PointerEvent) => {
+      const left = Math.min(startX, pointerEvent.clientX);
+      const top = Math.min(startY, pointerEvent.clientY);
+      const right = Math.max(startX, pointerEvent.clientX);
+      const bottom = Math.max(startY, pointerEvent.clientY);
+      if (right - left < 3 && bottom - top < 3) return;
+
+      const next = new Set(baseSelection);
+      for (const entry of entries) {
+        const row = rowRefs.current.get(entry.entryRef);
+        if (!row) continue;
+        const rect = row.getBoundingClientRect();
+        if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
+          next.add(entry.entryRef);
+        }
+      }
+      onSelectRefs(next);
+      setSelectionRectangle({ left, top, width: right - left, height: bottom - top });
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      selectionCleanupRef.current = null;
+      setSelectionRectangle(null);
+    };
+
+    selectionCleanupRef.current = stop;
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
+
   return (
     <div
       className="workspaceFileGrid"
+      data-selecting={selectionRectangle ? "true" : undefined}
       data-resizing-column={resizingColumn ?? undefined}
       ref={gridRef}
       role="grid"
       aria-label={ui.tableView}
       style={gridStyle}
+      onPointerDown={startSelectionRectangle}
     >
       <div className="workspaceFileGridHeader" role="row">
         <span className="workspaceFileCheckboxCell" role="columnheader">
@@ -399,10 +457,18 @@ export function FileTable({
         />
       </div>
       <div className="workspaceFileGridBody" role="rowgroup">
+        {selectionRectangle ? (
+          <span
+            aria-hidden="true"
+            className="workspaceFileSelectionRectangle"
+            style={selectionRectangle}
+          />
+        ) : null}
         {entries.map((entry, index) => (
           <div
             aria-selected={selectedRefs.has(entry.entryRef)}
             className="workspaceFileRow"
+            data-cut={cutRefs.has(entry.entryRef) ? "true" : undefined}
             data-external-drop-target={externalDropTargetPath === entry.canonicalPath || undefined}
             data-hidden={isHiddenEntry(entry) ? "true" : undefined}
             data-kind={entry.kind}
@@ -415,7 +481,7 @@ export function FileTable({
             onClick={(event) => selectRow(event, entry, index)}
             onContextMenu={(event) => {
               event.preventDefault();
-              onSelectEntry(entry, false);
+              if (!selectedRefs.has(entry.entryRef)) onSelectEntry(entry, false);
               onContextMenu(entry, { x: event.clientX, y: event.clientY });
             }}
             onDoubleClick={() => onOpenEntry(entry)}

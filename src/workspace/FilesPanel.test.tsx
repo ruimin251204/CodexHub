@@ -460,6 +460,86 @@ test("Ctrl+C copies selected files and Ctrl+V pastes them", async () => {
   }));
 });
 
+test("dragging a selection rectangle selects every intersecting file row", async () => {
+  renderPanel([directory, textFile]);
+  const grid = await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
+  const rows = within(grid).getAllByRole("row").slice(1);
+  expect(rows).toHaveLength(2);
+
+  vi.spyOn(rows[0], "getBoundingClientRect").mockReturnValue({
+    x: 0, y: 40, left: 0, top: 40, right: 500, bottom: 80, width: 500, height: 40,
+    toJSON: () => ({})
+  });
+  vi.spyOn(rows[1], "getBoundingClientRect").mockReturnValue({
+    x: 0, y: 80, left: 0, top: 80, right: 500, bottom: 120, width: 500, height: 40,
+    toJSON: () => ({})
+  });
+
+  fireEvent.pointerDown(within(grid).getByRole("rowgroup"), { button: 0, clientX: 490, clientY: 132 });
+  fireEvent.pointerMove(window, { clientX: 10, clientY: 45 });
+
+  expect(rows[0]).toHaveAttribute("aria-selected", "true");
+  expect(rows[1]).toHaveAttribute("aria-selected", "true");
+  expect(document.querySelector(".workspaceFileSelectionRectangle")).not.toBeNull();
+
+  fireEvent.pointerUp(window);
+  expect(document.querySelector(".workspaceFileSelectionRectangle")).toBeNull();
+});
+
+test("Ctrl+X cuts all selected files and Ctrl+V moves them together", async () => {
+  const stop = () => undefined;
+  const moveEntries = vi.fn().mockResolvedValue([]);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory, textFile])),
+    moveEntries,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  fireEvent.click(await screen.findByRole("row", { name: /projects/i }));
+  fireEvent.click(screen.getByRole("row", { name: /notes\.txt/i }), { ctrlKey: true });
+  fireEvent.keyDown(window, { key: "x", ctrlKey: true });
+  fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+
+  await waitFor(() => expect(moveEntries).toHaveBeenCalledWith({
+    sourceFileSessionId: session.fileSessionId,
+    destinationFileSessionId: session.fileSessionId,
+    sourceEntryRefs: [directory.entryRef, textFile.entryRef],
+    destinationPath: session.homePath
+  }));
+});
+
+test("right-clicking one selected row keeps the group for context-menu copy", async () => {
+  const stop = () => undefined;
+  const copyEntries = vi.fn().mockResolvedValue([]);
+  const api = {
+    openFiles: vi.fn().mockResolvedValue(session),
+    listDirectory: vi.fn().mockResolvedValue(page(session.homePath, [directory, textFile])),
+    copyEntries,
+    events: {
+      onFileSearchUpdated: vi.fn().mockReturnValue(stop),
+      onLocalDrop: vi.fn().mockReturnValue(stop)
+    }
+  } as unknown as WorkspaceApi;
+
+  render(errorPanel(api, vi.fn()));
+  const first = await screen.findByRole("row", { name: /projects/i });
+  const second = screen.getByRole("row", { name: /notes\.txt/i });
+  fireEvent.click(first);
+  fireEvent.click(second, { ctrlKey: true });
+  fireEvent.contextMenu(second, { clientX: 10, clientY: 10 });
+  fireEvent.click(screen.getByRole("menuitem", { name: workspaceCopy.en.copyEntry }));
+  fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+
+  await waitFor(() => expect(copyEntries).toHaveBeenCalledWith(expect.objectContaining({
+    sourceEntryRefs: [directory.entryRef, textFile.entryRef]
+  })));
+});
+
 test("the More menu delete action offers backup mode and asks whether to remember it", async () => {
   window.localStorage.removeItem(FILE_DELETE_MODE_STORAGE_KEY);
   const stop = () => undefined;
