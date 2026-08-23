@@ -1044,6 +1044,12 @@ impl Deref for AppState {
 pub(crate) const CODEX_RESOLVER_SCRIPT: &str = r#"best_path=""
 best_version=""
 best_key=""
+best_source=""
+command_available=no
+candidate_count=0
+unversioned_count=0
+shell_context_count=0
+login_shell_supported=no
 seen=""
 
 version_numbers() {
@@ -1081,6 +1087,7 @@ package_version_for_candidate() {
 
 probe_candidate() {
   candidate="$1"
+  probe_source="${2:-unknown}"
   if [ -z "$candidate" ] || [ ! -x "$candidate" ]; then
     return
   fi
@@ -1088,6 +1095,7 @@ probe_candidate() {
     *":$candidate:"*) return ;;
   esac
   seen="$seen:$candidate"
+  candidate_count=$((candidate_count + 1))
 
   version=$("$candidate" --version </dev/null 2>&1 | head -n 1)
   version_source="command"
@@ -1102,6 +1110,7 @@ probe_candidate() {
       version_source="package metadata"
       numbers="$package_numbers"
     else
+      unversioned_count=$((unversioned_count + 1))
       printf 'candidate %s -> %s\n' "$candidate" "${version:-unversioned}" >&2
       return
     fi
@@ -1119,30 +1128,77 @@ probe_candidate() {
     best_path="$candidate"
     best_version="$version"
     best_version_source="$version_source"
+    best_source="$probe_source"
   fi
 }
 
 probe_path_list() {
+  path_list="$1"
+  path_source="$2"
   old_ifs="$IFS"
   IFS=:
-  for dir in $1; do
-    probe_candidate "$dir/codex"
+  for dir in $path_list; do
+    [ -n "$dir" ] && probe_candidate "$dir/codex" "$path_source"
   done
   IFS="$old_ifs"
 }
 
-probe_path_list "$PATH"
-
-login_shell="${SHELL:-}"
-if [ -n "$login_shell" ] && [ -x "$login_shell" ]; then
-  login_path=$("$login_shell" -lc 'printf "%s" "$PATH"' 2>/dev/null || true)
-  if [ -n "$login_path" ]; then
-    probe_path_list "$login_path"
+resolve_login_shell() {
+  login_shell="${SHELL:-}"
+  if [ -z "$login_shell" ] || [ ! -x "$login_shell" ]; then
+    login_shell=""
+    if command -v getent >/dev/null 2>&1; then
+      login_shell=$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f7 | head -n 1)
+    elif [ -r /etc/passwd ]; then
+      login_shell=$(awk -F: -v uid="$(id -u)" '$3 == uid { print $7; exit }' /etc/passwd 2>/dev/null)
+    fi
   fi
-  login_codex=$("$login_shell" -lc 'command -v codex 2>/dev/null' 2>/dev/null | head -n 1 || true)
-  case "$login_codex" in
-    /*) probe_candidate "$login_codex" ;;
+  case "$login_shell" in
+    /*) [ -x "$login_shell" ] || login_shell="" ;;
+    *) login_shell="" ;;
   esac
+  case "${login_shell##*/}" in
+    sh|bash|zsh|ksh|dash) login_shell_supported=yes ;;
+    *) login_shell_supported=no ;;
+  esac
+}
+
+# Startup files may print banners. Only consume values carrying our exact markers.
+probe_shell_context() {
+  mode_flag="$1"
+  context_source="$2"
+  shell_context_count=$((shell_context_count + 1))
+  shell_output=$("$login_shell" "$mode_flag" 'printf "CODEXHUB_RESOLVER_PATH=%s\n" "$PATH"; codexhub_resolved=$(command -v codex 2>/dev/null || true); printf "CODEXHUB_RESOLVER_CODEX=%s\n" "$codexhub_resolved"' </dev/null 2>/dev/null || true)
+  shell_path=$(printf '%s\n' "$shell_output" | sed -n 's/^CODEXHUB_RESOLVER_PATH=//p' | tail -n 1)
+  shell_codex=$(printf '%s\n' "$shell_output" | sed -n 's/^CODEXHUB_RESOLVER_CODEX=//p' | tail -n 1)
+  case "$shell_codex" in
+    /*)
+      if [ -x "$shell_codex" ]; then
+        command_available=yes
+      fi
+      probe_candidate "$shell_codex" "$context_source-command"
+      ;;
+  esac
+  if [ -n "$shell_path" ]; then
+    probe_path_list "$shell_path" "$context_source-path"
+  fi
+}
+
+current_codex=$(command -v codex 2>/dev/null | head -n 1 || true)
+case "$current_codex" in
+  /*)
+    if [ -x "$current_codex" ]; then
+      command_available=yes
+    fi
+    probe_candidate "$current_codex" current-shell-command
+    ;;
+esac
+probe_path_list "$PATH" current-shell-path
+
+resolve_login_shell
+if [ "$login_shell_supported" = yes ]; then
+  probe_shell_context -lc login-shell
+  probe_shell_context -ic interactive-shell
 fi
 
 for candidate in \
@@ -1162,47 +1218,58 @@ for candidate in \
   "/opt/homebrew/bin/codex" \
   "/home/linuxbrew/.linuxbrew/bin/codex"
 do
-  probe_candidate "$candidate"
+  probe_candidate "$candidate" known-path
 done
 
+for candidate in "$HOME/.nvm/versions/node"/*/bin/codex; do
+  probe_candidate "$candidate" nvm
+done
 for candidate in \
-  "$HOME/.nvm/versions/node"/*/bin/codex \
   "$HOME/.fnm/node-versions"/*/installation/bin/codex \
-  "$HOME/.local/share/fnm/node-versions"/*/installation/bin/codex \
-  "$HOME/.local/share/mise/installs/node"/*/bin/codex \
-  "$HOME/.local/share/pnpm/global"/*/node_modules/.bin/codex
+  "$HOME/.local/share/fnm/node-versions"/*/installation/bin/codex
 do
-  probe_candidate "$candidate"
+  probe_candidate "$candidate" fnm
+done
+for candidate in "$HOME/.local/share/mise/installs/node"/*/bin/codex; do
+  probe_candidate "$candidate" mise
+done
+for candidate in "$HOME/.local/share/pnpm/global"/*/node_modules/.bin/codex; do
+  probe_candidate "$candidate" pnpm-global
 done
 
-if [ -z "$best_path" ]; then
-  exit 127
+if [ -n "$best_path" ]; then
+  printf 'selected %s -> %s (%s; %s)\n' "$best_path" "$best_version" "$best_version_source" "$best_source" >&2
 fi
-printf 'selected %s -> %s (%s)\n' "$best_path" "$best_version" "$best_version_source" >&2"#;
+"#;
 
 pub(crate) fn codex_path_probe_script() -> String {
-    format!("{CODEX_RESOLVER_SCRIPT}\nprintf '%s\\n' \"$best_path\"")
+    format!(
+        "{CODEX_RESOLVER_SCRIPT}\n[ -n \"$best_path\" ] || exit 127\nprintf '%s\\n' \"$best_path\""
+    )
 }
 
 pub(crate) fn codex_version_probe_script() -> String {
-    format!("{CODEX_RESOLVER_SCRIPT}\nprintf '%s\\n' \"$best_version\"")
+    format!(
+        "{CODEX_RESOLVER_SCRIPT}\n[ -n \"$best_version\" ] || exit 127\nprintf '%s\\n' \"$best_version\""
+    )
 }
 
-pub(crate) const CODEX_COMMAND_AVAILABLE_SCRIPT: &str = r#"if command -v codex >/dev/null 2>&1; then
-  command -v codex
-  exit 0
-fi
-login_shell="${SHELL:-}"
-if [ -n "$login_shell" ] && [ -x "$login_shell" ]; then
-  login_codex=$("$login_shell" -lc 'command -v codex 2>/dev/null' 2>/dev/null | head -n 1 || true)
-  if [ -n "$login_codex" ]; then
-    printf '%s\n' "$login_codex"
-    exit 0
-  fi
-fi
-printf 'no\n'
-exit 1
-"#;
+pub(crate) fn codex_runtime_probe_script() -> String {
+    format!(
+        r#"{CODEX_RESOLVER_SCRIPT}
+if [ -n "$best_path" ]; then installed=yes; else installed=no; fi
+printf 'CODEXHUB_CODEX_INSTALLED=%s\n' "$installed"
+printf 'CODEXHUB_CODEX_COMMAND_AVAILABLE=%s\n' "$command_available"
+printf 'CODEXHUB_CODEX_PATH=%s\n' "$best_path"
+printf 'CODEXHUB_CODEX_VERSION=%s\n' "$best_version"
+printf 'CODEXHUB_CODEX_SOURCE=%s\n' "$best_source"
+printf 'CODEXHUB_CODEX_CANDIDATE_COUNT=%s\n' "$candidate_count"
+printf 'CODEXHUB_CODEX_UNVERSIONED_COUNT=%s\n' "$unversioned_count"
+printf 'CODEXHUB_CODEX_SHELL_CONTEXTS=%s\n' "$shell_context_count"
+printf 'CODEXHUB_CODEX_LOGIN_SHELL_SUPPORTED=%s\n' "$login_shell_supported"
+"#
+    )
+}
 
 pub(crate) fn remote_skill_count_script() -> &'static str {
     r#"count=0

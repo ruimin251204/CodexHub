@@ -1184,25 +1184,8 @@ printf 'CODEXHUB_PATH=%s\n' "$PATH"
 }
 
 fn codex_probe_group_script() -> String {
-    let path_script = shell_single_quote(&codex_path_probe_script());
-    let version_script = shell_single_quote(&codex_version_probe_script());
-    let command_script = shell_single_quote(CODEX_COMMAND_AVAILABLE_SCRIPT);
-    format!(
-        r#"set -u
-codex_path=$(sh -c {path_script} 2>/dev/null || true)
-codex_version=$(sh -c {version_script} 2>/dev/null || true)
-if codex_command=$(sh -c {command_script} 2>/dev/null); then
-  command_available=yes
-else
-  command_available=no
-fi
-if [ -n "$codex_path" ]; then installed=yes; else installed=no; fi
-printf 'CODEXHUB_CODEX_INSTALLED=%s\n' "$installed"
-printf 'CODEXHUB_CODEX_COMMAND_AVAILABLE=%s\n' "$command_available"
-printf 'CODEXHUB_CODEX_PATH=%s\n' "$codex_path"
-printf 'CODEXHUB_CODEX_VERSION=%s\n' "$codex_version"
-"#
-    )
+    let resolver_script = shell_single_quote(&codex_runtime_probe_script());
+    format!("sh -c {resolver_script} 2>/dev/null")
 }
 
 fn api_probe_group_script() -> &'static str {

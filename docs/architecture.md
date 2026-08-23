@@ -243,7 +243,7 @@ See [stable updater details](stable-updater.md).
 
 Host tests and Codex install/update/uninstall are implemented through plain SSH. CodexHub keeps the user-facing remote command as `codex`; profile apply may install a same-name CodexHub-managed launcher under `~/.local/bin/codex` only to source managed environment variables before execing the real Codex binary.
 
-A host test first runs `ssh-check`, then runs the `system`, `codex`, `api`, and `skills` probe groups concurrently. Each group uses one structured remote script. A missing Codex installation, API config, or skills directory is a successful negative result; transport, command, timeout, parse, or persistence errors fail only the affected group and do not overwrite previously trusted fields.
+A host test first runs `ssh-check`, then runs the `system`, `codex`, `api`, and `skills` probe groups concurrently. Each group uses one structured remote script. The Codex resolver checks the current PATH, the passwd-resolved login shell, supported interactive shell startup files, and known user install roots; it validates candidates by command output or `@openai/codex` package metadata and records only safe source/count diagnostics. Marker-filtered shell output prevents startup banners from corrupting path detection. A missing Codex installation, API config, or skills directory is a successful negative result; transport, command, timeout, parse, or persistence errors fail only the affected group and do not overwrite previously trusted fields.
 
 Install and update keep this strict per-host order:
 

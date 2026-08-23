@@ -1928,14 +1928,194 @@ codexhub_test_sleep() {{ :; }}
     fn codex_resolver_checks_login_paths_and_package_metadata() {
         let path_script = codex_path_probe_script();
         let version_script = codex_version_probe_script();
+        let runtime_script = codex_runtime_probe_script();
 
         assert!(path_script.contains("package_version_for_candidate"));
-        assert!(path_script.contains("$login_shell\" -lc"));
+        assert!(path_script.contains("probe_shell_context -lc login-shell"));
+        assert!(path_script.contains("probe_shell_context -ic interactive-shell"));
+        assert!(path_script.contains("getent passwd"));
         assert!(path_script.contains("\"$HOME/.nvm/versions/node\"/*/bin/codex"));
         assert!(path_script.contains("\"$HOME/.local/share/pnpm/codex\""));
         assert!(path_script.contains("\"$HOME/node_modules/.bin/codex\""));
         assert!(path_script.contains("</dev/null"));
         assert!(version_script.ends_with("printf '%s\\n' \"$best_version\""));
+        assert!(runtime_script.contains("CODEXHUB_CODEX_SOURCE"));
+        assert!(runtime_script.contains("CODEXHUB_CODEX_UNVERSIONED_COUNT"));
+    }
+
+    #[test]
+    fn codex_resolver_script_is_posix_shell_syntax() {
+        use std::io::Write as _;
+        use std::process::Stdio;
+
+        let mut child = match std::process::Command::new("sh")
+            .arg("-n")
+            .stdin(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) => panic!("could not start sh -n: {error}"),
+        };
+        child
+            .stdin
+            .take()
+            .expect("sh stdin")
+            .write_all(codex_runtime_probe_script().as_bytes())
+            .expect("write resolver script to sh");
+        assert!(child.wait().expect("wait for sh -n").success());
+    }
+
+    #[cfg(target_os = "linux")]
+    fn write_resolver_executable(path: &Path, contents: &str) {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        fs::write(path, contents).expect("write resolver fixture executable");
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+            .expect("make resolver fixture executable");
+    }
+
+    #[cfg(target_os = "linux")]
+    fn run_codex_runtime_probe_fixture(root: &Path, path: &str, shell: &str) -> String {
+        let output = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(codex_runtime_probe_script())
+            .env("HOME", root)
+            .env("PATH", path)
+            .env("SHELL", shell)
+            .env_remove("BASH_ENV")
+            .env_remove("ENV")
+            .env_remove("ZDOTDIR")
+            .output()
+            .expect("run Codex resolver fixture");
+        assert!(
+            output.status.success(),
+            "resolver failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).expect("resolver stdout is UTF-8")
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn codex_resolver_detects_nvm_symlink_without_node_on_noninteractive_path() {
+        use std::os::unix::fs::symlink;
+
+        let root = isolated_reload_fixture_root("resolver-nvm");
+        let node_root = root.join(".nvm/versions/node/v24.13.0");
+        let package_root = node_root.join("lib/node_modules/@openai/codex");
+        let package_bin = package_root.join("bin");
+        let node_bin = node_root.join("bin");
+        let tools_bin = root.join("test-tools");
+        fs::create_dir_all(&package_bin).expect("create npm package fixture");
+        fs::create_dir_all(&node_bin).expect("create NVM bin fixture");
+        fs::create_dir_all(&tools_bin).expect("create isolated resolver PATH");
+        for tool in ["head", "readlink", "sed"] {
+            let source = [Path::new("/usr/bin"), Path::new("/bin")]
+                .into_iter()
+                .map(|directory| directory.join(tool))
+                .find(|candidate| candidate.is_file())
+                .unwrap_or_else(|| panic!("missing resolver test tool: {tool}"));
+            symlink(source, tools_bin.join(tool)).expect("link resolver test tool");
+        }
+        let unsupported_shell = tools_bin.join("fish");
+        write_resolver_executable(&unsupported_shell, "#!/bin/sh\nexit 0\n");
+        write_resolver_executable(
+            &package_bin.join("codex.js"),
+            "#!/usr/bin/env node\nprocess.exit(1);\n",
+        );
+        fs::write(
+            package_root.join("package.json"),
+            "{\n  \"name\": \"@openai/codex\",\n  \"version\": \"0.148.0\"\n}\n",
+        )
+        .expect("write npm package metadata");
+        symlink(
+            "../lib/node_modules/@openai/codex/bin/codex.js",
+            node_bin.join("codex"),
+        )
+        .expect("create NVM Codex symlink");
+
+        let real_codex_home = root.join("codex-data");
+        fs::create_dir_all(&real_codex_home).expect("create linked Codex home");
+        symlink(&real_codex_home, root.join(".codex")).expect("create Codex home symlink");
+
+        let stdout = run_codex_runtime_probe_fixture(
+            &root,
+            tools_bin.to_string_lossy().as_ref(),
+            unsupported_shell.to_string_lossy().as_ref(),
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_INSTALLED").as_deref(),
+            Some("yes")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_VERSION").as_deref(),
+            Some("codex-cli 0.148.0")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_SOURCE").as_deref(),
+            Some("nvm")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_COMMAND_AVAILABLE").as_deref(),
+            Some("no")
+        );
+        let expected_path = node_bin.join("codex").to_string_lossy().into_owned();
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_PATH").as_deref(),
+            Some(expected_path.as_str())
+        );
+
+        fs::remove_dir_all(root).expect("remove NVM resolver fixture");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn codex_resolver_uses_interactive_shell_with_marker_filtered_output() {
+        let root = isolated_reload_fixture_root("resolver-interactive");
+        let custom_bin = root.join("custom-node/bin");
+        let tools_bin = root.join("test-tools");
+        fs::create_dir_all(&custom_bin).expect("create custom Node bin fixture");
+        fs::create_dir_all(&tools_bin).expect("create resolver tools fixture");
+        write_resolver_executable(
+            &custom_bin.join("codex"),
+            "#!/bin/sh\n[ \"${1:-}\" = \"--version\" ] && printf 'codex-cli 0.149.0\\n'\n",
+        );
+        write_resolver_executable(
+            &tools_bin.join("getent"),
+            "#!/bin/sh\nprintf 'fixture:x:1000:1000:Fixture:%s:/bin/bash\\n' \"$HOME\"\n",
+        );
+        fs::write(
+            root.join(".bashrc"),
+            "printf 'startup banner\\n'\nexport PATH=\"$HOME/custom-node/bin:$PATH\"\n",
+        )
+        .expect("write interactive shell fixture");
+
+        let fixture_path = format!("{}:/usr/bin:/bin", tools_bin.to_string_lossy());
+        let stdout = run_codex_runtime_probe_fixture(&root, &fixture_path, "/missing-shell");
+        assert!(!stdout.contains("startup banner"));
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_INSTALLED").as_deref(),
+            Some("yes")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_VERSION").as_deref(),
+            Some("codex-cli 0.149.0")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_SOURCE").as_deref(),
+            Some("interactive-shell-command")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_COMMAND_AVAILABLE").as_deref(),
+            Some("yes")
+        );
+        assert_eq!(
+            marker_value(&stdout, "CODEXHUB_CODEX_LOGIN_SHELL_SUPPORTED").as_deref(),
+            Some("yes")
+        );
+
+        fs::remove_dir_all(root).expect("remove interactive resolver fixture");
     }
 
     #[test]
