@@ -369,6 +369,34 @@ impl LocalFileSessions {
         display_path(&canonical_existing(path).await?)
     }
 
+    pub(crate) async fn vscode_folder(
+        &self,
+        path: &str,
+        entry_ref: Option<&str>,
+    ) -> WorkspaceResult<super::vscode::VscodeFolder> {
+        let canonical = canonical_existing(path).await?;
+        let canonical_path = display_path(&canonical)?;
+        let metadata = tokio::fs::symlink_metadata(&canonical)
+            .await
+            .map_err(|error| WorkspaceError::new("vscode-folder-stale", error.to_string()))?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(WorkspaceError::new(
+                "vscode-folder-not-directory",
+                "VS Code can only open a plain directory.",
+            ));
+        }
+        if let Some(entry_ref) = entry_ref {
+            let entry = self.operation_stat(entry_ref).await?;
+            if entry.kind != RemoteFileKind::Directory || entry.path != canonical_path {
+                return Err(WorkspaceError::new(
+                    "vscode-folder-entry-mismatch",
+                    "Refresh the directory before opening this folder in VS Code.",
+                ));
+            }
+        }
+        Ok(super::vscode::VscodeFolder::Local(canonical))
+    }
+
     pub(crate) async fn copy_entry(
         &self,
         source_ref: &str,
@@ -415,6 +443,49 @@ impl LocalFileSessions {
             .await
             .insert(entry.entry_ref.clone(), entry.clone());
         Ok(entry)
+    }
+
+    pub(crate) async fn write_text_staging(&self, path: &str, bytes: &[u8]) -> WorkspaceResult<()> {
+        let target = path_from_display(path)?;
+        let parent = target.parent().ok_or_else(|| {
+            WorkspaceError::new(
+                "unsafe-staging-path",
+                "The editor staging path has no parent.",
+            )
+        })?;
+        let parent_meta = tokio::fs::symlink_metadata(parent)
+            .await
+            .map_err(|e| WorkspaceError::new("edit-staging-parent-stale", e.to_string()))?;
+        if !parent_meta.is_dir() || parent_meta.file_type().is_symlink() {
+            return Err(WorkspaceError::new(
+                "edit-staging-parent-unsafe",
+                "The editor staging parent is not a plain directory.",
+            ));
+        }
+        let mut options = tokio::fs::OpenOptions::new();
+        options.create_new(true).write(true);
+        let mut file = options
+            .open(&target)
+            .await
+            .map_err(|e| WorkspaceError::new("edit-staging-open-failed", e.to_string()))?;
+        file.write_all(bytes)
+            .await
+            .map_err(|e| WorkspaceError::new("edit-staging-write-failed", e.to_string()))?;
+        file.sync_all()
+            .await
+            .map_err(|e| WorkspaceError::new("edit-staging-sync-failed", e.to_string()))
+    }
+
+    pub(crate) async fn remove_staging_file(&self, path: &str) -> WorkspaceResult<()> {
+        let target = path_from_display(path)?;
+        match tokio::fs::remove_file(target).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(WorkspaceError::new(
+                "edit-staging-remove-failed",
+                error.to_string(),
+            )),
+        }
     }
 
     pub(crate) async fn operation_stat(&self, entry_ref: &str) -> WorkspaceResult<RemoteFileEntry> {

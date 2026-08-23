@@ -211,6 +211,9 @@ export const desktopWorkspaceApi: WorkspaceApi = {
     const selected = await host(hostAlias);
     return requiredInvoke<WorkspaceFileSessionDto>("workspace_open_files", { request: { local: false, hostId: selected.id, hostName: selected.name, hostAlias } }).then(fileSession);
   },
+  openFolderInVscode: ({ fileSessionId, path, entryRef }) => requiredInvoke<void>("workspace_open_folder_in_vscode", {
+    request: { fileSessionId, path, entryRef: entryRef ?? null }
+  }),
   closeFiles: ({ fileSessionId }) => requiredInvoke<void>("workspace_close_files", { fileSessionId }),
   listDirectory: ({ fileSessionId, path, snapshotId, cursor, sort, direction }) => requiredInvoke<WorkspaceListDirectoryResultDto>("workspace_list_directory", {
     request: { fileSessionId, path: path ?? ".", snapshotId, pageToken: cursor, sort, direction }
@@ -233,6 +236,12 @@ export const desktopWorkspaceApi: WorkspaceApi = {
   }).then(entry),
   copyEntry: ({ fileSessionId, sourceEntryRef, destinationPath }) => requiredInvoke<RemoteFileEntryDto>("workspace_copy_file_entry", {
     request: { fileSessionId, sourceEntryRef, destinationPath }
+  }).then(entry),
+  copyEntries: ({ sourceFileSessionId, destinationFileSessionId, sourceEntryRefs, destinationPath }) => requiredInvoke<RemoteFileEntryDto[]>("workspace_copy_file_entries", {
+    request: { sourceFileSessionId, destinationFileSessionId, sourceEntryRefs, destinationPath }
+  }).then((items) => items.map(entry)),
+  saveTextFile: ({ fileSessionId, entryRef, expectedFingerprint, text }) => requiredInvoke<RemoteFileEntryDto>("workspace_save_text_file", {
+    request: { fileSessionId, entryRef, expectedFingerprint, text }
   }).then(entry),
   validateTerminalCwd: ({ sessionId, generation, fileSessionId }) => requiredInvoke<WorkspaceValidatedCwdDto>("workspace_validate_terminal_cwd", {
     request: { sessionId, generation, fileSessionId }

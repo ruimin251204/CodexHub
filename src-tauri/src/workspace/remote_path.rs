@@ -54,6 +54,15 @@ pub(crate) fn file_name(path: &str) -> WorkspaceResult<&str> {
         .ok_or_else(|| WorkspaceError::new("invalid-remote-path", "Remote path has no file name."))
 }
 
+pub(crate) fn is_same_or_child(path: &str, parent: &str) -> bool {
+    let path = trim_trailing_slashes(path);
+    let parent = trim_trailing_slashes(parent);
+    path == parent
+        || path
+            .strip_prefix(parent)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
 pub(crate) fn validate_absolute(path: &str) -> WorkspaceResult<()> {
     if !is_absolute(path)
         || path.contains('\0')

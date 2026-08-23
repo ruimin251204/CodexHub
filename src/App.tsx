@@ -2418,6 +2418,10 @@ function localizeFeedbackMessage(message: string, copy: UICopy, tone: FeedbackTo
     return copy.feedback.storageCorrupt;
   }
   if (normalized.includes("partial-failure")) return copy.feedback.partialFailure;
+  // Workspace's VS Code launcher is not a durable Task operation, so replacing
+  // its backend detail with the generic Chinese error leaves no diagnostics to
+  // inspect. Keep the sanitized command error visible in the toast.
+  if (normalized.includes("workspace_open_folder_in_vscode")) return message;
   const cjkCount = message.match(/[\u3400-\u9fff]/gu)?.length ?? 0;
   const latinWordCount = message.match(/[a-z]{2,}/giu)?.length ?? 0;
   if (cjkCount >= Math.max(2, latinWordCount)) return message;
