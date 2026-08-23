@@ -381,8 +381,11 @@ test("a directory context menu opens that directory in VS Code", async () => {
   } as unknown as WorkspaceApi;
 
   render(errorPanel(api, vi.fn()));
-  fireEvent.contextMenu(await screen.findByRole("row", { name: /projects/i }), { clientX: 10, clientY: 10 });
-  fireEvent.click(screen.getByRole("menuitem", { name: workspaceCopy.en.openFolderInVscode }));
+  fireEvent.contextMenu(await screen.findByRole("row", { name: /projects/i }), { clientX: 10, clientY: 40 });
+  const contextMenu = screen.getByRole("menu");
+  expect(contextMenu).toHaveStyle({ left: "10px", top: "40px" });
+  expect(contextMenu.parentElement).toBe(document.body);
+  fireEvent.click(within(contextMenu).getByRole("menuitem", { name: workspaceCopy.en.openFolderInVscode }));
 
   await waitFor(() => expect(openFolderInVscode).toHaveBeenCalledWith({
     fileSessionId: session.fileSessionId,
@@ -416,7 +419,7 @@ test("a directory tree context menu opens that folder in VS Code", async () => {
   }));
 });
 
-test("directory tree and file-list context menus match and show one Copy action", async () => {
+test("directory tree keeps the file-list actions and adds Quick access", async () => {
   renderPanel();
 
   fireEvent.contextMenu(await screen.findByRole("row", { name: /projects/i }), { clientX: 10, clientY: 10 });
@@ -430,8 +433,33 @@ test("directory tree and file-list context menus match and show one Copy action"
   const treeMenu = screen.getByRole("menu");
   const treeActions = within(treeMenu).getAllByRole("menuitem").map((item) => item.textContent);
 
-  expect(treeActions).toEqual(fileActions);
+  expect(treeActions.filter((action) => action !== filesUiCopy.en.addQuickAccess)).toEqual(fileActions);
+  expect(within(treeMenu).getByRole("menuitem", { name: filesUiCopy.en.addQuickAccess })).toBeEnabled();
   expect(within(treeMenu).getAllByRole("menuitem", { name: workspaceCopy.en.copyEntry })).toHaveLength(1);
+});
+
+test("a pinned directory has a one-action Quick access context menu and can be removed", async () => {
+  renderPanel();
+  const tree = await screen.findByRole("tree", { name: filesUiCopy.en.directoryTree });
+  const treeDirectory = within(tree).getByTitle(directory.canonicalPath);
+
+  fireEvent.contextMenu(treeDirectory, { clientX: 18, clientY: 24 });
+  fireEvent.click(screen.getByRole("menuitem", { name: filesUiCopy.en.addQuickAccess }));
+
+  const quickAccess = screen.getByRole("heading", { name: filesUiCopy.en.quickAccess }).closest<HTMLElement>(".workspaceFilesQuickAccess");
+  expect(quickAccess).not.toBeNull();
+  if (!quickAccess) throw new Error("Quick access is unavailable");
+  const pinnedDirectory = within(quickAccess).getByTitle(directory.canonicalPath);
+  expect(pinnedDirectory).toHaveTextContent(directory.name);
+
+  fireEvent.contextMenu(pinnedDirectory, { clientX: 30, clientY: 50 });
+  const quickAccessMenu = screen.getByRole("menu");
+  const items = within(quickAccessMenu).getAllByRole("menuitem");
+  expect(items).toHaveLength(1);
+  expect(items[0]).toHaveAccessibleName(filesUiCopy.en.removeQuickAccess);
+
+  fireEvent.click(items[0]);
+  expect(within(quickAccess).queryByTitle(directory.canonicalPath)).not.toBeInTheDocument();
 });
 
 test("Ctrl+C copies selected files and Ctrl+V pastes them", async () => {
@@ -460,7 +488,7 @@ test("Ctrl+C copies selected files and Ctrl+V pastes them", async () => {
   }));
 });
 
-test("dragging a selection rectangle selects every intersecting file row", async () => {
+test("dragging from a file name cell selects every intersecting file row", async () => {
   renderPanel([directory, textFile]);
   const grid = await screen.findByRole("grid", { name: filesUiCopy.en.tableView });
   const rows = within(grid).getAllByRole("row").slice(1);
@@ -475,15 +503,34 @@ test("dragging a selection rectangle selects every intersecting file row", async
     toJSON: () => ({})
   });
 
-  fireEvent.pointerDown(within(grid).getByRole("rowgroup"), { button: 0, clientX: 490, clientY: 132 });
+  const nameCell = within(rows[1]).getAllByRole("gridcell")[1];
+  fireEvent.pointerDown(nameCell, { button: 0, clientX: 490, clientY: 110 });
   fireEvent.pointerMove(window, { clientX: 10, clientY: 45 });
 
   expect(rows[0]).toHaveAttribute("aria-selected", "true");
   expect(rows[1]).toHaveAttribute("aria-selected", "true");
-  expect(document.querySelector(".workspaceFileSelectionRectangle")).not.toBeNull();
+  const selectionRectangle = document.querySelector<HTMLElement>(".workspaceFileSelectionRectangle");
+  expect(selectionRectangle).not.toBeNull();
+  expect(selectionRectangle?.parentElement).toBe(document.body);
+  expect(selectionRectangle).toHaveStyle({ left: "10px", top: "45px", width: "480px", height: "65px" });
 
   fireEvent.pointerUp(window);
   expect(document.querySelector(".workspaceFileSelectionRectangle")).toBeNull();
+
+  fireEvent.click(nameCell);
+  expect(rows[0]).toHaveAttribute("aria-selected", "true");
+  expect(rows[1]).toHaveAttribute("aria-selected", "true");
+});
+
+test("only the file icon is the internal drag handle", async () => {
+  renderPanel([directory]);
+  const row = await screen.findByRole("row", { name: /projects/i });
+  const nameCell = within(row).getAllByRole("gridcell")[1];
+  const dragHandle = nameCell.querySelector<HTMLElement>(".workspaceFileDragHandle");
+  expect(nameCell).not.toHaveAttribute("draggable");
+  expect(dragHandle).toHaveAttribute("draggable", "true");
+  expect(dragHandle).toHaveAttribute("title", filesUiCopy.en.dragToMove);
+  expect(row).not.toHaveAttribute("draggable");
 });
 
 test("Ctrl+X cuts all selected files and Ctrl+V moves them together", async () => {

@@ -436,6 +436,7 @@
 }
 
 .workspaceFilesQuickAccess button:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.workspaceFilesQuickAccess button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .workspaceFilesTablePane {
   position: relative;
@@ -600,6 +601,9 @@
 }
 
 .workspaceFilesRedesign .workspaceFileName { gap: 9px; }
+.workspaceFileDragHandle { display: inline-flex; flex: 0 0 auto; cursor: grab; }
+.workspaceFileDragHandle:active { cursor: grabbing; }
+.workspaceFilesRedesign .workspaceFileName > .workspaceFileDragHandle { overflow: visible; }
 .workspaceFilesRedesign .workspaceFileName > span { overflow: hidden; color: var(--text); text-overflow: ellipsis; }
 .workspaceFilesRedesign .workspaceFileRow[data-kind="directory"] .workspaceFileName > span { color: var(--text); }
 .workspaceFilesRedesign .workspaceFileRow code { color: var(--text-muted); font-size: 0.75rem; }

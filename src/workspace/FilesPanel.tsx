@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import type { WorkspaceCopy } from "./copy";
 import type {
   RemoteFileEntry,
@@ -58,6 +59,10 @@ const ACTIVE_TRANSFER_STATES = new Set<WorkspaceTransfer["state"]>([
 // still journals the replaced destination for recovery.
 const FILE_UPLOAD_CONFLICT_POLICY = "replace-with-backup" as const;
 
+function offsetContextMenuPoint(point: { x: number; y: number }) {
+  return point;
+}
+
 function loadFileDeleteMode(): FileDeleteMode | null {
   try {
     const value = window.localStorage.getItem(FILE_DELETE_MODE_STORAGE_KEY);
@@ -95,6 +100,7 @@ type FilesHostView = {
   localRoots: string[];
   directoryEntriesByPath: Map<string, RemoteFileEntry[]>;
   expandedTreePaths: Set<string>;
+  quickAccessPaths: string[];
   clientPage: number;
   clientPageSize: number;
 };
@@ -110,6 +116,7 @@ type PersistedFilesView = {
   treeCollapsed: boolean;
   treeWidth: number;
   expandedTreePaths: string[];
+  quickAccessPaths: string[];
   clientPageSize: number;
   followCwd: boolean;
 };
@@ -132,6 +139,9 @@ function loadPersistedFilesView(instanceId: string, hostAlias: string): Persiste
       treeCollapsed: parsed.treeCollapsed === true,
       treeWidth: typeof parsed.treeWidth === "number" ? Math.max(TREE_MIN_WIDTH, Math.min(TREE_MAX_WIDTH, parsed.treeWidth)) : DEFAULT_TREE_WIDTH,
       expandedTreePaths: Array.isArray(parsed.expandedTreePaths) ? parsed.expandedTreePaths.filter((value): value is string => typeof value === "string") : ["/"],
+      quickAccessPaths: Array.isArray(parsed.quickAccessPaths)
+        ? [...new Set(parsed.quickAccessPaths.filter((value): value is string => typeof value === "string" && value.length > 0))].slice(0, 50)
+        : [],
       clientPageSize: parsed.clientPageSize === 25 || parsed.clientPageSize === 100 ? parsed.clientPageSize : 50,
       followCwd: parsed.followCwd !== false
     };
@@ -233,6 +243,7 @@ export function FilesPanel({
   const [localRoots, setLocalRoots] = useState<string[]>([]);
   const [directoryEntriesByPath, setDirectoryEntriesByPath] = useState<Map<string, RemoteFileEntry[]>>(() => new Map());
   const [expandedTreePaths, setExpandedTreePaths] = useState<Set<string>>(() => new Set(["/"]));
+  const [quickAccessPaths, setQuickAccessPaths] = useState<string[]>([]);
   const [loadingTreePaths, setLoadingTreePaths] = useState<Set<string>>(() => new Set());
   const [clientPage, setClientPage] = useState(0);
   const [clientPageSize, setClientPageSize] = useState(50);
@@ -246,6 +257,7 @@ export function FilesPanel({
     entry: RemoteFileEntry | null;
     kind: RemoteFileEntry["kind"];
     path: string;
+    source: "file-list" | "directory-tree" | "quick-access";
     x: number;
     y: number;
   } | null>(null);
@@ -302,6 +314,7 @@ export function FilesPanel({
       setTreeCollapsed(compact ? true : persisted.treeCollapsed);
       setTreeWidth(persisted.treeWidth);
       setExpandedTreePaths(new Set(persisted.expandedTreePaths.length > 0 ? persisted.expandedTreePaths : ["/"]));
+      setQuickAccessPaths(persisted.quickAccessPaths);
       setClientPageSize(persisted.clientPageSize);
     }
     setHydratedPersistenceKey(persistenceKey);
@@ -383,6 +396,7 @@ export function FilesPanel({
     localRoots,
     directoryEntriesByPath,
     expandedTreePaths,
+    quickAccessPaths,
     clientPage,
     clientPageSize
   };
@@ -400,10 +414,11 @@ export function FilesPanel({
       treeCollapsed,
       treeWidth,
       expandedTreePaths: [...expandedTreePaths],
+      quickAccessPaths,
       clientPageSize,
       followCwd
     });
-  }, [clientPageSize, expandedTreePaths, followCwd, hydratedPersistenceKey, history, historyIndex, instanceId, isActive, page?.canonicalPath, pathInput, persistenceEnabled, persistenceKey, selectedHostAlias, showHidden, sortAscending, sortKey, treeCollapsed, treeWidth]);
+  }, [clientPageSize, expandedTreePaths, followCwd, hydratedPersistenceKey, history, historyIndex, instanceId, isActive, page?.canonicalPath, pathInput, persistenceEnabled, persistenceKey, quickAccessPaths, selectedHostAlias, showHidden, sortAscending, sortKey, treeCollapsed, treeWidth]);
 
   const restoreHostView = useCallback((view: FilesHostView | null) => {
     setFileSession(view?.fileSession ?? null);
@@ -425,6 +440,7 @@ export function FilesPanel({
     setLocalRoots(view?.localRoots ?? []);
     setDirectoryEntriesByPath(view?.directoryEntriesByPath ?? new Map());
     setExpandedTreePaths(view?.expandedTreePaths ?? new Set(["/"]));
+    setQuickAccessPaths(view?.quickAccessPaths ?? []);
     setLoadingTreePaths(new Set());
     setClientPage(view?.clientPage ?? 0);
     setClientPageSize(view?.clientPageSize ?? 50);
@@ -620,6 +636,7 @@ export function FilesPanel({
       setTreeCollapsed(compact ? true : persisted.treeCollapsed);
       setTreeWidth(persisted.treeWidth);
       setExpandedTreePaths(new Set(persisted.expandedTreePaths.length > 0 ? persisted.expandedTreePaths : ["/"]));
+      setQuickAccessPaths(persisted.quickAccessPaths);
       setClientPageSize(persisted.clientPageSize);
       if (isActive) onFollowCwdChange(persisted.followCwd);
     }
@@ -1352,6 +1369,14 @@ export function FilesPanel({
   };
 
   const canLocate = Boolean(fileSession && activeTerminal && activeTerminal.hostAlias === selectedHostAlias);
+  const addQuickAccess = (path: string) => {
+    setQuickAccessPaths((current) => current.includes(path) ? current : [...current, path].slice(-50));
+    setContextMenu(null);
+  };
+  const removeQuickAccess = (path: string) => {
+    setQuickAccessPaths((current) => current.filter((candidate) => candidate !== path));
+    setContextMenu(null);
+  };
   const contextTargets = contextMenu?.entry
     ? selectedRefs.has(contextMenu.entry.entryRef)
       ? selectedEntries
@@ -1523,11 +1548,15 @@ export function FilesPanel({
               expandedPaths={expandedTreePaths}
               localRoots={localRoots}
               loadingPaths={loadingTreePaths}
+              quickAccessPaths={quickAccessPaths}
               session={fileSession}
               onContextMenu={(path, point) => {
-                setContextMenu({ entry: treeEntryByPath.get(path) ?? null, kind: "directory", path, ...point });
+                setContextMenu({ entry: treeEntryByPath.get(path) ?? null, kind: "directory", path, source: "directory-tree", ...offsetContextMenuPoint(point) });
               }}
               onNavigate={(path) => { if (fileSession) void navigate(fileSession, path, { manual: true }); }}
+              onQuickAccessContextMenu={(path, point) => {
+                setContextMenu({ entry: null, kind: "directory", path, source: "quick-access", ...offsetContextMenuPoint(point) });
+              }}
               onToggle={(path) => void toggleTreePath(path)}
             />
             <button
@@ -1559,7 +1588,7 @@ export function FilesPanel({
             ui={ui}
             onAskOperation={askOperation}
             onContextMenu={(entry, point) => {
-              setContextMenu({ entry, kind: entry.kind, path: entry.canonicalPath, ...point });
+              setContextMenu({ entry, kind: entry.kind, path: entry.canonicalPath, source: "file-list", ...offsetContextMenuPoint(point) });
             }}
             onFocusedIndexChange={setFocusedIndex}
             onMove={(source, destination) => askOperation("move", source, destination.canonicalPath)}
@@ -1622,14 +1651,25 @@ export function FilesPanel({
         </main>
       </div>
 
-      {contextMenu ? (
+      {contextMenu ? createPortal(
         <div className="workspaceContextMenu" role="menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
+          {contextMenu.source === "quick-access" ? (
+            <button role="menuitem" type="button" onClick={() => removeQuickAccess(contextMenu.path)}>{ui.removeQuickAccess}</button>
+          ) : <>
           <button role="menuitem" type="button" onClick={() => {
             if (contextMenu.entry) openEntry(contextMenu.entry);
             else if (fileSession) void navigate(fileSession, contextMenu.path, { manual: true });
             setContextMenu(null);
           }}>{copy.open}</button>
           {contextMenu.kind === "directory" ? <button role="menuitem" type="button" onClick={() => { openFolderInVscode(contextMenu.entry, contextMenu.path); setContextMenu(null); }}>{copy.openFolderInVscode}</button> : null}
+          {contextMenu.source === "directory-tree" ? (
+            <button
+              disabled={quickAccessPaths.includes(contextMenu.path) || fileSession?.homePath === contextMenu.path}
+              role="menuitem"
+              type="button"
+              onClick={() => addQuickAccess(contextMenu.path)}
+            >{ui.addQuickAccess}</button>
+          ) : null}
           <button role="menuitem" type="button" disabled={!contextMenu.entry} onClick={() => { if (contextMenu.entry) void showPreview(contextMenu.entry); setContextMenu(null); }}>{copy.preview}</button>
           {contextMenu.kind === "file" ? <button role="menuitem" type="button" disabled={!contextMenu.entry} onClick={() => { if (contextMenu.entry) void editEntry(contextMenu.entry); setContextMenu(null); }}>{copy.editFile}</button> : null}
           <button role="menuitem" type="button" disabled={contextTargets.length === 0} onClick={() => { copyEntriesToClipboard(contextTargets); setContextMenu(null); }}>{copy.copyEntry}</button>
@@ -1655,7 +1695,9 @@ export function FilesPanel({
               setContextMenu(null);
             }}
           >{copy.openTerminalHere}</button>
-        </div>
+          </>}
+        </div>,
+        document.body
       ) : null}
 
       <FilePreviewDialog copy={copy} preview={preview} onClose={() => setPreview(null)} />
