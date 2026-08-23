@@ -3125,13 +3125,18 @@ mod tests {
                 "printf 'stream-out\\n'; printf 'stream-err\\n' >&2".to_string(),
             ],
         );
+        // Hosted Windows runners can need several seconds to cold-start PowerShell.
+        #[cfg(windows)]
+        let timeout_ms = 15_000;
+        #[cfg(not(windows))]
+        let timeout_ms = 5_000;
 
         let mut events = Vec::new();
         let output = run_process_with_timeout_streaming(
             program,
             &args,
             "stream-test",
-            5_000,
+            timeout_ms,
             "",
             &[],
             |event| events.push((event.kind, event.line)),
